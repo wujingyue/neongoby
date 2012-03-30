@@ -1,6 +1,6 @@
 # Author: Jingyue
 
-PROGS = SimpleTest TestCalloc
+PROGS = SimpleTest TestCalloc TestStore
 BCS = $(PROGS:=.bc)
 
 CFLAGS = -g -Wall

@@ -16,7 +16,9 @@ using namespace llvm;
 
 namespace dyn_aa {
 struct MemoryInstrumenter: public FunctionPass {
-  static const string MemAllocHookName, MemFreeHookName;
+  static const string MemAllocHookName;
+  static const string MemFreeHookName;
+  static const string MemAccessHookName;
 
   static char ID;
 
@@ -36,7 +38,7 @@ struct MemoryInstrumenter: public FunctionPass {
   void instrumentMemoryFreer(const CallSite &CS);
   void checkFeatures(Module &M);
 
-  Function *MemAllocHook, *MemFreeHook;
+  Function *MemAllocHook, *MemFreeHook, *MemAccessHook;
   const IntegerType *CharType, *LongType;
   const PointerType *CharStarType;
   const Type *VoidType;
@@ -48,6 +50,7 @@ using namespace dyn_aa;
 char MemoryInstrumenter::ID = 0;
 const string MemoryInstrumenter::MemAllocHookName = "hook_mem_alloc";
 const string MemoryInstrumenter::MemFreeHookName = "hook_mem_free";
+const string MemoryInstrumenter::MemAccessHookName = "hook_mem_access";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
@@ -155,7 +158,16 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
                                  GlobalValue::ExternalLinkage,
                                  MemFreeHookName,
                                  &M);
-
+  ArgTypes.clear();
+  ArgTypes.push_back(CharStarType);
+  ArgTypes.push_back(CharStarType);
+  FunctionType *MemAccessHookType = FunctionType::get(VoidType,
+                                                      ArgTypes,
+                                                      false);
+  MemAccessHook = Function::Create(MemAccessHookType,
+                                   GlobalValue::ExternalLinkage,
+                                   MemAccessHookName,
+                                   &M);
   // Initialize the list of memory allocatores.
   MemAllocatorNames.push_back("malloc");
   MemAllocatorNames.push_back("calloc");
@@ -176,6 +188,7 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
 bool MemoryInstrumenter::runOnFunction(Function &F) {
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
+      // Instrument memory allocations and releases. 
       CallSite CS(I);
       if (CS.getInstruction()) {
         // TODO: A function pointer can possibly point to memory allocation
@@ -185,6 +198,24 @@ bool MemoryInstrumenter::runOnFunction(Function &F) {
           instrumentMemoryAllocator(CS);
         } else if (isMemoryFreer(Callee)) {
           instrumentMemoryFreer(CS);
+        }
+      }
+      // Instrument pointer stores, i.e. store X *, X **. 
+      // store long, long * is considered as a pointer store as well. 
+      if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
+        Value *ValueStored = SI->getValueOperand();
+        const Type *ValueType = ValueStored->getType();
+        if (ValueType == LongType || isa<PointerType>(ValueType)) {
+          vector<Value *> Args;
+          if (ValueType == LongType)
+            Args.push_back(new IntToPtrInst(ValueStored, CharStarType, "", I));
+          else
+            Args.push_back(new BitCastInst(ValueStored, CharStarType, "", I));
+          Args.push_back(new BitCastInst(SI->getPointerOperand(),
+                                         CharStarType,
+                                         "",
+                                         I));
+          CallInst::Create(MemAccessHook, Args.begin(), Args.end(), "", I);
         }
       }
     }
