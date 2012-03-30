@@ -79,11 +79,14 @@ void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
       CalleeName.startswith("_Zn")) {
     Size = CS.getArgument(0);
   } else if (CalleeName == "calloc") {
-    BinaryOperator::Create(Instruction::Mul,
-                           CS.getArgument(0),
-                           CS.getArgument(1),
-                           "",
-                           Loc);
+    // calloc() takes two size_t, i.e. i64. 
+    // Therefore, no need to worry Mul will have two operands with different
+    // types. Also, Size will always be of type i64. 
+    Size = BinaryOperator::Create(Instruction::Mul,
+                                  CS.getArgument(0),
+                                  CS.getArgument(1),
+                                  "",
+                                  Loc);
   } else if (CalleeName == "memalign") {
     Size = CS.getArgument(1);
   } else if (CalleeName == "realloc") {

@@ -1,6 +1,6 @@
 # Author: Jingyue
 
-PROGS = SimpleTest
+PROGS = SimpleTest TestCalloc
 BCS = $(PROGS:=.bc)
 
 CFLAGS = -g -Wall
@@ -12,7 +12,7 @@ clean:
 	rm -f $(BCS)
 
 %.bc: %.c
-	clang %< -o $@ -c -emit-llvm $(CFLAGS)
+	clang $< -o $@ -c -emit-llvm $(CFLAGS)
 
 %.bc: %.cpp
 	clang++ $< -o $@ -c -emit-llvm $(CXXFLAGS)
