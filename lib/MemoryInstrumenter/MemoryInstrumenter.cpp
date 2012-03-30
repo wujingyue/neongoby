@@ -10,6 +10,8 @@ using namespace std;
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/DerivedTypes.h"
+#include "llvm/Support/CallSite.h"
+#include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
 namespace dyn_aa {
@@ -21,6 +23,7 @@ struct MemoryInstrumenter: public FunctionPass {
   MemoryInstrumenter(): FunctionPass(ID) {
     MemAllocHook = MemFreeHook = NULL;
     CharType = LongType = NULL;
+    CharStarType = NULL;
     VoidType = NULL;
   }
   virtual bool doInitialization(Module &M);
@@ -29,9 +32,13 @@ struct MemoryInstrumenter: public FunctionPass {
  private:
   bool isMemoryAllocator(Function *F) const;
   bool isMemoryFreer(Function *F) const;
+  void instrumentMemoryAllocator(const CallSite &CS);
+  void instrumentMemoryFreer(const CallSite &CS);
+  void checkFeatures(Module &M);
 
   Function *MemAllocHook, *MemFreeHook;
   const IntegerType *CharType, *LongType;
+  const PointerType *CharStarType;
   const Type *VoidType;
   vector<string> MemAllocatorNames, MemFreerNames;
 };
@@ -39,8 +46,8 @@ struct MemoryInstrumenter: public FunctionPass {
 using namespace dyn_aa;
 
 char MemoryInstrumenter::ID = 0;
-const string MemAllocHookName = "hook_mem_alloc";
-const string MemFreeHookName = "hook_mem_free";
+const string MemoryInstrumenter::MemAllocHookName = "hook_mem_alloc";
+const string MemoryInstrumenter::MemFreeHookName = "hook_mem_free";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
@@ -60,7 +67,66 @@ bool MemoryInstrumenter::isMemoryFreer(Function *F) const {
   return Pos != MemFreerNames.end();
 }
 
+void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
+  Instruction *Loc = CS.getInstruction();
+  Function *Callee = CS.getCalledFunction();
+  assert(isMemoryAllocator(Callee));
+  
+  // hook_mem_alloc(i64)
+  StringRef CalleeName = Callee->getName();
+  Value *Size = NULL;
+  if (CalleeName == "malloc" || CalleeName == "valloc" ||
+      CalleeName.startswith("_Zn")) {
+    Size = CS.getArgument(0);
+  } else if (CalleeName == "calloc") {
+    BinaryOperator::Create(Instruction::Mul,
+                           CS.getArgument(0),
+                           CS.getArgument(1),
+                           "",
+                           Loc);
+  } else if (CalleeName == "memalign") {
+    Size = CS.getArgument(1);
+  } else if (CalleeName == "realloc") {
+    assert(false && "Not supported");
+  }
+  assert(Size);
+  CallInst::Create(MemAllocHook, Size, "", Loc);
+}
+
+void MemoryInstrumenter::instrumentMemoryFreer(const CallSite &CS) {
+  Instruction *Loc = CS.getInstruction();
+  Function *Callee = CS.getCalledFunction();
+  assert(isMemoryFreer(Callee));
+
+  // hook_mem_free(i8 *)
+  StringRef CalleeName = Callee->getName();
+  if (CalleeName == "free" || CalleeName.startswith("_Zd")) {
+    CallInst::Create(MemFreeHook, CS.getArgument(0), "", Loc);
+  } else {
+    assert(false);
+  }
+}
+
+void MemoryInstrumenter::checkFeatures(Module &M) {
+  // Check whether any memory allocate or memory free functions can
+  // potentially be pointed by function pointers. 
+  for (Module::iterator F = M.begin(); F != M.end(); ++F) {
+    if (isMemoryAllocator(F) || isMemoryFreer(F)) {
+      for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
+        User *Usr = *UI;
+        assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
+        CallSite CS(cast<Instruction>(Usr));
+        for (unsigned i = 0; i < CS.arg_size(); ++i)
+          assert(CS.getArgument(i) != F);
+      }
+    }
+  }
+}
+
 bool MemoryInstrumenter::doInitialization(Module &M) {
+  // Check whether there are unsupported language features.
+  checkFeatures(M);
+
   // No existing functions have the same name. 
   assert(M.getFunction(MemAllocHookName) == NULL);
   assert(M.getFunction(MemFreeHookName) == NULL);
@@ -68,15 +134,20 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
   // Setup scalar types.
   VoidType = Type::getVoidTy(M.getContext());
   CharType = IntegerType::get(M.getContext(), 8);
+  CharStarType = PointerType::getUnqual(CharType);
   LongType = IntegerType::get(M.getContext(), __WORDSIZE);
-  // Setup function types. 
+  // Setup hook functions. 
   vector<const Type *> ArgTypes(1, LongType);
-  FunctionType *MemAllocHookType = FunctionType::get(CharType, ArgTypes, false);
+  FunctionType *MemAllocHookType = FunctionType::get(CharStarType,
+                                                     ArgTypes,
+                                                     false);
   MemAllocHook = Function::Create(MemAllocHookType,
                                   GlobalValue::ExternalLinkage,
                                   MemAllocHookName,
                                   &M);
-  FunctionType *MemFreeHookType = FunctionType::get(VoidType, false);
+  ArgTypes.clear();
+  ArgTypes.push_back(CharStarType);
+  FunctionType *MemFreeHookType = FunctionType::get(VoidType, ArgTypes, false);
   MemFreeHook = Function::Create(MemFreeHookType,
                                  GlobalValue::ExternalLinkage,
                                  MemFreeHookName,
@@ -86,14 +157,34 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
   MemAllocatorNames.push_back("malloc");
   MemAllocatorNames.push_back("calloc");
   MemAllocatorNames.push_back("valloc");
-  // TODO: more
+  MemAllocatorNames.push_back("realloc");
+  MemAllocatorNames.push_back("memalign");
+  MemAllocatorNames.push_back("_Znwm");
+  MemAllocatorNames.push_back("_Znaj");
+  MemAllocatorNames.push_back("_Znam");
   // Initialize the list of memory freers. 
   MemFreerNames.push_back("free");
-  // TODO: more
+  MemFreerNames.push_back("_ZdlPv");
+  MemFreerNames.push_back("_ZdaPv");
 
   return true;
 }
 
 bool MemoryInstrumenter::runOnFunction(Function &F) {
+  for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
+    for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
+      CallSite CS(I);
+      if (CS.getInstruction()) {
+        // TODO: A function pointer can possibly point to memory allocation
+        // or memroy free functions. We don't handle this case for now. 
+        Function *Callee = CS.getCalledFunction();
+        if (isMemoryAllocator(Callee)) {
+          instrumentMemoryAllocator(CS);
+        } else if (isMemoryFreer(Callee)) {
+          instrumentMemoryFreer(CS);
+        }
+      }
+    }
+  }
   return true;
 }

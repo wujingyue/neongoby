@@ -2,7 +2,7 @@
 # Indicates our relative path to the top of the project's root directory.
 #
 LEVEL = .
-DIRS = lib
+DIRS = lib test tools
 EXTRA_DIST = include
 
 #
