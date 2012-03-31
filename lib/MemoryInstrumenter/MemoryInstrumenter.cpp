@@ -17,13 +17,12 @@ using namespace llvm;
 namespace dyn_aa {
 struct MemoryInstrumenter: public FunctionPass {
   static const string MemAllocHookName;
-  static const string MemFreeHookName;
   static const string MemAccessHookName;
 
   static char ID;
 
   MemoryInstrumenter(): FunctionPass(ID) {
-    MemAllocHook = MemFreeHook = NULL;
+    MemAllocHook = NULL;
     CharType = LongType = NULL;
     CharStarType = NULL;
     VoidType = NULL;
@@ -33,23 +32,20 @@ struct MemoryInstrumenter: public FunctionPass {
 
  private:
   bool isMemoryAllocator(Function *F) const;
-  bool isMemoryFreer(Function *F) const;
   void instrumentMemoryAllocator(const CallSite &CS);
-  void instrumentMemoryFreer(const CallSite &CS);
   void checkFeatures(Module &M);
 
-  Function *MemAllocHook, *MemFreeHook, *MemAccessHook;
+  Function *MemAllocHook, *MemAccessHook;
   const IntegerType *CharType, *LongType;
   const PointerType *CharStarType;
   const Type *VoidType;
-  vector<string> MemAllocatorNames, MemFreerNames;
+  vector<string> MemAllocatorNames;
 };
 }
 using namespace dyn_aa;
 
 char MemoryInstrumenter::ID = 0;
 const string MemoryInstrumenter::MemAllocHookName = "HookMemAlloc";
-const string MemoryInstrumenter::MemFreeHookName = "HookMemFree";
 const string MemoryInstrumenter::MemAccessHookName = "HookMemAccess";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
@@ -63,14 +59,8 @@ bool MemoryInstrumenter::isMemoryAllocator(Function *F) const {
   return Pos != MemAllocatorNames.end();
 }
 
-bool MemoryInstrumenter::isMemoryFreer(Function *F) const {
-  vector<string>::const_iterator Pos = find(MemFreerNames.begin(),
-                                            MemFreerNames.end(),
-                                            F->getName());
-  return Pos != MemFreerNames.end();
-}
-
 // TODO: Handle AllocaInst. 
+// TODO: Handle global variables. 
 void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
   Function *Callee = CS.getCalledFunction();
   assert(isMemoryAllocator(Callee));
@@ -118,25 +108,11 @@ void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
   CallInst::Create(MemAllocHook, Args.begin(), Args.end(), "", Loc);
 }
 
-void MemoryInstrumenter::instrumentMemoryFreer(const CallSite &CS) {
-  Instruction *Loc = CS.getInstruction();
-  Function *Callee = CS.getCalledFunction();
-  assert(isMemoryFreer(Callee));
-
-  // hook_mem_free(i8 *)
-  StringRef CalleeName = Callee->getName();
-  if (CalleeName == "free" || CalleeName.startswith("_Zd")) {
-    CallInst::Create(MemFreeHook, CS.getArgument(0), "", Loc);
-  } else {
-    assert(false);
-  }
-}
-
 void MemoryInstrumenter::checkFeatures(Module &M) {
-  // Check whether any memory allocate or memory free functions can
+  // Check whether any memory allocation function can
   // potentially be pointed by function pointers. 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (isMemoryAllocator(F) || isMemoryFreer(F)) {
+    if (isMemoryAllocator(F)) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
         User *Usr = *UI;
         assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
@@ -146,6 +122,7 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
       }
     }
   }
+
   // Check whether memory allocation functions are captured. 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (F->hasFnAttr(Attribute::NoAlias)) {
@@ -160,7 +137,6 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
 
   // No existing functions have the same name. 
   assert(M.getFunction(MemAllocHookName) == NULL);
-  assert(M.getFunction(MemFreeHookName) == NULL);
 
   // Setup scalar types.
   VoidType = Type::getVoidTy(M.getContext());
@@ -180,15 +156,6 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
                                   GlobalValue::ExternalLinkage,
                                   MemAllocHookName,
                                   &M);
-  
-  // Setup MemFreeHook
-  ArgTypes.clear();
-  ArgTypes.push_back(CharStarType);
-  FunctionType *MemFreeHookType = FunctionType::get(VoidType, ArgTypes, false);
-  MemFreeHook = Function::Create(MemFreeHookType,
-                                 GlobalValue::ExternalLinkage,
-                                 MemFreeHookName,
-                                 &M);
   
   // Setup MemAccessHook
   ArgTypes.clear();
@@ -212,11 +179,6 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
   MemAllocatorNames.push_back("_Znaj");
   MemAllocatorNames.push_back("_Znam");
 
-  // Initialize the list of memory freers. 
-  MemFreerNames.push_back("free");
-  MemFreerNames.push_back("_ZdlPv");
-  MemFreerNames.push_back("_ZdaPv");
-
   return true;
 }
 
@@ -231,8 +193,6 @@ bool MemoryInstrumenter::runOnFunction(Function &F) {
         Function *Callee = CS.getCalledFunction();
         if (isMemoryAllocator(Callee)) {
           instrumentMemoryAllocator(CS);
-        } else if (isMemoryFreer(Callee)) {
-          instrumentMemoryFreer(CS);
         }
       }
       // Instrument pointer stores, i.e. store X *, X **. 
