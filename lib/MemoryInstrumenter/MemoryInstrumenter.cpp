@@ -48,9 +48,9 @@ struct MemoryInstrumenter: public FunctionPass {
 using namespace dyn_aa;
 
 char MemoryInstrumenter::ID = 0;
-const string MemoryInstrumenter::MemAllocHookName = "hook_mem_alloc";
-const string MemoryInstrumenter::MemFreeHookName = "hook_mem_free";
-const string MemoryInstrumenter::MemAccessHookName = "hook_mem_access";
+const string MemoryInstrumenter::MemAllocHookName = "HookMemAlloc";
+const string MemoryInstrumenter::MemFreeHookName = "HookMemFree";
+const string MemoryInstrumenter::MemAccessHookName = "HookMemAccess";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
@@ -70,12 +70,23 @@ bool MemoryInstrumenter::isMemoryFreer(Function *F) const {
   return Pos != MemFreerNames.end();
 }
 
+// TODO: Handle AllocaInst. 
 void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
-  Instruction *Loc = CS.getInstruction();
   Function *Callee = CS.getCalledFunction();
   assert(isMemoryAllocator(Callee));
   
-  // hook_mem_alloc(i64)
+  // Calculate where to insert.
+  Instruction *Ins = CS.getInstruction();
+  BasicBlock::iterator Loc;
+  if (!Ins->isTerminator()) {
+    Loc = Ins;
+    ++Loc;
+  } else {
+    assert(isa<InvokeInst>(Ins));
+    Loc = cast<InvokeInst>(Ins)->getNormalDest()->begin();
+  }
+
+  // Retrive the allocated size. 
   StringRef CalleeName = Callee->getName();
   Value *Size = NULL;
   if (CalleeName == "malloc" || CalleeName == "valloc" ||
@@ -96,7 +107,15 @@ void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
     assert(false && "Not supported");
   }
   assert(Size);
-  CallInst::Create(MemAllocHook, Size, "", Loc);
+  
+  // start = malloc(size)
+  // =>
+  // start = malloc(size)
+  // HookMemAlloc(start, size)
+  vector<Value *> Args;
+  Args.push_back(Ins);
+  Args.push_back(Size);
+  CallInst::Create(MemAllocHook, Args.begin(), Args.end(), "", Loc);
 }
 
 void MemoryInstrumenter::instrumentMemoryFreer(const CallSite &CS) {
@@ -127,6 +146,12 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
       }
     }
   }
+  // Check whether memory allocation functions are captured. 
+  for (Module::iterator F = M.begin(); F != M.end(); ++F) {
+    if (F->hasFnAttr(Attribute::NoAlias)) {
+      assert(isMemoryAllocator(F));
+    }
+  }
 }
 
 bool MemoryInstrumenter::doInitialization(Module &M) {
@@ -142,15 +167,21 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
   CharType = IntegerType::get(M.getContext(), 8);
   CharStarType = PointerType::getUnqual(CharType);
   LongType = IntegerType::get(M.getContext(), __WORDSIZE);
+
   // Setup hook functions. 
-  vector<const Type *> ArgTypes(1, LongType);
-  FunctionType *MemAllocHookType = FunctionType::get(CharStarType,
+  // Setup MemAllocHook
+  vector<const Type *> ArgTypes;
+  ArgTypes.push_back(CharStarType);
+  ArgTypes.push_back(LongType);
+  FunctionType *MemAllocHookType = FunctionType::get(VoidType,
                                                      ArgTypes,
                                                      false);
   MemAllocHook = Function::Create(MemAllocHookType,
                                   GlobalValue::ExternalLinkage,
                                   MemAllocHookName,
                                   &M);
+  
+  // Setup MemFreeHook
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   FunctionType *MemFreeHookType = FunctionType::get(VoidType, ArgTypes, false);
@@ -158,6 +189,8 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
                                  GlobalValue::ExternalLinkage,
                                  MemFreeHookName,
                                  &M);
+  
+  // Setup MemAccessHook
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(CharStarType);
@@ -168,6 +201,7 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
                                    GlobalValue::ExternalLinkage,
                                    MemAccessHookName,
                                    &M);
+
   // Initialize the list of memory allocatores.
   MemAllocatorNames.push_back("malloc");
   MemAllocatorNames.push_back("calloc");
@@ -177,6 +211,7 @@ bool MemoryInstrumenter::doInitialization(Module &M) {
   MemAllocatorNames.push_back("_Znwm");
   MemAllocatorNames.push_back("_Znaj");
   MemAllocatorNames.push_back("_Znam");
+
   // Initialize the list of memory freers. 
   MemFreerNames.push_back("free");
   MemFreerNames.push_back("_ZdlPv");
