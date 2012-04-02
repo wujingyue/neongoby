@@ -21,6 +21,7 @@ struct MemoryInstrumenter: public ModulePass {
   static const string MemAllocHookName;
   static const string MemAccessHookName;
   static const string GlobalsAllocHookName;
+  static const string MemHooksIniterName;
 
   static char ID;
 
@@ -39,9 +40,9 @@ struct MemoryInstrumenter: public ModulePass {
   void setupHooks(Module &M);
   void lowerGlobalCtors(Module &M);
   void addNewGlobalCtor(Module &M);
-  void addGlobalsAllocHook(Module &M);
 
-  Function *MemAllocHook, *MemAccessHook, *GlobalsAllocHook;
+  Function *MemAllocHook, *MemAccessHook, *GlobalsAllocHook, *MemHooksIniter;
+  Function *Main;
   const IntegerType *CharType, *LongType, *IntType;
   const PointerType *CharStarType;
   const Type *VoidType;
@@ -54,6 +55,7 @@ char MemoryInstrumenter::ID = 0;
 const string MemoryInstrumenter::MemAllocHookName = "HookMemAlloc";
 const string MemoryInstrumenter::MemAccessHookName = "HookMemAccess";
 const string MemoryInstrumenter::GlobalsAllocHookName = "HookGlobalsAlloc";
+const string MemoryInstrumenter::MemHooksIniterName = "InitMemHooks";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
@@ -64,7 +66,8 @@ void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
-  MemAllocHook = NULL;
+  MemAllocHook = MemAccessHook = GlobalsAllocHook = MemHooksIniter = NULL;
+  Main = NULL;
   CharType = LongType = IntType = NULL;
   CharStarType = NULL;
   VoidType = NULL;
@@ -83,6 +86,7 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   uint64_t TypeSize = TD.getTypeSizeInBits(AI->getAllocatedType());
   assert(TypeSize % 8 == 0);
   assert((int64_t)TypeSize > 0);
+  TypeSize /= 8;
 
   // start = alloca type
   // =>
@@ -178,8 +182,9 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(MemAllocHookName) == NULL);
   assert(M.getFunction(MemAccessHookName) == NULL);
   assert(M.getFunction(GlobalsAllocHookName) == NULL);
+  assert(M.getFunction(MemHooksIniterName) == NULL);
 
-  // Setup MemAllocHook
+  // Setup MemAllocHook. 
   vector<const Type *> ArgTypes;
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(LongType);
@@ -190,8 +195,15 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                   GlobalValue::ExternalLinkage,
                                   MemAllocHookName,
                                   &M);
+
+  // Setup MemHooksIniter. 
+  FunctionType *MemHooksIniterType = FunctionType::get(VoidType, false);
+  MemHooksIniter = Function::Create(MemHooksIniterType,
+                                    GlobalValue::ExternalLinkage,
+                                    MemHooksIniterName,
+                                    &M);
   
-  // Setup MemAccessHook
+  // Setup MemAccessHook. 
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(CharStarType);
@@ -203,7 +215,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                    MemAccessHookName,
                                    &M);
 
-  // Setup GlobalsAccessHook
+  // Setup GlobalsAccessHook. 
   FunctionType *GlobalsAllocHookType = FunctionType::get(VoidType, false);
   GlobalsAllocHook = Function::Create(GlobalsAllocHookType,
                                       GlobalValue::ExternalLinkage,
@@ -232,6 +244,9 @@ void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
       continue;
     TargetData &TD = getAnalysis<TargetData>();
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
+    assert(TypeSize % 8 == 0);
+    assert((int64_t)TypeSize > 0);
+    TypeSize /= 8;
 
     vector<Value *> Args;
     Args.push_back(new BitCastInst(GI, CharStarType, "", BB));
@@ -247,6 +262,10 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
 
   // Setup scalar types. 
   setupScalarTypes(M);
+
+  // Find the main function. 
+  Main = M.getFunction("main");
+  assert(Main && !Main->isDeclaration() && !Main->hasLocalLinkage());
 
   // Setup hook function declarations. 
   setupHooks(M);
@@ -279,8 +298,12 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   // Add HookGlobalsAlloc to the global_ctors list. 
   addNewGlobalCtor(M);
 #endif
-  // Call the global variable allocation hook at the very beginning. 
-  addGlobalsAllocHook(M);
+
+  // Call the memory hook initializer and the global variable allocation hook
+  // at the very beginning. 
+  Instruction *OldEntry = Main->begin()->getFirstNonPHI();
+  CallInst::Create(MemHooksIniter, "", OldEntry);
+  CallInst::Create(GlobalsAllocHook, "", OldEntry);
 
   return true;
 }
@@ -292,10 +315,6 @@ void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
     return;
   assert(!GV->isDeclaration() && !GV->hasLocalLinkage());
   
-  // Find the main function where we lower the global ctors. 
-  Function *Main = M.getFunction("main");
-  assert(Main && !Main->hasLocalLinkage() && !Main->isDeclaration());
-
   // Should be an array of '{ int, void ()* }' structs.  The first value is
   // the init priority, which must be 65535 if the bitcode is generated using
   // clang. 
@@ -325,15 +344,6 @@ void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
   // Clear the global_ctors array. 
   // Use eraseFromParent() instead of removeFromParent().
   GV->eraseFromParent();
-}
-
-void MemoryInstrumenter::addGlobalsAllocHook(Module &M) {
-  // Find the main function where we add GlobalsAllocHook. 
-  Function *Main = M.getFunction("main");
-  assert(Main && !Main->hasLocalLinkage() && !Main->isDeclaration());
-
-  // Add GlobalsAllocHooks to the very beginning. 
-  CallInst::Create(GlobalsAllocHook, "", Main->begin()->getFirstNonPHI());
 }
 
 void MemoryInstrumenter::addNewGlobalCtor(Module &M) {

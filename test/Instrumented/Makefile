@@ -4,14 +4,15 @@ PROGS = SimpleTest TestCalloc TestStore TestInit
 BCS = $(PROGS:=.bc)
 INSTRUMENTED_BCS = $(PROGS:=.inst.bc)
 INSTRUMENTED_LLS = $(PROGS:=.inst.ll)
+INSTRUMENTED_EXES = $(PROGS:=.inst)
 
 CFLAGS = -g -Wall
 CXXFLAGS = -g -Wall
 
-all: $(INSTRUMENTED_BCS) $(INSTRUMENTED_LLS)
+all: $(INSTRUMENTED_BCS) $(INSTRUMENTED_LLS) $(INSTRUMENTED_EXES)
 
 clean:
-	rm -rf $(INSTRUMENTED_BCS) $(INSTRUMENTED_LLS)
+	rm -rf $(INSTRUMENTED_BCS) $(INSTRUMENTED_LLS) $(INSTRUMENTED_EXES)
 
 %.inst.bc: ../Original/%.bc
 	opt -load $(LLVM_ROOT)/install/lib/MemoryInstrumenter.so \
