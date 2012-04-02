@@ -1,6 +1,4 @@
-/**
- * Author: Jingyue
- */
+// Author: Jingyue
 
 #define DEBUG_TYPE "instrument-memory"
 

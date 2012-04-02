@@ -1,10 +1,11 @@
 # Author: Jingyue
 
-PROGS = SimpleTest TestCalloc TestStore TestInit
+PROGS = SimpleTest TestCalloc TestStore TestInit TestThread
 BCS = $(PROGS:=.bc)
 
 CFLAGS = -g -Wall
 CXXFLAGS = -g -Wall
+LDFLAGS = -pthread
 
 all: $(BCS) $(PROGS)
 

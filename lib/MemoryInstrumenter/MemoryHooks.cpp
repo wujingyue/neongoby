@@ -1,6 +1,4 @@
-/**
- * Author: Jingyue
- */
+// Author: Jingyue
 
 #include <pthread.h>
 

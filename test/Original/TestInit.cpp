@@ -1,6 +1,4 @@
-/**
- * Author: Jingyue
- */
+// Author: Jingyue
 
 #include <iostream>
 using namespace std;
