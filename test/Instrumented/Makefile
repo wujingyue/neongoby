@@ -1,6 +1,6 @@
 # Author: Jingyue
 
-PROGS = SimpleTest TestCalloc TestStore
+PROGS = SimpleTest TestCalloc TestStore TestInit
 BCS = $(PROGS:=.bc)
 INSTRUMENTED_BCS = $(PROGS:=.inst.bc)
 INSTRUMENTED_LLS = $(PROGS:=.inst.ll)
