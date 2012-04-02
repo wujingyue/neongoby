@@ -39,6 +39,7 @@ struct MemoryInstrumenter: public ModulePass {
   void setupHooks(Module &M);
   void lowerGlobalCtors(Module &M);
   void addNewGlobalCtor(Module &M);
+  void addGlobalsAllocHook(Module &M);
 
   Function *MemAllocHook, *MemAccessHook, *GlobalsAllocHook;
   const IntegerType *CharType, *LongType, *IntType;
@@ -274,8 +275,12 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   // Lower global constructors. 
   lowerGlobalCtors(M);
 
+#if 0
   // Add HookGlobalsAlloc to the global_ctors list. 
   addNewGlobalCtor(M);
+#endif
+  // Call the global variable allocation hook at the very beginning. 
+  addGlobalsAllocHook(M);
 
   return true;
 }
@@ -320,6 +325,15 @@ void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
   // Clear the global_ctors array. 
   // Use eraseFromParent() instead of removeFromParent().
   GV->eraseFromParent();
+}
+
+void MemoryInstrumenter::addGlobalsAllocHook(Module &M) {
+  // Find the main function where we add GlobalsAllocHook. 
+  Function *Main = M.getFunction("main");
+  assert(Main && !Main->hasLocalLinkage() && !Main->isDeclaration());
+
+  // Add GlobalsAllocHooks to the very beginning. 
+  CallInst::Create(GlobalsAllocHook, "", Main->begin()->getFirstNonPHI());
 }
 
 void MemoryInstrumenter::addNewGlobalCtor(Module &M) {

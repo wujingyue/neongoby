@@ -22,13 +22,7 @@ clean:
 %.ll: %.bc
 	llvm-dis $<
 
-%.bc: %.c
-	clang %< -o $@ -c -emit-llvm $(CFLAGS)
-
-%.bc: %.cpp
-	clang++ $< -o $@ -c -emit-llvm $(CXXFLAGS)
-
-%: %.bc
-	clang++ $< -o $@ $(LDFLAGS)
+%.inst: %.inst.bc
+	clang++ $< ../../lib/MemoryInstrumenter/MemoryHooks.bc -o $@
 
 .PHONY: clean

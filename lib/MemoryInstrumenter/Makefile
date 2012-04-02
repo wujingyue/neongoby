@@ -11,6 +11,8 @@ include $(LEVEL)/Makefile.common
 
 all:: MemoryHooks.bc
 
+install:: all
+
 MemoryHooks.bc: MemoryHooks.cpp
 	clang++ $< -o $@ -c -emit-llvm
 
