@@ -398,9 +398,8 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // TODO: A function pointer can possibly point to memory allocation
     // or memroy free functions. We don't handle this case for now. 
     Function *Callee = CS.getCalledFunction();
-    if (isMemoryAllocator(Callee)) {
+    if (Callee && isMemoryAllocator(Callee))
       instrumentMemoryAllocator(CS);
-    }
     return;
   }
 
