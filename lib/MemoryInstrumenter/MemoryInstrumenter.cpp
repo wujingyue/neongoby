@@ -14,6 +14,9 @@ using namespace std;
 #include "llvm/Target/TargetData.h"
 using namespace llvm;
 
+#include "common/IDAssigner.h"
+using namespace rcs;
+
 namespace dyn_aa {
 struct MemoryInstrumenter: public ModulePass {
   static const string MemAllocHookName;
@@ -62,6 +65,7 @@ static RegisterPass<MemoryInstrumenter> X("instrument-memory",
 
 void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
+  AU.addRequired<IDAssigner>();
 }
 
 uint64_t MemoryInstrumenter::BitLengthToByteLength(uint64_t Size) {
@@ -91,24 +95,29 @@ bool MemoryInstrumenter::isMemoryAllocator(Function *F) const {
 }
 
 void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
-  // Calculate the type size. 
   TargetData &TD = getAnalysis<TargetData>();
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
+  // Calculate the type size. 
   uint64_t TypeSize = TD.getTypeSizeInBits(AI->getAllocatedType());
   TypeSize = BitLengthToByteLength(TypeSize);
 
   // start = alloca type
   // =>
   // start = alloca type
-  // HookMemAlloc(start, sizeof(type))
+  // HookMemAlloc(ins id, start, sizeof(type))
   assert(!AI->isTerminator());
   BasicBlock::iterator Loc = AI; ++Loc;
   vector<Value *> Args;
+  Args.push_back(ConstantInt::get(IntType, IDA.getValueID(AI)));
   Args.push_back(new BitCastInst(AI, CharStarType, "", Loc));
   Args.push_back(ConstantInt::get(LongType, TypeSize));
   CallInst::Create(MemAllocHook, Args.begin(), Args.end(), "", Loc);
 }
 
 void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
   Function *Callee = CS.getCalledFunction();
   assert(isMemoryAllocator(Callee));
   
@@ -157,6 +166,7 @@ void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
   // start = malloc(size)
   // HookMemAlloc(start, size)
   vector<Value *> Args;
+  Args.push_back(ConstantInt::get(IntType, IDA.getValueID(Ins)));
   Args.push_back(Ins);
   Args.push_back(Size);
   CallInst::Create(MemAllocHook, Args.begin(), Args.end(), "", Loc);
@@ -194,6 +204,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
 
   // Setup MemAllocHook. 
   vector<const Type *> ArgTypes;
+  ArgTypes.push_back(IntType);
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(LongType);
   FunctionType *MemAllocHookType = FunctionType::get(VoidType,
@@ -240,6 +251,8 @@ void MemoryInstrumenter::setupScalarTypes(Module &M) {
 }
 
 void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
   // Function HookGlobalsAlloc contains only one basic block. 
   // The BB iterates through all global variables, and calls HookMemAlloc
   // for each of them. 
@@ -255,6 +268,7 @@ void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
     TypeSize = BitLengthToByteLength(TypeSize);
 
     vector<Value *> Args;
+    Args.push_back(ConstantInt::get(IntType, IDA.getValueID(GI)));
     Args.push_back(new BitCastInst(GI, CharStarType, "", BB));
     Args.push_back(ConstantInt::get(LongType, TypeSize));
     CallInst::Create(MemAllocHook, Args.begin(), Args.end(), "", BB);

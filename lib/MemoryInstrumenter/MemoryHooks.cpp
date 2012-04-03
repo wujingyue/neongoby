@@ -9,7 +9,14 @@ using namespace std;
 #include <boost/unordered_map.hpp>
 using namespace boost;
 
-typedef pair<void *, int> MemNode;
+struct AllocInfo {
+  AllocInfo(): Version(0), AllocatedBy(-1) {}
+  AllocInfo(unsigned Ver, unsigned ValueID):
+      Version(Ver), AllocatedBy(ValueID) {}
+
+  unsigned Version;
+  unsigned AllocatedBy; // The ID of the value that allocates this byte. 
+};
 
 struct Environment {
   Environment() {
@@ -18,7 +25,7 @@ struct Environment {
     fclose(LogFile);
   }
   pthread_mutex_t Lock;
-  unordered_map<void *, unsigned> MemVersion;
+  unordered_map<void *, AllocInfo> AllocTable;
 };
 
 Environment *Global;
@@ -27,22 +34,28 @@ extern "C" void InitMemHooks() {
   Global = new Environment();
 }
 
-extern "C" void HookMemAlloc(void *Start, unsigned long Bound) {
+extern "C" void HookMemAlloc(unsigned ValueID, void *Start,
+                             unsigned long Bound) {
   pthread_mutex_lock(&Global->Lock);
-  fprintf(stderr, "HookMemAlloc(%p, %lu)\n", Start, Bound);
-  for (unsigned long i = 0; i < Bound; ++i)
-    ++Global->MemVersion[(void *)((unsigned long)Start + i)];
+  fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
+  for (unsigned long i = 0; i < Bound; ++i) {
+    AllocInfo &AI = Global->AllocTable[(void *)((unsigned long)Start + i)];
+    ++AI.Version;
+    AI.AllocatedBy = ValueID;
+  }
   pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookMemAccess(void *Value, void *Pointer) {
   pthread_mutex_lock(&Global->Lock);
-  assert(Global->MemVersion.count(Pointer));
-  if (Global->MemVersion.count(Value)) {
+  assert(Global->AllocTable.count(Pointer));
+  if (Global->AllocTable.count(Value)) {
+    AllocInfo &PointerAllocInfo = Global->AllocTable.at(Pointer);
+    AllocInfo &ValueAllocInfo = Global->AllocTable.at(Value);
     FILE *LogFile = fopen("/tmp/pts", "a");
-    fprintf(LogFile, "(%p, %u) => (%p, %u)\n",
-            Pointer, Global->MemVersion[Pointer],
-            Value, Global->MemVersion[Value]);
+    fprintf(LogFile, "%u: (%p, %u) => %u: (%p, %u)\n",
+            PointerAllocInfo.AllocatedBy, Pointer, PointerAllocInfo.Version,
+            ValueAllocInfo.AllocatedBy, Value, ValueAllocInfo.Version);
     fclose(LogFile);
   }
   pthread_mutex_unlock(&Global->Lock);

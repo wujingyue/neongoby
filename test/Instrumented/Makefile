@@ -16,7 +16,9 @@ clean:
 	rm -rf $(INSTRUMENTED_BCS) $(INSTRUMENTED_LLS) $(INSTRUMENTED_EXES)
 
 %.inst.bc: ../Original/%.bc
-	opt -load $(LLVM_ROOT)/install/lib/MemoryInstrumenter.so \
+	opt \
+		-load $(LLVM_ROOT)/install/lib/id.so \
+		-load $(LLVM_ROOT)/install/lib/MemoryInstrumenter.so \
 		-instrument-memory \
 		-o $@ \
 		< $<

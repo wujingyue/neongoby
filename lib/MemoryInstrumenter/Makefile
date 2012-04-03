@@ -14,7 +14,7 @@ all:: MemoryHooks.bc
 install:: all
 
 MemoryHooks.bc: MemoryHooks.cpp
-	clang++ $< -o $@ -c -emit-llvm
+	clang++ $< -o $@ -c -emit-llvm -g -O3
 
 clean::
 	rm -rf MemoryHooks.bc

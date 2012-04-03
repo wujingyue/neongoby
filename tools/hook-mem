@@ -4,6 +4,7 @@ import os, sys
 
 def get_opt_base():
     return "opt " + \
+            "-load $LLVM_ROOT/install/lib/id.so " + \
             "-load $LLVM_ROOT/install/lib/MemoryInstrumenter.so "
 
 def invoke(cmd):
