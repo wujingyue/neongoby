@@ -28,6 +28,7 @@ struct MemoryInstrumenter: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
+  static uint64_t BitLengthToByteLength(uint64_t Size);
   bool isMemoryAllocator(Function *F) const;
   void instrumentInstructionIfNecessary(Instruction *I);
   void instrumentMemoryAllocator(const CallSite &CS);
@@ -63,6 +64,17 @@ void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
 }
 
+uint64_t MemoryInstrumenter::BitLengthToByteLength(uint64_t Size) {
+  // Except bool, every type size must be a multipler of 8. 
+  assert(Size == 1 || Size % 8 == 0);
+  // The type size shouldn't be a very large number; otherwise, how would
+  // you allocate it? 
+  assert((int64_t)Size > 0);
+  if (Size != 1)
+    Size /= 8;
+  return Size;
+}
+
 MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   MemAllocHook = MemAccessHook = GlobalsAllocHook = MemHooksIniter = NULL;
   Main = NULL;
@@ -82,9 +94,7 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   // Calculate the type size. 
   TargetData &TD = getAnalysis<TargetData>();
   uint64_t TypeSize = TD.getTypeSizeInBits(AI->getAllocatedType());
-  assert(TypeSize % 8 == 0);
-  assert((int64_t)TypeSize > 0);
-  TypeSize /= 8;
+  TypeSize = BitLengthToByteLength(TypeSize);
 
   // start = alloca type
   // =>
@@ -242,9 +252,7 @@ void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
       continue;
     TargetData &TD = getAnalysis<TargetData>();
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
-    assert(TypeSize % 8 == 0);
-    assert((int64_t)TypeSize > 0);
-    TypeSize /= 8;
+    TypeSize = BitLengthToByteLength(TypeSize);
 
     vector<Value *> Args;
     Args.push_back(new BitCastInst(GI, CharStarType, "", BB));
