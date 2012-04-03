@@ -3,7 +3,6 @@
 #
 LEVEL = .
 DIRS = lib test tools
-EXTRA_DIST = include
 
 #
 # Include the Master Makefile that knows how to build all.

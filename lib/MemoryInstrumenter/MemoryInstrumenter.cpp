@@ -155,7 +155,8 @@ void MemoryInstrumenter::instrumentMemoryAllocator(const CallSite &CS) {
   } else if (CalleeName == "memalign") {
     Size = CS.getArgument(1);
   } else if (CalleeName == "realloc") {
-    assert(false && "Not supported");
+    // Don't worry about the free feature. We ignore free anyway. 
+    Size = CS.getArgument(1);
   }
   assert(Size);
   // The size argument to HookMemAlloc must be long;
