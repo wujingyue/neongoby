@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+
+import re, os, sys
+
+class NodeInfo:
+    def __init__(self, node_id, label):
+        self.node_id = node_id
+        self.label = label
+
+if __name__ == "__main__":
+    nodes = {}
+    edges = []
+    for line in sys.stdin:
+        what = re.search("(\\d+):\\s*\((\\w+),\\s*(\\d+)\) => " + \
+                "(\\d+):\\s*\((\\w+),\\s*(\\d+)\)", line)
+        vid_1 = int(what.group(1))
+        addr_1 = what.group(2)
+        ver_1 = int(what.group(3))
+        vid_2 = int(what.group(4))
+        addr_2 = what.group(5)
+        ver_2 = int(what.group(6))
+        if (addr_1, ver_1) not in nodes:
+            node_id = len(nodes)
+            label = str(vid_1) + ":" + str(ver_1)
+            nodes[addr_1, ver_1] = NodeInfo(node_id, label)
+        if (addr_2, ver_2) not in nodes:
+            node_id = len(nodes)
+            label = str(vid_2) + ":" + str(ver_2)
+            nodes[addr_2, ver_2] = NodeInfo(node_id, label)
+        node_id_1 = nodes[addr_1, ver_1].node_id
+        node_id_2 = nodes[addr_2, ver_2].node_id
+        edges.append((node_id_1, node_id_2))
+
+    print "digraph point_to {"
+    for node_info in nodes.values():
+        print "node" + str(node_info.node_id),
+        print "[label = \"" + node_info.label + "\"]"
+    for edge in edges:
+        print "node" + str(edge[0]) + " -> " + "node" + str(edge[1])
+    print "}"

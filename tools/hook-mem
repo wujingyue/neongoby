@@ -31,4 +31,6 @@ if __name__ == "__main__":
     cmd += "-o " + instrumented_exe + " -pthread "
     if prog_name.startswith("pbzip2"):
         cmd += "-lbz2 "
+    if prog_name.startswith("ferret"):
+        cmd += "-lgsl -lblas "
     invoke(cmd)
