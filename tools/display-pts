@@ -51,7 +51,7 @@ if __name__ == "__main__":
         node_id_2 = nodes[key_2].node_id
         edges.append((node_id_1, node_id_2))
 
-    print "digraph point_to {"
+    print "strict digraph point_to {"
     for node_info in nodes.values():
         print "node" + str(node_info.node_id),
         print "[label = \"" + node_info.label + "\"]"
