@@ -4,9 +4,65 @@ import re, os, sys
 import argparse
 
 class NodeInfo:
-    def __init__(self, node_id, label):
+    def __init__(self, node_id, label, is_top_level):
         self.node_id = node_id
         self.label = label
+        self.is_top_level = is_top_level
+
+global nodes
+global edges
+
+def process_line(line, mode):
+    what = re.match("(\\w+),\\s*(\\d+),\\s*(\\d+) => " + \
+            "(\\w+),\\s*(\\d+),\\s*(\\d+)", line)
+    if what != None:
+        addr_1 = what.group(1)
+        ver_1 = what.group(2)
+        vid_1 = what.group(3)
+        addr_2 = what.group(4)
+        ver_2 = what.group(5)
+        vid_2 = what.group(6)
+        process_addr_taken(addr_1, ver_1, vid_1, addr_2, ver_2, vid_2, mode)
+        return
+
+    what = re.match("(\\d+),\\s*(\\d+) => (\\w+),\\s*(\\d+),\\s*(\\d+)", line)
+    if what != None:
+        vid_1 = what.group(1)
+        ver_1 = what.group(2)
+        addr_2 = what.group(3)
+        ver_2 = what.group(4)
+        vid_2 = what.group(5)
+        process_top_level(vid_1, ver_1, addr_2, ver_2, vid_2, mode)
+        return
+
+    assert False
+
+def process_addr_taken(addr_1, ver_1, vid_1, addr_2, ver_2, vid_2, mode):
+    if mode == "static":
+        add_to_graph(vid_1, vid_1, vid_2, vid_2, False)
+    else:
+        add_to_graph((addr_1, ver_1), vid_1 + ":" + ver_1,
+                (addr_2, ver_2), vid_2 + ":" + ver_2, False)
+
+def process_top_level(vid_1, ver_1, addr_2, ver_2, vid_2, mode):
+    if mode == "static":
+        add_to_graph(vid_1, vid_1, vid_2, vid_2, True)
+    else:
+        add_to_graph((vid_1, ver_1), vid_1 + ":" + ver_1,
+                (addr_2, ver_2), vid_2 + ":" + ver_2, True)
+
+# is_top_level: whether the first node corresponds to a top-level variable. 
+def add_to_graph(key_1, label_1, key_2, label_2, is_top_level):
+    if key_1 not in nodes:
+        node_id = len(nodes)
+        nodes[key_1] = NodeInfo(node_id, label_1, is_top_level)
+    if key_2 not in nodes:
+        node_id = len(nodes)
+        nodes[key_2] = NodeInfo(node_id, label_2, False)
+
+    node_id_1 = nodes[key_1].node_id
+    node_id_2 = nodes[key_2].node_id
+    edges.append((node_id_1, node_id_2))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -20,41 +76,16 @@ if __name__ == "__main__":
     nodes = {}
     edges = []
     for line in sys.stdin:
-        what = re.search("(\\d+):\\s*\((\\w+),\\s*(\\d+)\) => " + \
-                "(\\d+):\\s*\((\\w+),\\s*(\\d+)\)", line)
+        process_line(line, args.mode)
 
-        vid_1 = int(what.group(1))
-        addr_1 = what.group(2)
-        ver_1 = int(what.group(3))
-        vid_2 = int(what.group(4))
-        addr_2 = what.group(5)
-        ver_2 = int(what.group(6))
-        if args.mode == "static":
-            key_1 = vid_1
-            label_1 = str(vid_1)
-            key_2 = vid_2
-            label_2 = str(vid_2)
-        else:
-            key_1 = (addr_1, ver_1)
-            label_1 = str(vid_1) + ":" + str(ver_1)
-            key_2 = (addr_2, ver_2)
-            label_2 = str(vid_2) + ":" + str(ver_2)
-
-        if key_1 not in nodes:
-            node_id = len(nodes)
-            nodes[key_1] = NodeInfo(node_id, label_1)
-        if key_2 not in nodes:
-            node_id = len(nodes)
-            nodes[key_2] = NodeInfo(node_id, label_2)
-
-        node_id_1 = nodes[key_1].node_id
-        node_id_2 = nodes[key_2].node_id
-        edges.append((node_id_1, node_id_2))
-
-    print "strict digraph point_to {"
+    sys.stdout.write("strict digraph point_to {\n")
     for node_info in nodes.values():
-        print "node" + str(node_info.node_id),
-        print "[label = \"" + node_info.label + "\"]"
+        sys.stdout.write("node" + str(node_info.node_id) + " ")
+        sys.stdout.write("[label = \"" + node_info.label + "\"")
+        if node_info.is_top_level:
+            sys.stdout.write(", shape = box")
+        sys.stdout.write("]\n")
     for edge in edges:
-        print "node" + str(edge[0]) + " -> " + "node" + str(edge[1])
-    print "}"
+        sys.stdout.write("node" + str(edge[0]) + " -> ")
+        sys.stdout.write("node" + str(edge[1]) + "\n")
+    sys.stdout.write("}\n")

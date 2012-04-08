@@ -44,7 +44,7 @@ extern "C" void InitMemHooks() {
 extern "C" void HookMemAlloc(unsigned ValueID, void *Start,
                              unsigned long Bound) {
   pthread_mutex_lock(&Global->Lock);
-  fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
+  // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
   for (unsigned long i = 0; i < Bound; ++i) {
     unsigned long Addr = (unsigned long)Start + i;
     AddrTakenInfo &AI = Global->AddrTakenInfoTable[(void *)Addr];
@@ -54,25 +54,27 @@ extern "C" void HookMemAlloc(unsigned ValueID, void *Start,
   pthread_mutex_unlock(&Global->Lock);
 }
 
-extern "C" void HookMainArgsAlloc(int Argc, char *Argv[]) {
-  HookMemAlloc(-1, Argv, Argc * sizeof(char *));
+extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],
+                                  unsigned ArgvValueID) {
+  HookMemAlloc(ArgvValueID, Argv, Argc * sizeof(char *));
   for (int i = 0; i < Argc; ++i)
     HookMemAlloc(-1, Argv[i], strlen(Argv[i]) + 1); // ends with '\0'
 }
 
 extern "C" void HookTopLevel(void *Value, unsigned ValueID) {
   pthread_mutex_lock(&Global->Lock);
-  fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
-  TopLevelInfo &PointerInfo = Global->TopLevelInfoTable[ValueID];
-  ++PointerInfo.Version;
-  PointerInfo.ValueID = ValueID;
-  assert(Global->AddrTakenInfoTable.count(Value));
-  AddrTakenInfo &ValueInfo = Global->AddrTakenInfoTable.at(Value);
-  FILE *LogFile = fopen("/tmp/pts", "a");
-  fprintf(LogFile, "%u, %u => %p, %u, %u\n",
-          PointerInfo.ValueID, PointerInfo.Version,
-          Value, ValueInfo.Version, ValueInfo.AllocatedBy);
-  fclose(LogFile);
+  // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
+  if (Global->AddrTakenInfoTable.count(Value)) {
+    TopLevelInfo &PointerInfo = Global->TopLevelInfoTable[ValueID];
+    ++PointerInfo.Version;
+    PointerInfo.ValueID = ValueID;
+    AddrTakenInfo &ValueInfo = Global->AddrTakenInfoTable.at(Value);
+    FILE *LogFile = fopen("/tmp/pts", "a");
+    fprintf(LogFile, "%u, %u => %p, %u, %u\n",
+            PointerInfo.ValueID, PointerInfo.Version,
+            Value, ValueInfo.Version, ValueInfo.AllocatedBy);
+    fclose(LogFile);
+  }
   pthread_mutex_unlock(&Global->Lock);
 }
 
@@ -83,9 +85,9 @@ extern "C" void HookAddrTaken(void *Value, void *Pointer) {
     AddrTakenInfo &PointerInfo = Global->AddrTakenInfoTable.at(Pointer);
     AddrTakenInfo &ValueInfo = Global->AddrTakenInfoTable.at(Value);
     FILE *LogFile = fopen("/tmp/pts", "a");
-    fprintf(LogFile, "%u: (%p, %u) => %u: (%p, %u)\n",
-            PointerInfo.AllocatedBy, Pointer, PointerInfo.Version,
-            ValueInfo.AllocatedBy, Value, ValueInfo.Version);
+    fprintf(LogFile, "%p, %u, %u => %p, %u, %u\n",
+            Pointer, PointerInfo.Version, PointerInfo.AllocatedBy,
+            Value, ValueInfo.Version, ValueInfo.AllocatedBy);
     fclose(LogFile);
   }
   pthread_mutex_unlock(&Global->Lock);

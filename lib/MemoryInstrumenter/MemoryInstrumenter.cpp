@@ -119,6 +119,8 @@ bool MemoryInstrumenter::isMalloc(Function *F) const {
 }
 
 void MemoryInstrumenter::instrumentMainArgs(Module &M) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
   assert(Main);
   assert(Main->arg_size() == 0 || Main->arg_size() == 2);
 
@@ -135,6 +137,7 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
   vector<Value *> Args;
   Args.push_back(Arg1);
   Args.push_back(Arg2);
+  Args.push_back(ConstantInt::get(IntType, IDA.getValueID(Arg2)));
   AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args.begin(), Args.end(),
                                     "", Main->begin()->getFirstNonPHI()));
 }
@@ -305,6 +308,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   ArgTypes.clear();
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(PointerType::getUnqual(CharStarType));
+  ArgTypes.push_back(IntType);
   FunctionType *MainArgsAllocHookType = FunctionType::get(VoidType,
                                                           ArgTypes,
                                                           false);
@@ -381,7 +385,6 @@ void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
     TypeSize = BitLengthToByteLength(TypeSize);
     instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), Ret);
-    instrumentPointer(GI, Ret);
   }
 }
 
@@ -416,7 +419,12 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (F->isDeclaration())
       continue;
-    instrumentPointerParameters(F);
+    // The second argument of main(int argc, char *argv[]) needs special
+    // handling, which is done in instrumentMainArgs.
+    // We should treat argv as a memory allocation instead of a regular
+    // pointer. 
+    if (Main != F)
+      instrumentPointerParameters(F);
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
         instrumentInstructionIfNecessary(I);
@@ -545,12 +553,6 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     return;
   }
 
-  // Has to happen before handling malloc or alloca. 
-  // instrumentPointer adds hooks right after I, and these hooks must be
-  // put after allocation hooks. 
-  if (isa<PointerType>(I->getType())) {
-    instrumentPointerInstruction(I);
-  }
 
   // Instrument memory allocation function calls. 
   CallSite CS(I);
@@ -558,13 +560,21 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // TODO: A function pointer can possibly point to memory allocation
     // or memroy free functions. We don't handle this case for now. 
     Function *Callee = CS.getCalledFunction();
-    if (Callee && isMalloc(Callee))
+    if (Callee && isMalloc(Callee)) {
       instrumentMalloc(CS);
+      return;
+    }
   }
 
   // Instrument AllocaInsts. 
   if (AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
     instrumentAlloca(AI);
+    return;
+  }
+
+  // Regular pointers, i.e. not the results of mallocs or allocs. 
+  if (isa<PointerType>(I->getType())) {
+    instrumentPointerInstruction(I);
   }
 }
 
