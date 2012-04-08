@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Author: Jingyue
+# May be slow on large programs
+
 import re, os, sys
 import argparse
 
@@ -35,33 +38,51 @@ def process_line(line, mode):
         process_top_level(vid_1, ver_1, addr_2, ver_2, vid_2, mode)
         return
 
+    what = re.match("(\\w+),\\s*(\\d+),\\s*(\\d+)", line)
+    if what != None:
+        addr = what.group(1)
+        ver = what.group(2)
+        vid = what.group(3)
+        declare_addr_taken(addr, ver, vid, mode)
+        return
+
+    print >> sys.stderr, line
     assert False
+
+def declare_addr_taken(addr, ver, vid, mode):
+    if mode == "static":
+        add_node(vid, vid, False)
+    else:
+        add_node((addr, ver), vid + ":" + ver, False)
 
 def process_addr_taken(addr_1, ver_1, vid_1, addr_2, ver_2, vid_2, mode):
     if mode == "static":
-        add_to_graph(vid_1, vid_1, vid_2, vid_2, False)
+        add_edge(vid_1, vid_1, vid_2, vid_2, False)
     else:
-        add_to_graph((addr_1, ver_1), vid_1 + ":" + ver_1,
+        add_edge((addr_1, ver_1), vid_1 + ":" + ver_1,
                 (addr_2, ver_2), vid_2 + ":" + ver_2, False)
 
 def process_top_level(vid_1, ver_1, addr_2, ver_2, vid_2, mode):
     if mode == "static":
-        add_to_graph(vid_1, vid_1, vid_2, vid_2, True)
+        add_edge(vid_1, vid_1, vid_2, vid_2, True)
     else:
-        add_to_graph((vid_1, ver_1), vid_1 + ":" + ver_1,
+        add_edge((vid_1, ver_1), vid_1 + ":" + ver_1,
                 (addr_2, ver_2), vid_2 + ":" + ver_2, True)
 
-# is_top_level: whether the first node corresponds to a top-level variable. 
-def add_to_graph(key_1, label_1, key_2, label_2, is_top_level):
-    if key_1 not in nodes:
-        node_id = len(nodes)
-        nodes[key_1] = NodeInfo(node_id, label_1, is_top_level)
-    if key_2 not in nodes:
-        node_id = len(nodes)
-        nodes[key_2] = NodeInfo(node_id, label_2, False)
 
-    node_id_1 = nodes[key_1].node_id
-    node_id_2 = nodes[key_2].node_id
+def add_node(key, label, is_top_level):
+    if key not in nodes:
+        node_id = len(nodes)
+        nodes[key] = NodeInfo(node_id, label, is_top_level)
+    else:
+        node_id = nodes[key].node_id
+    return node_id
+
+# is_top_level: whether the first node corresponds to a top-level variable. 
+def add_edge(key_1, label_1, key_2, label_2, is_top_level):
+    node_id_1 = add_node(key_1, label_1, is_top_level)
+    # The pointee is always an addr-taken variable. 
+    node_id_2 = add_node(key_2, label_2, False)
     edges.append((node_id_1, node_id_2))
 
 if __name__ == "__main__":

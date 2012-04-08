@@ -50,6 +50,9 @@ extern "C" void HookMemAlloc(unsigned ValueID, void *Start,
     AddrTakenInfo &AI = Global->AddrTakenInfoTable[(void *)Addr];
     ++AI.Version;
     AI.AllocatedBy = ValueID;
+    FILE *LogFile = fopen("/tmp/pts", "a");
+    fprintf(LogFile, "%p, %u, %u\n", (void *)Addr, AI.Version, ValueID);
+    fclose(LogFile);
   }
   pthread_mutex_unlock(&Global->Lock);
 }

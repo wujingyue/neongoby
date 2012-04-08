@@ -199,7 +199,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     ++Loc;
   } else {
     assert(isa<InvokeInst>(Ins));
-    Loc = cast<InvokeInst>(Ins)->getNormalDest()->begin();
+    Loc = cast<InvokeInst>(Ins)->getNormalDest()->getFirstNonPHI();
   }
 
   // Retrive the allocated size. 
@@ -579,12 +579,17 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
 }
 
 void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
-  BasicBlock::iterator Loc = I;
-  if (!Loc->isTerminator()) {
+  BasicBlock::iterator Loc;
+  if (isa<PHINode>(I)) {
+    // Cannot insert hooks right after a PHI, because PHINodes have to be
+    // grouped together. 
+    Loc = I->getParent()->getFirstNonPHI();
+  } else if (!I->isTerminator()) {
+    Loc = I;
     ++Loc;
   } else {
-    assert(isa<InvokeInst>(Loc));
-    Loc = cast<InvokeInst>(Loc)->getNormalDest()->begin();
+    assert(isa<InvokeInst>(I));
+    Loc = cast<InvokeInst>(I)->getNormalDest()->getFirstNonPHI();
   }
   instrumentPointer(I, Loc);
 }
