@@ -133,12 +133,9 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
   assert(isa<PointerType>(Arg2->getType()));
   assert(cast<PointerType>(Arg2->getType())->getElementType() == CharStarType);
   
-  // TODO: Could treat Arg2 as the allocator. 
-  vector<Value *> Args;
-  Args.push_back(Arg1);
-  Args.push_back(Arg2);
-  Args.push_back(ConstantInt::get(IntType, IDA.getValueID(Arg2)));
-  AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args.begin(), Args.end(),
+  Value *Args[3] = {Arg1, Arg2,
+    ConstantInt::get(IntType, IDA.getValueID(Arg2))};
+  AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args, Args + 3,
                                     "", Main->begin()->getFirstNonPHI()));
 }
 
