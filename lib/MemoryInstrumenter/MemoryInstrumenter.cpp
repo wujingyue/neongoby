@@ -8,6 +8,7 @@ using namespace std;
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/DerivedTypes.h"
+#include "llvm/Constants.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Debug.h"
@@ -61,9 +62,9 @@ struct MemoryInstrumenter: public ModulePass {
   Function *GlobalsAllocHook;
   Function *MemHooksIniter;
   Function *Main;
-  const IntegerType *CharType, *LongType, *IntType;
-  const PointerType *CharStarType;
-  const Type *VoidType;
+  IntegerType *CharType, *LongType, *IntType;
+  PointerType *CharStarType;
+  Type *VoidType;
   vector<string> MallocNames;
   DenseSet<Instruction *> AddedByUs;
 };
@@ -135,8 +136,8 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
   
   Value *Args[3] = {Arg1, Arg2,
     ConstantInt::get(IntType, IDA.getValueID(Arg2))};
-  AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args, Args + 3,
-                                    "", Main->begin()->getFirstNonPHI()));
+  AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args, "",
+                                    Main->begin()->getFirstNonPHI()));
 }
 
 void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
@@ -176,9 +177,7 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start, Value *Size,
   Args.push_back(Start);
   // Arg 3: bound
   Args.push_back(Size);
-  AddedByUs.insert(CallInst::Create(MemAllocHook,
-                                    Args.begin(), Args.end(),
-                                    "", Loc));
+  AddedByUs.insert(CallInst::Create(MemAllocHook, Args, "", Loc));
 }
 
 void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
@@ -289,7 +288,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(MemHooksIniterName) == NULL);
 
   // Setup MemAllocHook. 
-  vector<const Type *> ArgTypes;
+  vector<Type *> ArgTypes;
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(LongType);
@@ -491,7 +490,7 @@ void MemoryInstrumenter::addNewGlobalCtor(Module &M) {
   // TODO: Could have reused the old StructType, but llvm.global_ctors is not
   // guaranteed to exist. 
   // Setup the types. 
-  vector<const Type *> FieldTypes;
+  vector<Type *> FieldTypes;
   FieldTypes.push_back(IntType);
   FieldTypes.push_back(GlobalsAllocHook->getType());
   StructType *GlobalCtorType = StructType::get(M.getContext(), FieldTypes);
@@ -502,7 +501,7 @@ void MemoryInstrumenter::addNewGlobalCtor(Module &M) {
   Fields.push_back(ConstantInt::get(IntType, 65535));
   Fields.push_back(GlobalsAllocHook);
   Constant *GlobalCtor = ConstantStruct::get(GlobalCtorType, Fields);
-  Constant *Initializer = ConstantArray::get(GlobalCtorsType, &GlobalCtor, 1);
+  Constant *Initializer = ConstantArray::get(GlobalCtorsType, GlobalCtor);
 
   // Finally, create the global variable. 
   new GlobalVariable(M, GlobalCtorsType, true, GlobalValue::AppendingLinkage,
@@ -530,9 +529,7 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
                                                "", SI);
     AddedByUs.insert(PointerCast);
     Args.push_back(PointerCast);
-    AddedByUs.insert(CallInst::Create(AddrTakenHook,
-                                      Args.begin(), Args.end(),
-                                      "", SI));
+    AddedByUs.insert(CallInst::Create(AddrTakenHook, Args, "", SI));
   }
 }
 
@@ -602,9 +599,7 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   AddedByUs.insert(Cast);
   Args.push_back(Cast);
   Args.push_back(ConstantInt::get(IntType, ValueID));
-  AddedByUs.insert(CallInst::Create(TopLevelHook,
-                                    Args.begin(), Args.end(),
-                                    "", Loc));
+  AddedByUs.insert(CallInst::Create(TopLevelHook, Args, "", Loc));
 }
 
 void MemoryInstrumenter::instrumentPointerParameters(Function *F) {
