@@ -1,5 +1,5 @@
-LEVEL = ..
+LEVEL = ../..
 
-DIRS = dump-log
+TOOLNAME = dump-log
 
 include $(LEVEL)/Makefile.common
