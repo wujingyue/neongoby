@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = dump-log
+DIRS = dump-log display-pts
 
 include $(LEVEL)/Makefile.common

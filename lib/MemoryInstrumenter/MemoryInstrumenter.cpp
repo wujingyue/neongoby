@@ -47,7 +47,7 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentPointer(Value *V, Instruction *Loc);
   void instrumentPointerInstruction(Instruction *I);
   void instrumentPointerParameters(Function *F);
-  void instrumentGlobalsAlloc(Module &M);
+  void instrumentGlobals(Module &M);
   void instrumentMainArgs(Module &M);
   void checkFeatures(Module &M);
   void setupScalarTypes(Module &M);
@@ -360,9 +360,7 @@ void MemoryInstrumenter::setupScalarTypes(Module &M) {
   IntType = Type::getInt32Ty(M.getContext());
 }
 
-// TODO: Treat each global variable as a pointer as well. 
-// Not necessary for now, because they do not create false point-tos. 
-void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
+void MemoryInstrumenter::instrumentGlobals(Module &M) {
   TargetData &TD = getAnalysis<TargetData>();
 
   // Function HookGlobalsAlloc contains only one basic block. 
@@ -375,12 +373,15 @@ void MemoryInstrumenter::instrumentGlobalsAlloc(Module &M) {
 
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
+#if 0
     // Ignore the intrinsic global variables, such as llvm.used. 
     if (GI->getName().startswith("llvm."))
       continue;
+#endif
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
     TypeSize = BitLengthToByteLength(TypeSize);
     instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), Ret);
+    instrumentPointer(GI, Ret);
   }
 }
 
@@ -409,7 +410,7 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   MallocNames.push_back("_Znam");
 
   // Hook global variable allocations. 
-  instrumentGlobalsAlloc(M);
+  instrumentGlobals(M);
 
   // Hook memory allocations and memory accesses. 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {

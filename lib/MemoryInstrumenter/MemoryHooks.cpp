@@ -15,10 +15,9 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include <cassert>
+#include <unordered_map>
 using namespace std;
-
-#include <boost/unordered_map.hpp>
-using namespace boost;
 
 #include "dyn-aa/LogRecord.h"
 using namespace dyn_aa;
@@ -72,8 +71,8 @@ extern "C" void HookMemAlloc(unsigned ValueID, void *Start,
     AddrTakenInfo &AI = Global->AddrTakenInfoTable[(void *)Addr];
     ++AI.Version;
     AI.AllocatedBy = ValueID;
-    PrintLogRecord(AddrTakenDeclaration,
-                   AddrTakenDeclarationLogRecord((void *)Addr,
+    PrintLogRecord(AddrTakenDecl,
+                   AddrTakenDeclLogRecord((void *)Addr,
                                                  AI.Version,
                                                  ValueID));
   }

@@ -16,29 +16,25 @@ global nodes
 global edges
 
 def process_line(line, mode):
-    what = re.match("(\\w+),\\s*(\\d+),\\s*(\\d+) => " + \
-            "(\\w+),\\s*(\\d+),\\s*(\\d+)", line)
+    what = re.match("(\\w+), (\\d+) => (\\w+), (\\d+)", line)
     if what != None:
         addr_1 = what.group(1)
         ver_1 = what.group(2)
-        vid_1 = what.group(3)
-        addr_2 = what.group(4)
-        ver_2 = what.group(5)
-        vid_2 = what.group(6)
-        process_addr_taken(addr_1, ver_1, vid_1, addr_2, ver_2, vid_2, mode)
+        addr_2 = what.group(3)
+        ver_2 = what.group(4)
+        process_addr_taken(addr_1, ver_1, addr_2, ver_2, mode)
         return
 
-    what = re.match("(\\d+),\\s*(\\d+) => (\\w+),\\s*(\\d+),\\s*(\\d+)", line)
+    what = re.match("(\\d+), (\\d+) => (\\w+), (\\d+)", line)
     if what != None:
         vid_1 = what.group(1)
         ver_1 = what.group(2)
         addr_2 = what.group(3)
         ver_2 = what.group(4)
-        vid_2 = what.group(5)
-        process_top_level(vid_1, ver_1, addr_2, ver_2, vid_2, mode)
+        process_top_level(vid_1, ver_1, addr_2, ver_2, mode)
         return
 
-    what = re.match("(\\w+),\\s*(\\d+),\\s*(\\d+)", line)
+    what = re.match("(\\w+), (\\d+), (\\d+)", line)
     if what != None:
         addr = what.group(1)
         ver = what.group(2)

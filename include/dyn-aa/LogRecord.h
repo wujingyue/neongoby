@@ -5,14 +5,14 @@
 
 namespace dyn_aa {
 enum LogRecordType {
-  AddrTakenDeclaration = 0,
+  AddrTakenDecl = 0,
   TopLevelPointTo,
   AddrTakenPointTo
 };
 
-struct AddrTakenDeclarationLogRecord {
-  AddrTakenDeclarationLogRecord() {}
-  AddrTakenDeclarationLogRecord(void *Addr, unsigned Ver, unsigned Alloc):
+struct AddrTakenDeclLogRecord {
+  AddrTakenDeclLogRecord() {}
+  AddrTakenDeclLogRecord(void *Addr, unsigned Ver, unsigned Alloc):
       Address(Addr), Version(Ver), AllocatedBy(Alloc) {}
 
   void *Address;

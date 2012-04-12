@@ -19,7 +19,7 @@ clean:
 	dot $< -o $@ -Tpng
 
 %.dot: %.pts
-	../../tools/display-pts --mode=static < $< > $@
+	display-pts < $< > $@
 
 %.pts: ../Instrumented/%.inst
 	$<

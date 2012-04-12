@@ -9,8 +9,8 @@ using namespace std;
 #include "dyn-aa/LogRecord.h"
 using namespace dyn_aa;
 
-static void PrintAddrTakenDeclaration(
-    const AddrTakenDeclarationLogRecord &Record) {
+static void PrintAddrTakenDecl(
+    const AddrTakenDeclLogRecord &Record) {
   printf("%p, %u, %u\n", Record.Address, Record.Version, Record.AllocatedBy);
 }
 
@@ -30,11 +30,11 @@ int main(int argc, char *argv[]) {
   LogRecordType RecordType;
   while (fread(&RecordType, sizeof RecordType, 1, stdin) == 1) {
     switch (RecordType) {
-      case AddrTakenDeclaration:
+      case AddrTakenDecl:
         {
-          AddrTakenDeclarationLogRecord Record;
+          AddrTakenDeclLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, stdin) == 1);
-          PrintAddrTakenDeclaration(Record);
+          PrintAddrTakenDecl(Record);
         }
         break;
       case TopLevelPointTo:
