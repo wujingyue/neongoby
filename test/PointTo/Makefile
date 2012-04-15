@@ -1,6 +1,7 @@
 # Author: Jingyue
 
 PROGS = SimpleTest TestCalloc TestStore TestInit TestThread TestTopLevel
+PROGS += TestFP
 INSTRUMENTED_EXES = $(PROGS:=.inst)
 DOTS = $(PROGS:=.dot)
 PTSS = $(PROGS:=.pts)

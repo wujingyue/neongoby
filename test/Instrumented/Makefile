@@ -1,6 +1,7 @@
 # Author: Jingyue
 
 PROGS = SimpleTest TestCalloc TestStore TestInit TestThread TestTopLevel
+PROGS += TestFP
 BCS = $(PROGS:=.bc)
 INSTRUMENTED_BCS = $(PROGS:=.inst.bc)
 INSTRUMENTED_LLS = $(PROGS:=.inst.ll)

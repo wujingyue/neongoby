@@ -236,8 +236,10 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
 void MemoryInstrumenter::checkFeatures(Module &M) {
   // Check whether any memory allocation function can
   // potentially be pointed by function pointers. 
+  // Also, all intrinsic functions will be called directly, i.e. not via
+  // function pointers. 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (isMalloc(F)) {
+    if (isMalloc(F) || F->isIntrinsic()) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
         User *Usr = *UI;
         assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
@@ -373,15 +375,35 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
 
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
-#if 0
-    // Ignore the intrinsic global variables, such as llvm.used. 
-    if (GI->getName().startswith("llvm."))
+    // We are going to delete llvm.global_ctors. 
+    // Therefore, don't instrument it. 
+    if (GI->getName() == "llvm.global_ctors")
       continue;
-#endif
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
     TypeSize = BitLengthToByteLength(TypeSize);
     instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), Ret);
     instrumentPointer(GI, Ret);
+  }
+
+  for (Module::iterator F = M.begin(); F != M.end(); ++F) {
+    // These hooks added by us don't have a value ID. 
+    if (MemAllocHook == F || MainArgsAllocHook == F || TopLevelHook == F ||
+        AddrTakenHook == F || GlobalsAllocHook == F || MemHooksIniter == F) {
+      continue;
+    }
+    // Ignore intrinsic functions because we cannot take the address of
+    // an intrinsic. Also, no function pointers will point to instrinsic
+    // functions. 
+    if (F->isIntrinsic())
+      continue;
+#if 0
+    uint64_t TypeSize = TD.getTypeSizeInBits(F->getFunctionType());
+    TypeSize = BitLengthToByteLength(TypeSize);
+    assert(TypeSize == TD.getPointerSize());
+#endif
+    uint64_t TypeSize = TD.getPointerSize();
+    instrumentMemoryAllocation(F, ConstantInt::get(LongType, TypeSize), Ret);
+    instrumentPointer(F, Ret);
   }
 }
 
@@ -593,6 +615,8 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   unsigned ValueID = IDA.getValueID(V);
+  if (ValueID == IDAssigner::INVALID_ID)
+    errs() << *V << "\n";
   assert(ValueID != IDAssigner::INVALID_ID);
   
   vector<Value *> Args;

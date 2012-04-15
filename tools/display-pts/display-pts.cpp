@@ -6,6 +6,7 @@
 
 // Caution: This piece of code may not compile with gcc-4.3 or earlier. 
 
+#include <iostream>
 #include <cstdio>
 #include <cassert>
 #include <vector>
@@ -50,10 +51,18 @@ static void ProcessAddrTakenPointTo(const AddrTakenPointToLogRecord &Record) {
 
 static void ReadLog() {
   LogRecordType RecordType;
+  int numRecords = 0;
+  int numAddrTakenDecls = 0;
+  int numAddrTakenPointTos = 0;
+  int numTopLevelPointTos = 0;
   while (fread(&RecordType, sizeof RecordType, 1, stdin) == 1) {
+    if (numRecords % 1000000 == 0)
+      cerr << "Processed " << numRecords << " records\n";
+    ++numRecords;
     switch (RecordType) {
       case AddrTakenDecl:
         {
+          ++numAddrTakenDecls;
           AddrTakenDeclLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, stdin) == 1);
           ProcessAddrTakenDecl(Record);
@@ -61,6 +70,7 @@ static void ReadLog() {
         break;
       case TopLevelPointTo:
         {
+          ++numTopLevelPointTos;
           TopLevelPointToLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, stdin) == 1);
           ProcessTopLevelPointTo(Record);
@@ -68,6 +78,7 @@ static void ReadLog() {
         break;
       case AddrTakenPointTo:
         {
+          ++numAddrTakenPointTos;
           AddrTakenPointToLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, stdin) == 1);
           ProcessAddrTakenPointTo(Record);
@@ -78,6 +89,9 @@ static void ReadLog() {
         assert(false && "Unknown record type");
     }
   }
+  cerr << "# of addr-taken decls = " << numAddrTakenDecls << "\n";
+  cerr << "# of addr-taken point-tos = " << numAddrTakenPointTos << "\n";
+  cerr << "# of top-level point-tos = " << numTopLevelPointTos << "\n";
 }
 
 static void WriteDot() {
