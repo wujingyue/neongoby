@@ -17,35 +17,25 @@
 #include <vector>
 #include <cassert>
 #include <unordered_map>
+#include <string>
 using namespace std;
 
 #include "dyn-aa/LogRecord.h"
 using namespace dyn_aa;
 
-struct AddrTakenInfo {
-  AddrTakenInfo(): Version(0), AllocatedBy(-1) {}
-
-  unsigned Version;
-  unsigned AllocatedBy; // The ID of the value that allocates this byte. 
-};
-
-struct TopLevelInfo {
-  TopLevelInfo(): Version(0), ValueID(-1) {}
-
-  unsigned Version;
-  unsigned ValueID;
-};
-
 struct Environment {
+  static const string LogFileName;
+
   Environment() {
     pthread_mutex_init(&Lock, NULL);
-    FILE *LogFile = fopen("/tmp/pts", "wb");
+    FILE *LogFile = fopen(LogFileName.c_str(), "wb");
     fclose(LogFile);
   }
+
   pthread_mutex_t Lock;
-  unordered_map<void *, AddrTakenInfo> AddrTakenInfoTable;
-  unordered_map<unsigned, TopLevelInfo> TopLevelInfoTable;
 };
+
+const string Environment::LogFileName = "/tmp/pts";
 
 Environment *Global;
 
@@ -56,26 +46,19 @@ extern "C" void InitMemHooks() {
 // Must be called with Global->Lock held. 
 template<class T>
 void PrintLogRecord(LogRecordType RecordType, const T &Record) {
-  FILE *LogFile = fopen("/tmp/pts", "ab");
+  FILE *LogFile = fopen(Environment::LogFileName.c_str(), "ab");
   fwrite(&RecordType, sizeof RecordType, 1, LogFile);
   fwrite(&Record, sizeof Record, 1, LogFile);
   fclose(LogFile);
 }
 
-extern "C" void HookMemAlloc(unsigned ValueID, void *Start,
+extern "C" void HookMemAlloc(unsigned ValueID, void *StartAddr,
                              unsigned long Bound) {
   pthread_mutex_lock(&Global->Lock);
+  assert(Bound > 0);
   // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
-  for (unsigned long i = 0; i < Bound; ++i) {
-    unsigned long Addr = (unsigned long)Start + i;
-    AddrTakenInfo &AI = Global->AddrTakenInfoTable[(void *)Addr];
-    ++AI.Version;
-    AI.AllocatedBy = ValueID;
-    PrintLogRecord(AddrTakenDecl,
-                   AddrTakenDeclLogRecord((void *)Addr,
-                                                 AI.Version,
-                                                 ValueID));
-  }
+  PrintLogRecord(AddrTakenDecl,
+                 AddrTakenDeclLogRecord(StartAddr, Bound, ValueID));
   pthread_mutex_unlock(&Global->Lock);
 }
 
@@ -89,28 +72,13 @@ extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],
 extern "C" void HookTopLevel(void *Value, unsigned ValueID) {
   pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
-  if (Global->AddrTakenInfoTable.count(Value)) {
-    TopLevelInfo &PointerInfo = Global->TopLevelInfoTable[ValueID];
-    ++PointerInfo.Version;
-    PointerInfo.ValueID = ValueID;
-    AddrTakenInfo &ValueInfo = Global->AddrTakenInfoTable.at(Value);
-    PrintLogRecord(TopLevelPointTo,
-                   TopLevelPointToLogRecord(ValueID, PointerInfo.Version,
-                                            Value, ValueInfo.Version));
-  }
+  PrintLogRecord(TopLevelPointTo, TopLevelPointToLogRecord(ValueID, Value));
   pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookAddrTaken(void *Value, void *Pointer) {
   pthread_mutex_lock(&Global->Lock);
-  assert(Global->AddrTakenInfoTable.count(Pointer));
-  if (Global->AddrTakenInfoTable.count(Value)) {
-    AddrTakenInfo &PointerInfo = Global->AddrTakenInfoTable.at(Pointer);
-    AddrTakenInfo &ValueInfo = Global->AddrTakenInfoTable.at(Value);
-    PrintLogRecord(AddrTakenPointTo,
-                   AddrTakenPointToLogRecord(Pointer, PointerInfo.Version,
-                                             Value, ValueInfo.Version));
-  }
+  PrintLogRecord(AddrTakenPointTo, AddrTakenPointToLogRecord(Pointer, Value));
   pthread_mutex_unlock(&Global->Lock);
 }
 

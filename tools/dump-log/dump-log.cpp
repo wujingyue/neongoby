@@ -11,19 +11,15 @@ using namespace dyn_aa;
 
 static void PrintAddrTakenDecl(
     const AddrTakenDeclLogRecord &Record) {
-  printf("%p, %u, %u\n", Record.Address, Record.Version, Record.AllocatedBy);
+  printf("%p, %u\n", Record.Address, Record.AllocatedBy);
 }
 
 static void PrintTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
-  printf("%u, %u => %p, %u\n",
-         Record.PointerValueID, Record.PointerVersion,
-         Record.PointeeAddress, Record.PointeeVersion);
+  printf("%u => %p\n", Record.PointerValueID, Record.PointeeAddress);
 }
 
 static void PrintAddrTakenPointTo(const AddrTakenPointToLogRecord &Record) {
-  printf("%p, %u => %p, %u\n",
-         Record.PointerAddress, Record.PointerVersion,
-         Record.PointeeAddress, Record.PointeeVersion);
+  printf("%p => %p\n", Record.PointerAddress, Record.PointeeAddress);
 }
 
 int main(int argc, char *argv[]) {

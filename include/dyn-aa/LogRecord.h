@@ -12,38 +12,30 @@ enum LogRecordType {
 
 struct AddrTakenDeclLogRecord {
   AddrTakenDeclLogRecord() {}
-  AddrTakenDeclLogRecord(void *Addr, unsigned Ver, unsigned Alloc):
-      Address(Addr), Version(Ver), AllocatedBy(Alloc) {}
+  AddrTakenDeclLogRecord(void *Addr, unsigned long Len, unsigned Alloc):
+      Address(Addr), Bound(Len), AllocatedBy(Alloc) {}
 
   void *Address;
-  unsigned Version;
+  unsigned long Bound;
   unsigned AllocatedBy;
 };
 
 struct TopLevelPointToLogRecord {
   TopLevelPointToLogRecord() {}
-  TopLevelPointToLogRecord(unsigned PtrVID, unsigned PtrVer,
-                           void *PttAddr, unsigned PttVer):
-      PointerValueID(PtrVID), PointerVersion(PtrVer),
-      PointeeAddress(PttAddr), PointeeVersion(PttVer) {}
+  TopLevelPointToLogRecord(unsigned PtrVID, void *PttAddr):
+      PointerValueID(PtrVID), PointeeAddress(PttAddr) {}
 
   unsigned PointerValueID;
-  unsigned PointerVersion;
   void *PointeeAddress;
-  unsigned PointeeVersion;
 };
 
 struct AddrTakenPointToLogRecord {
   AddrTakenPointToLogRecord() {}
-  AddrTakenPointToLogRecord(void *PtrAddr, unsigned PtrVer,
-                            void *PttAddr, unsigned PttVer):
-      PointerAddress(PtrAddr), PointerVersion(PtrVer),
-      PointeeAddress(PttAddr), PointeeVersion(PttVer) {}
+  AddrTakenPointToLogRecord(void *PtrAddr, void *PttAddr):
+      PointerAddress(PtrAddr), PointeeAddress(PttAddr) {}
 
   void *PointerAddress;
-  unsigned PointerVersion;
   void *PointeeAddress;
-  unsigned PointeeVersion;
 };
 }
 

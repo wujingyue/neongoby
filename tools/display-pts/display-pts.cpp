@@ -10,17 +10,34 @@
 #include <cstdio>
 #include <cassert>
 #include <vector>
+#include <map>
+#include <set>
 using namespace std;
 
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/DenseMap.h"
 using namespace llvm;
+
+#include "common/IDAssigner.h"
+using namespace rcs;
 
 #include "dyn-aa/LogRecord.h"
 using namespace dyn_aa;
 
-// Map: (address, version) => allocator's value ID
-DenseMap<pair<void *, unsigned>, unsigned> AddrTakenDecls;
+typedef pair<unsigned long, unsigned long> Interval;
+
+struct IntervalComparer {
+  bool operator()(const Interval &I1, const Interval &I2) const {
+    return I1.second <= I2.first;
+  }
+};
+
+typedef map<Interval, unsigned, IntervalComparer> IntervalTree;
+
+IntervalTree AddrTakenDecls;
+// The value IDs of all allocators ever occured. 
+// Note that this set is not equivalent to the value set of <AddrTakenDecls>,
+// because <AddrTakenDecls> changes from time to time. 
+set<unsigned> AddrTakenVids;
 // Use DenseSet instead of vector, because they are usually lots of 
 // duplicated edges. 
 // (pointer vid, pointee vid)
@@ -28,25 +45,38 @@ DenseSet<pair<unsigned, unsigned> > TopLevelPointTos;
 DenseSet<pair<unsigned, unsigned> > AddrTakenPointTos;
 
 static void ProcessAddrTakenDecl(const AddrTakenDeclLogRecord &Record) {
-  pair<void *, unsigned> Key(Record.Address, Record.Version);
-  assert(!AddrTakenDecls.count(Key) && "Shouldn't be declared twice");
-  AddrTakenDecls[Key] = Record.AllocatedBy;
+  unsigned long Start = (unsigned long)Record.Address;
+  Interval I(Start, Start + Record.Bound);
+  pair<IntervalTree::iterator, IntervalTree::iterator> ER =
+      AddrTakenDecls.equal_range(I);
+  AddrTakenDecls.erase(ER.first, ER.second);
+  AddrTakenDecls.insert(make_pair(I, Record.AllocatedBy));
+  AddrTakenVids.insert(Record.AllocatedBy);
+}
+
+// Returns the value ID of <Addr>'s allocator. 
+// Possible allocators include malloc function calls, AllocaInsts, and
+// global variables. 
+static unsigned LookupAddress(void *Addr) {
+  Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
+  IntervalTree::iterator Pos = AddrTakenDecls.find(I);
+  if (Pos == AddrTakenDecls.end())
+    return IDAssigner::INVALID_ID;
+  return Pos->second;
 }
 
 static void ProcessTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
-  pair<void *, unsigned> PttKey(Record.PointeeAddress, Record.PointeeVersion);
-  assert(AddrTakenDecls.count(PttKey));
-  TopLevelPointTos.insert(make_pair(Record.PointerValueID,
-                                    AddrTakenDecls.lookup(PttKey)));
+  unsigned PointeeVID = LookupAddress(Record.PointeeAddress);
+  if (PointeeVID != IDAssigner::INVALID_ID)
+    TopLevelPointTos.insert(make_pair(Record.PointerValueID, PointeeVID));
 }
 
 static void ProcessAddrTakenPointTo(const AddrTakenPointToLogRecord &Record) {
-  pair<void *, unsigned> PtrKey(Record.PointerAddress, Record.PointerVersion);
-  pair<void *, unsigned> PttKey(Record.PointeeAddress, Record.PointeeVersion);
-  assert(AddrTakenDecls.count(PtrKey));
-  assert(AddrTakenDecls.count(PttKey));
-  AddrTakenPointTos.insert(make_pair(AddrTakenDecls.lookup(PtrKey),
-                                     AddrTakenDecls.lookup(PttKey)));
+  unsigned PointerVID = LookupAddress(Record.PointerAddress);
+  unsigned PointeeVID = LookupAddress(Record.PointeeAddress);
+  assert(PointerVID != IDAssigner::INVALID_ID);
+  if (PointeeVID != IDAssigner::INVALID_ID)
+    AddrTakenPointTos.insert(make_pair(PointerVID, PointeeVID));
 }
 
 static void ReadLog() {
@@ -89,6 +119,7 @@ static void ReadLog() {
         assert(false && "Unknown record type");
     }
   }
+  cerr << "Processed " << numRecords << " records\n";
   cerr << "# of addr-taken decls = " << numAddrTakenDecls << "\n";
   cerr << "# of addr-taken point-tos = " << numAddrTakenPointTos << "\n";
   cerr << "# of top-level point-tos = " << numTopLevelPointTos << "\n";
@@ -99,23 +130,14 @@ static void WriteDot() {
   printf("strict digraph PointTo {\n");
 
   // Output nodes. 
-  // AddrTakenDecls may contain duplicated vids, because one value may span
-  // through multiple bytes. We do not want to output duplicated vids. 
-  vector<unsigned> AddrTakenVids;
-  for (DenseMap<pair<void *, unsigned>, unsigned>::iterator
-       I = AddrTakenDecls.begin(), E = AddrTakenDecls.end(); I != E; ++I) {
-    AddrTakenVids.push_back(I->second);
-  }
-  sort(AddrTakenVids.begin(), AddrTakenVids.end());
-  AddrTakenVids.resize(unique(AddrTakenVids.begin(), AddrTakenVids.end()) -
-                       AddrTakenVids.begin());
-  for (size_t i = 0; i < AddrTakenVids.size(); ++i) {
-    printf("AddrTaken%d [label = %d, style = filled, fillcolor = yellow]\n",
-           AddrTakenVids[i], AddrTakenVids[i]);
+  for (set<unsigned>::iterator I = AddrTakenVids.begin();
+       I != AddrTakenVids.end(); ++I) {
+    printf("AddrTaken%u [label = %u, style = filled, fillcolor = yellow]\n",
+           *I, *I);
   }
   for (DenseSet<pair<unsigned, unsigned> >::iterator
        I = TopLevelPointTos.begin(); I != TopLevelPointTos.end(); ++I) {
-    printf("TopLevel%d [label = %d]\n", I->first, I->first);
+    printf("TopLevel%u [label = %u]\n", I->first, I->first);
   }
 
   // Output edges. 
