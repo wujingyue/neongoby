@@ -4,8 +4,6 @@
 // in .dot format. 
 // TODO: Only outputs static point-to graphs for now. 
 
-// Caution: This piece of code may not compile with gcc-4.3 or earlier. 
-
 #include <iostream>
 #include <cstdio>
 #include <cassert>

@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = MemoryInstrumenter
+DIRS = MemoryInstrumenter PointToDrawer
 
 include $(LEVEL)/Makefile.common
