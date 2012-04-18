@@ -6,6 +6,7 @@ using namespace std;
 
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
 #include "common/IDAssigner.h"
@@ -19,6 +20,7 @@ struct PointToDrawer: public ModulePass {
   PointToDrawer(): ModulePass(ID) {}
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual bool runOnModule(Module &M);
+  virtual void print(raw_ostream &O, const Module *M) const;
 };
 }
 using namespace dyn_aa;
@@ -42,6 +44,7 @@ bool PointToDrawer::runOnModule(Module &M) {
 
   assert(DotFileName != "");
   FILE *DotFile = fopen(DotFileName.c_str(), "w");
+  fprintf(DotFile, "strict digraph PointTo {\n");
 
   set<unsigned> PointerVids, PointeeVids;
   unsigned NumValues = IDA.getNumValues();
@@ -67,13 +70,18 @@ bool PointToDrawer::runOnModule(Module &M) {
   for (set<unsigned>::iterator I = PointeeVids.begin(); I != PointeeVids.end();
        ++I) {
     fprintf(DotFile,
-            "AddrTaken%u [label = %u, style = filled, fillcolor = yellow]", 
+            "AddrTaken%u [label = %u, style = filled, fillcolor = yellow]\n", 
             *I, *I);
   }
 
+  fprintf(DotFile, "}\n");
   fclose(DotFile);
 
   return false;
+}
+
+void PointToDrawer::print(raw_ostream &O, const Module *M) const {
+  // Do nothing. 
 }
 
 static RegisterPass<PointToDrawer> X("draw-point-to",
