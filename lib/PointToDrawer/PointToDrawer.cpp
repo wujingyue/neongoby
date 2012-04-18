@@ -31,6 +31,7 @@ static cl::opt<string> DotFileName("dot",
 char PointToDrawer::ID = 0;
 
 void PointToDrawer::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.setPreservesAll();
   AU.addRequired<IDAssigner>();
   AU.addRequired<PointerAnalysis>();
 }
