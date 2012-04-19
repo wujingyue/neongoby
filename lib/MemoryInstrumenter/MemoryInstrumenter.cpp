@@ -131,7 +131,7 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
   Value *Arg1 = Main->arg_begin();
   assert(Arg1->getType() == IntType);
   Value *Arg2 = ++Main->arg_begin();
-  assert(isa<PointerType>(Arg2->getType()));
+  assert(Arg2->getType()->isPointerTy());
   assert(cast<PointerType>(Arg2->getType())->getElementType() == CharStarType);
   
   Value *Args[3] = {Arg1, Arg2,
@@ -154,15 +154,17 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   // start = alloca type
   // =>
   // start = alloca type
-  // HookMemAlloc(ins id, start, sizeof(type))
+  // HookMemAlloc
+  // HookTopLevel
   instrumentMemoryAllocation(AI, ConstantInt::get(LongType, TypeSize), Loc);
+  instrumentPointer(AI, Loc);
 }
 
 void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start, Value *Size,
                                                     Instruction *Loc) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-  assert(isa<PointerType>(Start->getType()));
+  assert(Start->getType()->isPointerTy());
   assert(Size->getType() == LongType);
   assert(Loc);
 
@@ -229,8 +231,10 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   // start = malloc(size)
   // =>
   // start = malloc(size)
-  // HookMemAlloc(start, size)
+  // HookMemAlloc
+  // HookTopLevel
   instrumentMemoryAllocation(Ins, Size, Loc);
+  instrumentPointer(Ins, Loc);
 }
 
 void MemoryInstrumenter::checkFeatures(Module &M) {
@@ -262,19 +266,19 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
     if (isa<SequentialType>(GI->getType()))
-      assert(isa<PointerType>(GI->getType()));
+      assert(GI->getType()->isPointerTy());
   }
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     for (Function::arg_iterator AI = F->arg_begin(); AI != F->arg_end(); ++AI) {
       if (isa<SequentialType>(AI->getType()))
-        assert(isa<PointerType>(AI->getType()));
+        assert(AI->getType()->isPointerTy());
     }
   }
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
         if (isa<SequentialType>(Ins->getType()))
-          assert(isa<PointerType>(Ins->getType()));
+          assert(Ins->getType()->isPointerTy());
       }
     }
   }
@@ -534,7 +538,7 @@ void MemoryInstrumenter::addNewGlobalCtor(Module &M) {
 void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
   Value *ValueStored = SI->getValueOperand();
   const Type *ValueType = ValueStored->getType();
-  if (ValueType == LongType || isa<PointerType>(ValueType)) {
+  if (ValueType == LongType || ValueType->isPointerTy()) {
     vector<Value *> Args;
     if (ValueType == LongType) {
       Instruction *ValueCast = new IntToPtrInst(ValueStored, CharStarType,
@@ -570,12 +574,12 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     return;
   }
 
-
   // Instrument memory allocation function calls. 
   CallSite CS(I);
   if (CS.getInstruction()) {
     // TODO: A function pointer can possibly point to memory allocation
     // or memroy free functions. We don't handle this case for now. 
+    // We added a feature check. The pass will assertion fail upon such cases. 
     Function *Callee = CS.getCalledFunction();
     if (Callee && isMalloc(Callee)) {
       instrumentMalloc(CS);
@@ -590,9 +594,8 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   }
 
   // Regular pointers, i.e. not the results of mallocs or allocs. 
-  if (isa<PointerType>(I->getType())) {
+  if (I->getType()->isPointerTy())
     instrumentPointerInstruction(I);
-  }
 }
 
 void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
@@ -614,6 +617,8 @@ void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
 void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
+  assert(V->getType()->isPointerTy());
+
   unsigned ValueID = IDA.getValueID(V);
   if (ValueID == IDAssigner::INVALID_ID)
     errs() << *V << "\n";
@@ -631,7 +636,7 @@ void MemoryInstrumenter::instrumentPointerParameters(Function *F) {
   assert(F && !F->isDeclaration());
   Instruction *Entry = F->begin()->getFirstNonPHI();
   for (Function::arg_iterator AI = F->arg_begin(); AI != F->arg_end(); ++AI) {
-    if (isa<PointerType>(AI->getType()))
+    if (AI->getType()->isPointerTy())
       instrumentPointer(AI, Entry);
   }
 }

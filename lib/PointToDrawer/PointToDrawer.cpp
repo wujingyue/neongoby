@@ -51,15 +51,17 @@ bool PointToDrawer::runOnModule(Module &M) {
   for (unsigned PointerVid = 0; PointerVid < NumValues; ++PointerVid) {
     Value *Pointer = IDA.getValue(PointerVid);
     assert(Pointer);
-    ValueList Pointees;
-    PA.getPointees(Pointer, Pointees);
-    for (size_t j = 0; j < Pointees.size(); ++j) {
-      Value *Pointee = Pointees[j];
-      unsigned PointeeVid = IDA.getValueID(Pointee);
-      assert(PointeeVid != IDAssigner::INVALID_ID);
-      fprintf(DotFile, "TopLevel%u -> AddrTaken%u\n", PointerVid, PointeeVid);
-      PointerVids.insert(PointerVid);
-      PointeeVids.insert(PointeeVid);
+    if (Pointer->getType()->isPointerTy()) {
+      ValueList Pointees;
+      PA.getPointees(Pointer, Pointees);
+      for (size_t j = 0; j < Pointees.size(); ++j) {
+        Value *Pointee = Pointees[j];
+        unsigned PointeeVid = IDA.getValueID(Pointee);
+        assert(PointeeVid != IDAssigner::INVALID_ID);
+        fprintf(DotFile, "TopLevel%u -> AddrTaken%u\n", PointerVid, PointeeVid);
+        PointerVids.insert(PointerVid);
+        PointeeVids.insert(PointeeVid);
+      }
     }
   }
   
