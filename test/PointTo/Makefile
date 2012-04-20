@@ -19,7 +19,17 @@ clean:
 %.png: %.dot
 	dot $< -o $@ -Tpng
 
-%.dot: %.pts
+%.dot: %.pts ../Original/%.bc
+	opt -disable-output \
+		-load $(LLVM_ROOT)/install/lib/id.so \
+		-load $(LLVM_ROOT)/install/lib/PointerAnalysis.so \
+		-load $(LLVM_ROOT)/install/lib/DynamicPointerAnalysis.so \
+		-dyn-pa \
+		-draw-point-to \
+		-log-file $< \
+		-dot $@ \
+		< $(word 2, $^)
+
 	display-pts < $< > $@
 
 %.pts: ../Instrumented/%.inst
