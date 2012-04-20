@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = MemoryInstrumenter
+DIRS = MemoryInstrumenter DynamicPointerAnalysis
 
 include $(LEVEL)/Makefile.common
