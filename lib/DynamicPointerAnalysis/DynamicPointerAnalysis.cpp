@@ -118,8 +118,12 @@ void DynamicPointerAnalysis::processAddrTakenDecl(
     const AddrTakenDeclLogRecord &Record) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-  Value *Allocator = IDA.getValue(Record.AllocatedBy);
-  assert(Allocator);
+  Value *Allocator = NULL;
+  if (Record.AllocatedBy != IDAssigner::INVALID_ID)
+    Allocator = IDA.getValue(Record.AllocatedBy);
+  // Allocator may be NULL. 
+  // In that case, the memory block is allocated by an external instruction.
+  // e.g. main arguments. 
 
   unsigned long Start = (unsigned long)Record.Address;
   Interval I(Start, Start + Record.Bound);
