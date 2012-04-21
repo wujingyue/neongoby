@@ -400,12 +400,9 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     // functions. 
     if (F->isIntrinsic())
       continue;
-#if 0
-    uint64_t TypeSize = TD.getTypeSizeInBits(F->getFunctionType());
+    uint64_t TypeSize = TD.getTypeSizeInBits(F->getType());
     TypeSize = BitLengthToByteLength(TypeSize);
     assert(TypeSize == TD.getPointerSize());
-#endif
-    uint64_t TypeSize = TD.getPointerSize();
     instrumentMemoryAllocation(F, ConstantInt::get(LongType, TypeSize), Ret);
     instrumentPointer(F, Ret);
   }
