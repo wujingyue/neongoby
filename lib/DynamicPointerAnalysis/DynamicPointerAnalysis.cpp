@@ -27,6 +27,8 @@ struct DynamicPointerAnalysis: public ModulePass, public PointerAnalysis {
   virtual void getAllPointers(ValueList &Pointers);
   virtual bool getPointees(const Value *Pointer, ValueList &Pointees);
 
+  virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
+
  private:
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
   void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
@@ -177,4 +179,10 @@ void DynamicPointerAnalysis::getAllPointers(ValueList &Pointers) {
        I != PointTos.end(); ++I) {
     Pointers.push_back(const_cast<Value *>(I->first));
   }
+}
+
+void *DynamicPointerAnalysis::getAdjustedAnalysisPointer(AnalysisID PI) {
+  if (PI == &PointerAnalysis::ID)
+    return (PointerAnalysis *)this;
+  return this;
 }

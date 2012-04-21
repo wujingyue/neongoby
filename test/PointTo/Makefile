@@ -30,8 +30,6 @@ clean:
 		-dot $@ \
 		< $(word 2, $^)
 
-	display-pts < $< > $@
-
 %.pts: ../Instrumented/%.inst
 	$<
 	mv /tmp/pts $@
