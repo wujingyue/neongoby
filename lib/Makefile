@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = MemoryInstrumenter DynamicPointerAnalysis
+DIRS = MemoryInstrumenter DynamicPointerAnalysis CallGraphChecker
 
 include $(LEVEL)/Makefile.common
