@@ -1,7 +1,6 @@
 // Author: Jingyue
 
 #include <cstdio>
-#include <set>
 using namespace std;
 
 #include "llvm/Pass.h"
@@ -9,48 +8,14 @@ using namespace std;
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-#include "common/PointerAnalysis.h"
-using namespace rcs;
-
-#include "dyn-aa/LogRecord.h"
-#include "dyn-aa/IntervalTree.h"
+#include "dyn-aa/DynamicPointerAnalysis.h"
 using namespace dyn_aa;
 
-namespace dyn_aa {
-struct DynamicPointerAnalysis: public ModulePass, public PointerAnalysis {
-  static char ID;
-
-  DynamicPointerAnalysis(): ModulePass(ID) {}
-  virtual bool runOnModule(Module &M);
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-
-  virtual void getAllPointers(ValueList &Pointers);
-  virtual bool getPointees(const Value *Pointer, ValueList &Pointees);
-
-  virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
-
- private:
-  void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
-  void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
-  void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
-  // Returns the value ID of <Addr>'s allocator. 
-  // Possible allocators include malloc function calls, AllocaInsts, and
-  // global variables. 
-  Value *lookupAddress(void *Addr) const;
-
-  // Stores all addr-taken declarations. 
-  IntervalTree AddrTakenDecls;
-  // Use DenseSet instead of vector, because they are usually lots of 
-  // duplicated edges. 
-  DenseMap<const Value *, ValueSet> PointTos;
-};
-}
-
 static RegisterPass<DynamicPointerAnalysis> X("dyn-pa", 
-                                              "Build the point-to graph from "
-                                              "the point-to log",
-                                              false,
-                                              true);
+                                              "Build the point-to graph "
+                                              "from the point-to log",
+                                              false, // Is CFG Only? 
+                                              true); // Is Analysis? 
 static RegisterAnalysisGroup<PointerAnalysis> Y(X);
 
 static cl::opt<string> LogFileName("log-file",
