@@ -21,13 +21,13 @@ clean:
 
 %.dot: %.pts ../Original/%.bc
 	opt -disable-output \
-		-load $(LLVM_ROOT)/install/lib/id.so \
+		-load $(LLVM_ROOT)/install/lib/ID.so \
 		-load $(LLVM_ROOT)/install/lib/PointerAnalysis.so \
 		-load $(LLVM_ROOT)/install/lib/DynamicPointerAnalysis.so \
 		-dyn-pa \
 		-draw-point-to \
 		-log-file $< \
-		-dot $@ \
+		-pointer-dot $@ \
 		< $(word 2, $^)
 
 %.pts: ../Instrumented/%.inst

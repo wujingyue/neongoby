@@ -71,6 +71,9 @@ bool CallGraphChecker::runOnModule(Module &M) {
       }
     }
   }
+
+  errs() << "=== Congrats! You passed all the tests. ===\n";
+
   return false;
 }
 

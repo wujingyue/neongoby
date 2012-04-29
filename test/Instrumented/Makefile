@@ -18,7 +18,7 @@ clean:
 
 %.inst.bc: ../Original/%.bc
 	opt \
-		-load $(LLVM_ROOT)/install/lib/id.so \
+		-load $(LLVM_ROOT)/install/lib/ID.so \
 		-load $(LLVM_ROOT)/install/lib/MemoryInstrumenter.so \
 		-instrument-memory \
 		-o $@ \

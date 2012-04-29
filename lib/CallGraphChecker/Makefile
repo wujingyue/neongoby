@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = DynamicPointerAnalysis
+LIBRARYNAME = CallGraphChecker
 
 LOADABLE_MODULE = 1
 BUILD_ARCHIVE = 1
