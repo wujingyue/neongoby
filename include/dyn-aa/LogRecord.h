@@ -36,6 +36,7 @@ struct AddrTakenPointToLogRecord {
 
   void *PointerAddress;
   void *PointeeAddress;
+  // <InstructionID> is not a must, but makes debugging a lot easier. 
   unsigned InstructionID;
 };
 }
