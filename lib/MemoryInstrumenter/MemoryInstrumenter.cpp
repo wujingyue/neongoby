@@ -14,6 +14,7 @@ using namespace std;
 #include "llvm/Support/Debug.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/Transforms/Utils/BuildLibCalls.h"
 using namespace llvm;
 
 #include "common/IDAssigner.h"
@@ -183,14 +184,17 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start, Value *Size,
 }
 
 void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
+  TargetData &TD = getAnalysis<TargetData>();
+
   Function *Callee = CS.getCalledFunction();
   assert(isMalloc(Callee));
   
   Instruction *Ins = CS.getInstruction();
-  // The return type should be (i8 *). 
+  // The return type should be (i8 *).
   assert(Ins->getType() == CharStarType);
 
   // Calculate where to insert.
+  // <Loc> will be the next instruction executed.
   BasicBlock::iterator Loc;
   if (!Ins->isTerminator()) {
     Loc = Ins;
@@ -223,9 +227,19 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   } else if (CalleeName == "realloc") {
     // Don't worry about the free feature. We ignore free anyway. 
     Size = CS.getArgument(1);
+  } else if (CalleeName == "strdup") {
+    // Use strlen to compute the length of the allocated memory. 
+    IRBuilder<> Builder(Loc);
+    Value *StrLen = EmitStrLen(Ins, Builder, &TD);
+    AddedByUs.insert(cast<Instruction>(StrLen));
+    // size = strlen(result) + 1
+    Size = Builder.CreateAdd(StrLen, ConstantInt::get(LongType, 1));
+    AddedByUs.insert(cast<Instruction>(Size));
+  } else {
+    assert(false && "Unhandled malloc function call");
   }
   assert(Size);
-  // The size argument to HookMemAlloc must be long;
+  // The size argument to HookMemAlloc must be long.
   assert(Size->getType() == LongType);
 
   // start = malloc(size)
@@ -239,9 +253,9 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
 
 void MemoryInstrumenter::checkFeatures(Module &M) {
   // Check whether any memory allocation function can
-  // potentially be pointed by function pointers. 
+  // potentially be pointed by function pointers.
   // Also, all intrinsic functions will be called directly, i.e. not via
-  // function pointers. 
+  // function pointers.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (isMalloc(F) || F->isIntrinsic()) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
@@ -257,8 +271,9 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   // Check whether memory allocation functions are captured. 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     // 0 is the return, 1 is the first parameter.
-    if (F->doesNotAlias(0)) {
-      assert(isMalloc(F));
+    if (F->isDeclaration() && F->doesNotAlias(0) && !isMalloc(F)) {
+      errs() << F->getName() << " is not treated as a malloc function.\n";
+      assert(false);
     }
   }
 
@@ -411,6 +426,17 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
 }
 
 bool MemoryInstrumenter::runOnModule(Module &M) {
+  // Initialize the list of memory allocatores.
+  MallocNames.push_back("malloc");
+  MallocNames.push_back("calloc");
+  MallocNames.push_back("valloc");
+  MallocNames.push_back("realloc");
+  MallocNames.push_back("memalign");
+  MallocNames.push_back("_Znwm");
+  MallocNames.push_back("_Znaj");
+  MallocNames.push_back("_Znam");
+  MallocNames.push_back("strdup");
+
   // Check whether there are unsupported language features.
   checkFeatures(M);
 
@@ -423,16 +449,6 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
 
   // Setup hook function declarations. 
   setupHooks(M);
-
-  // Initialize the list of memory allocatores.
-  MallocNames.push_back("malloc");
-  MallocNames.push_back("calloc");
-  MallocNames.push_back("valloc");
-  MallocNames.push_back("realloc");
-  MallocNames.push_back("memalign");
-  MallocNames.push_back("_Znwm");
-  MallocNames.push_back("_Znaj");
-  MallocNames.push_back("_Znam");
 
   // Hook global variable allocations. 
   instrumentGlobals(M);

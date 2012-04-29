@@ -117,7 +117,7 @@ void DynamicPointerAnalysis::processAddrTakenPointTo(
   Value *Pointee = lookupAddress(Record.PointeeAddress);
   // The pointer operand of a StoreInst may be not allocated in the
   // application. e.g., the "environ" global variable pre-exists in the C
-  // library before the application code runs. 
+  // library before the application code runs.
   if (Pointer && Pointee)
     PointTos[Pointer].insert(Pointee);
 }
