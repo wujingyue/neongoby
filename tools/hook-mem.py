@@ -4,7 +4,7 @@ import os, sys
 
 def get_opt_base():
     return "opt " + \
-            "-load $LLVM_ROOT/install/lib/id.so " + \
+            "-load $LLVM_ROOT/install/lib/ID.so " + \
             "-load $LLVM_ROOT/install/lib/MemoryInstrumenter.so "
 
 def invoke(cmd):
@@ -33,4 +33,6 @@ if __name__ == "__main__":
         cmd += "-lbz2 "
     if prog_name.startswith("ferret"):
         cmd += "-lgsl -lblas "
+    if prog_name.startswith("gpasswd"):
+        cmd += "-lcrypt "
     invoke(cmd)
