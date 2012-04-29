@@ -115,12 +115,10 @@ void DynamicPointerAnalysis::processAddrTakenPointTo(
     const AddrTakenPointToLogRecord &Record) {
   Value *Pointer = lookupAddress(Record.PointerAddress);
   Value *Pointee = lookupAddress(Record.PointeeAddress);
-  if (!Pointer) {
-    errs() << Record.PointerAddress << "\n";
-    errs() << Record.InstructionID << "\n";
-  }
-  assert(Pointer);
-  if (Pointee)
+  // The pointer operand of a StoreInst may be not allocated in the
+  // application. e.g., the "environ" global variable pre-exists in the C
+  // library before the application code runs. 
+  if (Pointer && Pointee)
     PointTos[Pointer].insert(Pointee);
 }
 
