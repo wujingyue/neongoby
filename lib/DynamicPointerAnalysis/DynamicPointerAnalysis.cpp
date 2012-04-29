@@ -11,11 +11,11 @@ using namespace llvm;
 #include "dyn-aa/DynamicPointerAnalysis.h"
 using namespace dyn_aa;
 
-static RegisterPass<DynamicPointerAnalysis> X("dyn-pa", 
+static RegisterPass<DynamicPointerAnalysis> X("dyn-pa",
                                               "Build the point-to graph "
                                               "from the point-to log",
-                                              false, // Is CFG Only? 
-                                              true); // Is Analysis? 
+                                              false, // Is CFG Only?
+                                              true); // Is Analysis?
 static RegisterAnalysisGroup<PointerAnalysis> Y(X);
 
 static cl::opt<string> LogFileName("log-file",
@@ -26,6 +26,8 @@ static cl::opt<string> LogFileName("log-file",
 char DynamicPointerAnalysis::ID = 0;
 
 bool DynamicPointerAnalysis::runOnModule(Module &M) {
+  assert(LogFileName != "");
+
   LogRecordType RecordType;
   int numRecords = 0;
   int numAddrTakenDecls = 0;
@@ -88,9 +90,9 @@ void DynamicPointerAnalysis::processAddrTakenDecl(
   Value *Allocator = NULL;
   if (Record.AllocatedBy != IDAssigner::INVALID_ID)
     Allocator = IDA.getValue(Record.AllocatedBy);
-  // Allocator may be NULL. 
+  // Allocator may be NULL.
   // In that case, the memory block is allocated by an external instruction.
-  // e.g. main arguments. 
+  // e.g. main arguments.
 
   unsigned long Start = (unsigned long)Record.Address;
   Interval I(Start, Start + Record.Bound);
@@ -107,8 +109,9 @@ void DynamicPointerAnalysis::processTopLevelPointTo(
   Value *Pointer = IDA.getValue(Record.PointerValueID);
   Value *Pointee = lookupAddress(Record.PointeeAddress);
   assert(Pointer);
-  if (Pointee)
+  if (Pointee) {
     PointTos[Pointer].insert(Pointee);
+  }
 }
 
 void DynamicPointerAnalysis::processAddrTakenPointTo(

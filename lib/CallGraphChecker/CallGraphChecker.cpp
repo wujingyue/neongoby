@@ -22,9 +22,9 @@ struct CallGraphChecker: public ModulePass {
 
  private:
   // Look for the call edge from <Call> to <Callee> in the call graph of
-  // <Call>'s containing function. 
+  // <Call>'s containing function.
   // The current implementation iterates through all call edges from <Call>'s
-  // containing function, which is a little bit slow. 
+  // containing function, which is a little bit slow.
   bool existsInCallGraph(Instruction *Call, Function *Callee);
 };
 }
@@ -33,8 +33,8 @@ static RegisterPass<CallGraphChecker> X("check-cg",
                                         "Check whether the call graph is "
                                         "sound by comparing it with "
                                         "DynamicPointerAnalysis",
-                                        false, // Is CFG Only? 
-                                        true); // Is Analysis? 
+                                        false, // Is CFG Only?
+                                        true); // Is Analysis?
 
 char CallGraphChecker::ID = 0;
 
@@ -47,6 +47,7 @@ void CallGraphChecker::getAnalysisUsage(AnalysisUsage &AU) const {
 bool CallGraphChecker::runOnModule(Module &M) {
   PointerAnalysis &PA = getAnalysis<DynamicPointerAnalysis>();
 
+  unsigned NumMissingCallEdges = 0;
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
@@ -61,10 +62,10 @@ bool CallGraphChecker::runOnModule(Module &M) {
             Function *Callee = dyn_cast<Function>(Pointee);
             assert(Callee);
             if (!existsInCallGraph(Ins, Callee)) {
-              errs() << "Call edge does not exist in the call graph:\n";
+              ++NumMissingCallEdges;
+              errs() << "=== Call edge does not exist in the call graph ===\n";
               errs() << *Ins << "\n";
-              errs() << Callee->getName() << "\n";
-              assert(false);
+              errs() << "  " << Callee->getName() << "\n";
             }
           }
         }
@@ -72,7 +73,12 @@ bool CallGraphChecker::runOnModule(Module &M) {
     }
   }
 
-  errs() << "=== Congrats! You passed all the tests. ===\n";
+  if (NumMissingCallEdges == 0) {
+    errs() << "=== Congrats! You passed all the tests. ===\n";
+  } else {
+    errs() << "=== Detected " << NumMissingCallEdges <<
+        " missing call edges. ===\n";
+  }
 
   return false;
 }
@@ -90,9 +96,9 @@ bool CallGraphChecker::existsInCallGraph(Instruction *Call, Function *Callee) {
       != CallerNode->end()) {
     return true;
   }
-  
+
   // An instruction conservatively calls all functions by calling
-  // CallsExternalNode. 
+  // CallsExternalNode.
   if (find(CallerNode->begin(), CallerNode->end(),
            CallGraphNode::CallRecord(Call, CG.getCallsExternalNode()))
       != CallerNode->end()) {
