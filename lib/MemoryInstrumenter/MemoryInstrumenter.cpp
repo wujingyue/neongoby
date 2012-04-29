@@ -38,7 +38,7 @@ struct MemoryInstrumenter: public ModulePass {
  private:
   static uint64_t BitLengthToByteLength(uint64_t Size);
   // Includes not only "malloc", but also similar memory allocation functions
-  // such as "valloc" and "calloc". 
+  // such as "valloc" and "calloc".
   bool isMalloc(Function *F) const;
   void instrumentInstructionIfNecessary(Instruction *I);
   void instrumentMemoryAllocation(Value *Start, Value *Size, Instruction *Loc);
@@ -90,10 +90,10 @@ void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 uint64_t MemoryInstrumenter::BitLengthToByteLength(uint64_t Size) {
-  // Except bool, every type size must be a multipler of 8. 
+  // Except bool, every type size must be a multipler of 8.
   assert(Size == 1 || Size % 8 == 0);
   // The type size shouldn't be a very large number; otherwise, how would
-  // you allocate it? 
+  // you allocate it?
   assert((int64_t)Size > 0);
   if (Size != 1)
     Size /= 8;
@@ -134,7 +134,7 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
   Value *Arg2 = ++Main->arg_begin();
   assert(Arg2->getType()->isPointerTy());
   assert(cast<PointerType>(Arg2->getType())->getElementType() == CharStarType);
-  
+
   Value *Args[3] = {Arg1, Arg2,
     ConstantInt::get(IntType, IDA.getValueID(Arg2))};
   AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args, "",
@@ -144,11 +144,11 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
 void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   TargetData &TD = getAnalysis<TargetData>();
 
-  // Calculate the type size. 
+  // Calculate the type size.
   uint64_t TypeSize = TD.getTypeSizeInBits(AI->getAllocatedType());
   TypeSize = BitLengthToByteLength(TypeSize);
 
-  // Calculate where to insert. 
+  // Calculate where to insert.
   assert(!AI->isTerminator());
   BasicBlock::iterator Loc = AI; ++Loc;
 
@@ -188,7 +188,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
 
   Function *Callee = CS.getCalledFunction();
   assert(isMalloc(Callee));
-  
+
   Instruction *Ins = CS.getInstruction();
   // The return type should be (i8 *).
   assert(Ins->getType() == CharStarType);
@@ -204,16 +204,16 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     Loc = cast<InvokeInst>(Ins)->getNormalDest()->getFirstNonPHI();
   }
 
-  // Retrive the allocated size. 
+  // Retrive the allocated size.
   StringRef CalleeName = Callee->getName();
   Value *Size = NULL;
   if (CalleeName == "malloc" || CalleeName == "valloc" ||
       CalleeName.startswith("_Zn")) {
     Size = CS.getArgument(0);
   } else if (CalleeName == "calloc") {
-    // calloc() takes two size_t, i.e. i64. 
+    // calloc() takes two size_t, i.e. i64.
     // Therefore, no need to worry Mul will have two operands with different
-    // types. Also, Size will always be of type i64. 
+    // types. Also, Size will always be of type i64.
     assert(CS.getArgument(0)->getType() == LongType);
     assert(CS.getArgument(1)->getType() == LongType);
     Size = BinaryOperator::Create(Instruction::Mul,
@@ -225,10 +225,10 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   } else if (CalleeName == "memalign") {
     Size = CS.getArgument(1);
   } else if (CalleeName == "realloc") {
-    // Don't worry about the free feature. We ignore free anyway. 
+    // Don't worry about the free feature. We ignore free anyway.
     Size = CS.getArgument(1);
   } else if (CalleeName == "strdup") {
-    // Use strlen to compute the length of the allocated memory. 
+    // Use strlen to compute the length of the allocated memory.
     IRBuilder<> Builder(Loc);
     Value *StrLen = EmitStrLen(Ins, Builder, &TD);
     AddedByUs.insert(cast<Instruction>(StrLen));
@@ -268,7 +268,7 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
     }
   }
 
-  // Check whether memory allocation functions are captured. 
+  // Check whether memory allocation functions are captured.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     // 0 is the return, 1 is the first parameter.
     if (F->isDeclaration() && F->doesNotAlias(0) && !isMalloc(F)) {
@@ -277,8 +277,8 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
     }
   }
 
-  // Sequential types except pointer types shouldn't be used as the type of 
-  // an instruction, a function parameter, or a global variable. 
+  // Sequential types except pointer types shouldn't be used as the type of
+  // an instruction, a function parameter, or a global variable.
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
     if (isa<SequentialType>(GI->getType()))
@@ -301,7 +301,7 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
 }
 
 void MemoryInstrumenter::setupHooks(Module &M) {
-  // No existing functions have the same name. 
+  // No existing functions have the same name.
   assert(M.getFunction(MemAllocHookName) == NULL);
   assert(M.getFunction(MainArgsAllocHookName) == NULL);
   assert(M.getFunction(TopLevelHookName) == NULL);
@@ -309,7 +309,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(GlobalsAllocHookName) == NULL);
   assert(M.getFunction(MemHooksIniterName) == NULL);
 
-  // Setup MemAllocHook. 
+  // Setup MemAllocHook.
   vector<Type *> ArgTypes;
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(CharStarType);
@@ -322,7 +322,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                   MemAllocHookName,
                                   &M);
 
-  // Setup MainArgsAllocHook. 
+  // Setup MainArgsAllocHook.
   ArgTypes.clear();
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(PointerType::getUnqual(CharStarType));
@@ -335,14 +335,14 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                        MainArgsAllocHookName,
                                        &M);
 
-  // Setup MemHooksIniter. 
+  // Setup MemHooksIniter.
   FunctionType *MemHooksIniterType = FunctionType::get(VoidType, false);
   MemHooksIniter = Function::Create(MemHooksIniterType,
                                     GlobalValue::ExternalLinkage,
                                     MemHooksIniterName,
                                     &M);
-  
-  // Setup TopLevelHook. 
+
+  // Setup TopLevelHook.
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(IntType);
@@ -354,7 +354,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                   TopLevelHookName,
                                   &M);
 
-  // Setup AddrTakenHook. 
+  // Setup AddrTakenHook.
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(CharStarType);
@@ -367,7 +367,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                    AddrTakenHookName,
                                    &M);
 
-  // Setup GlobalsAccessHook. 
+  // Setup GlobalsAccessHook.
   FunctionType *GlobalsAllocHookType = FunctionType::get(VoidType, false);
   GlobalsAllocHook = Function::Create(GlobalsAllocHookType,
                                       GlobalValue::ExternalLinkage,
@@ -386,9 +386,9 @@ void MemoryInstrumenter::setupScalarTypes(Module &M) {
 void MemoryInstrumenter::instrumentGlobals(Module &M) {
   TargetData &TD = getAnalysis<TargetData>();
 
-  // Function HookGlobalsAlloc contains only one basic block. 
+  // Function HookGlobalsAlloc contains only one basic block.
   // The BB iterates through all global variables, and calls HookMemAlloc
-  // for each of them. 
+  // for each of them.
   BasicBlock *BB = BasicBlock::Create(M.getContext(), "entry",
                                       GlobalsAllocHook);
   Instruction *Ret = ReturnInst::Create(M.getContext(), BB);
@@ -396,8 +396,8 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
 
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
-    // We are going to delete llvm.global_ctors. 
-    // Therefore, don't instrument it. 
+    // We are going to delete llvm.global_ctors.
+    // Therefore, don't instrument it.
     if (GI->getName() == "llvm.global_ctors")
       continue;
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
@@ -407,14 +407,14 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   }
 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    // These hooks added by us don't have a value ID. 
+    // These hooks added by us don't have a value ID.
     if (MemAllocHook == F || MainArgsAllocHook == F || TopLevelHook == F ||
         AddrTakenHook == F || GlobalsAllocHook == F || MemHooksIniter == F) {
       continue;
     }
     // Ignore intrinsic functions because we cannot take the address of
     // an intrinsic. Also, no function pointers will point to instrinsic
-    // functions. 
+    // functions.
     if (F->isIntrinsic())
       continue;
     uint64_t TypeSize = TD.getTypeSizeInBits(F->getType());
@@ -440,27 +440,27 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   // Check whether there are unsupported language features.
   checkFeatures(M);
 
-  // Setup scalar types. 
+  // Setup scalar types.
   setupScalarTypes(M);
 
-  // Find the main function. 
+  // Find the main function.
   Main = M.getFunction("main");
   assert(Main && !Main->isDeclaration() && !Main->hasLocalLinkage());
 
-  // Setup hook function declarations. 
+  // Setup hook function declarations.
   setupHooks(M);
 
-  // Hook global variable allocations. 
+  // Hook global variable allocations.
   instrumentGlobals(M);
 
-  // Hook memory allocations and memory accesses. 
+  // Hook memory allocations and memory accesses.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (F->isDeclaration())
       continue;
     // The second argument of main(int argc, char *argv[]) needs special
     // handling, which is done in instrumentMainArgs.
     // We should treat argv as a memory allocation instead of a regular
-    // pointer. 
+    // pointer.
     if (Main != F)
       instrumentPointerParameters(F);
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
@@ -470,19 +470,19 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   }
 
   // main(argc, argv)
-  // argv is allocated by outside. 
+  // argv is allocated by outside.
   instrumentMainArgs(M);
 
-  // Lower global constructors. 
+  // Lower global constructors.
   lowerGlobalCtors(M);
 
 #if 0
-  // Add HookGlobalsAlloc to the global_ctors list. 
+  // Add HookGlobalsAlloc to the global_ctors list.
   addNewGlobalCtor(M);
 #endif
 
   // Call the memory hook initializer and the global variable allocation hook
-  // at the very beginning. 
+  // at the very beginning.
   Instruction *OldEntry = Main->begin()->getFirstNonPHI();
   AddedByUs.insert(CallInst::Create(MemHooksIniter, "", OldEntry));
   AddedByUs.insert(CallInst::Create(GlobalsAllocHook, "", OldEntry));
@@ -491,15 +491,15 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
 }
 
 void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
-  // Find llvm.global_ctors. 
+  // Find llvm.global_ctors.
   GlobalVariable *GV = M.getNamedGlobal("llvm.global_ctors");
   if (!GV)
     return;
   assert(!GV->isDeclaration() && !GV->hasLocalLinkage());
-  
+
   // Should be an array of '{ int, void ()* }' structs.  The first value is
   // the init priority, which must be 65535 if the bitcode is generated using
-  // clang. 
+  // clang.
   ConstantArray *InitList = dyn_cast<ConstantArray>(GV->getInitializer());
   assert(InitList);
   for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
@@ -508,44 +508,44 @@ void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
     assert(CS);
     assert(CS->getNumOperands() == 2);
 
-    // Get the priority. 
+    // Get the priority.
     ConstantInt *Priority = dyn_cast<ConstantInt>(CS->getOperand(0));
     assert(Priority);
     // TODO: For now, we assume all priorities must be 65535.
     assert(Priority->equalsInt(65535));
 
-    // Get the constructor function. 
+    // Get the constructor function.
     Constant *FP = CS->getOperand(1);
     if (FP->isNullValue())
       break;  // Found a null terminator, exit.
 
-    // Explicitly call the constructor at the main entry. 
+    // Explicitly call the constructor at the main entry.
     AddedByUs.insert(CallInst::Create(FP, "", Main->begin()->getFirstNonPHI()));
   }
-  
-  // Clear the global_ctors array. 
+
+  // Clear the global_ctors array.
   // Use eraseFromParent() instead of removeFromParent().
   GV->eraseFromParent();
 }
 
 void MemoryInstrumenter::addNewGlobalCtor(Module &M) {
   // TODO: Could have reused the old StructType, but llvm.global_ctors is not
-  // guaranteed to exist. 
-  // Setup the types. 
+  // guaranteed to exist.
+  // Setup the types.
   vector<Type *> FieldTypes;
   FieldTypes.push_back(IntType);
   FieldTypes.push_back(GlobalsAllocHook->getType());
   StructType *GlobalCtorType = StructType::get(M.getContext(), FieldTypes);
   ArrayType *GlobalCtorsType = ArrayType::get(GlobalCtorType, 1);
 
-  // Setup the intializer. 
+  // Setup the intializer.
   vector<Constant *> Fields;
   Fields.push_back(ConstantInt::get(IntType, 65535));
   Fields.push_back(GlobalsAllocHook);
   Constant *GlobalCtor = ConstantStruct::get(GlobalCtorType, Fields);
   Constant *Initializer = ConstantArray::get(GlobalCtorsType, GlobalCtor);
 
-  // Finally, create the global variable. 
+  // Finally, create the global variable.
   new GlobalVariable(M, GlobalCtorsType, true, GlobalValue::AppendingLinkage,
                      Initializer, "llvm.global_ctors");
 }
@@ -587,23 +587,23 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   DEBUG(dbgs() << "Processing" << *I << "\n";);
 
-  // Skip those instructions added by us. 
+  // Skip those instructions added by us.
   if (AddedByUs.count(I))
     return;
 
-  // Instrument pointer stores, i.e. store X *, X **. 
-  // store long, long * is considered as a pointer store as well. 
+  // Instrument pointer stores, i.e. store X *, X **.
+  // store long, long * is considered as a pointer store as well.
   if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
     instrumentStoreInst(SI);
     return;
   }
 
-  // Instrument memory allocation function calls. 
+  // Instrument memory allocation function calls.
   CallSite CS(I);
   if (CS.getInstruction()) {
     // TODO: A function pointer can possibly point to memory allocation
-    // or memroy free functions. We don't handle this case for now. 
-    // We added a feature check. The pass will assertion fail upon such cases. 
+    // or memroy free functions. We don't handle this case for now.
+    // We added a feature check. The pass will assertion fail upon such cases.
     Function *Callee = CS.getCalledFunction();
     if (Callee && isMalloc(Callee)) {
       instrumentMalloc(CS);
@@ -611,13 +611,13 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     }
   }
 
-  // Instrument AllocaInsts. 
+  // Instrument AllocaInsts.
   if (AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
     instrumentAlloca(AI);
     return;
   }
 
-  // Regular pointers, i.e. not the results of mallocs or allocs. 
+  // Regular pointers, i.e. not the results of mallocs or allocs.
   if (I->getType()->isPointerTy())
     instrumentPointerInstruction(I);
 }
@@ -626,7 +626,7 @@ void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
   BasicBlock::iterator Loc;
   if (isa<PHINode>(I)) {
     // Cannot insert hooks right after a PHI, because PHINodes have to be
-    // grouped together. 
+    // grouped together.
     Loc = I->getParent()->getFirstNonPHI();
   } else if (!I->isTerminator()) {
     Loc = I;
@@ -647,7 +647,7 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   if (ValueID == IDAssigner::INVALID_ID)
     errs() << *V << "\n";
   assert(ValueID != IDAssigner::INVALID_ID);
-  
+
   vector<Value *> Args;
   Instruction *Cast = new BitCastInst(V, CharStarType, "", Loc);
   AddedByUs.insert(Cast);
