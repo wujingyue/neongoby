@@ -256,7 +256,8 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
 
   // Check whether memory allocation functions are captured. 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (F->hasFnAttr(Attribute::NoAlias)) {
+    // 0 is the return, 1 is the first parameter.
+    if (F->doesNotAlias(0)) {
       assert(isMalloc(F));
     }
   }
