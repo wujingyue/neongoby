@@ -342,6 +342,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(CharStarType);
+  ArgTypes.push_back(IntType);
   FunctionType *AddrTakenHookType = FunctionType::get(VoidType,
                                                       ArgTypes,
                                                       false);
@@ -533,10 +534,13 @@ void MemoryInstrumenter::addNewGlobalCtor(Module &M) {
 }
 
 void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
   Value *ValueStored = SI->getValueOperand();
   const Type *ValueType = ValueStored->getType();
   if (ValueType == LongType || ValueType->isPointerTy()) {
     vector<Value *> Args;
+
     if (ValueType == LongType) {
       Instruction *ValueCast = new IntToPtrInst(ValueStored, CharStarType,
                                                 "", SI);
@@ -548,11 +552,17 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
       AddedByUs.insert(ValueCast);
       Args.push_back(ValueCast);
     }
+
     Instruction *PointerCast = new BitCastInst(SI->getPointerOperand(),
                                                CharStarType,
                                                "", SI);
     AddedByUs.insert(PointerCast);
     Args.push_back(PointerCast);
+
+    unsigned InsID = IDA.getInstructionID(SI);
+    assert(InsID != IDAssigner::INVALID_ID);
+    Args.push_back(ConstantInt::get(IntType, InsID));
+
     AddedByUs.insert(CallInst::Create(AddrTakenHook, Args, "", SI));
   }
 }

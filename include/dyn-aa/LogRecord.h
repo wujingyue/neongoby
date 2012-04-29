@@ -31,11 +31,12 @@ struct TopLevelPointToLogRecord {
 
 struct AddrTakenPointToLogRecord {
   AddrTakenPointToLogRecord() {}
-  AddrTakenPointToLogRecord(void *PtrAddr, void *PttAddr):
-      PointerAddress(PtrAddr), PointeeAddress(PttAddr) {}
+  AddrTakenPointToLogRecord(void *PtrAddr, void *PttAddr, unsigned InsID):
+      PointerAddress(PtrAddr), PointeeAddress(PttAddr), InstructionID(InsID) {}
 
   void *PointerAddress;
   void *PointeeAddress;
+  unsigned InstructionID;
 };
 }
 

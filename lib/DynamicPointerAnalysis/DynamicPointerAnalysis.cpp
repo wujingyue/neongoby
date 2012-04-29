@@ -115,6 +115,10 @@ void DynamicPointerAnalysis::processAddrTakenPointTo(
     const AddrTakenPointToLogRecord &Record) {
   Value *Pointer = lookupAddress(Record.PointerAddress);
   Value *Pointee = lookupAddress(Record.PointeeAddress);
+  if (!Pointer) {
+    errs() << Record.PointerAddress << "\n";
+    errs() << Record.InstructionID << "\n";
+  }
   assert(Pointer);
   if (Pointee)
     PointTos[Pointer].insert(Pointee);
