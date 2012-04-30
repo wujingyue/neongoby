@@ -1,17 +1,17 @@
 // Author: Jingyue
 
-// Three types of messages: 
+// Three types of messages:
 // 1) Declare an addr-taken variable: allocator vid, start, bound
 // 2) Top-level point to addr-taken: vid => pointee
 // 3) Addr-taken point to addr-taken: pointer, pointee, instruction id of
 //    the store instruction
-// 
+//
 // The third type of messages is not necessary for constructing a traditional
 // point-to graph, because users query with top-level variables only. However,
-// we put it there because we want to observe the shape. 
+// we put it there because we want to observe the shape.
 //
 // Hook functions are declared with extern "C", because we want to disable
-// the C++ name mangling and make the instrumentation easier. 
+// the C++ name mangling and make the instrumentation easier.
 
 #include <pthread.h>
 
@@ -19,7 +19,6 @@
 #include <cstring>
 #include <vector>
 #include <cassert>
-#include <unordered_map>
 #include <string>
 using namespace std;
 
@@ -46,7 +45,7 @@ extern "C" void InitMemHooks() {
   Global = new Environment();
 }
 
-// Must be called with Global->Lock held. 
+// Must be called with Global->Lock held.
 template<class T>
 void PrintLogRecord(LogRecordType RecordType, const T &Record) {
   FILE *LogFile = fopen(Environment::LogFileName.c_str(), "ab");
@@ -86,8 +85,8 @@ extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
   pthread_mutex_unlock(&Global->Lock);
 }
 
-// TODO: Unused for now. 
-// Memory will be released anyway when the program exits. 
+// TODO: Unused for now.
+// Memory will be released anyway when the program exits.
 extern "C" void FinalizeMemHooks() {
   delete Global;
 }
