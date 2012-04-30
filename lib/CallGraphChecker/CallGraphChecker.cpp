@@ -63,7 +63,9 @@ bool CallGraphChecker::runOnModule(Module &M) {
             assert(Callee);
             if (!existsInCallGraph(Ins, Callee)) {
               ++NumMissingCallEdges;
-              errs() << "=== Call edge does not exist in the call graph ===\n";
+              errs().changeColor(raw_ostream::RED);
+              errs() << "Call edge does not exist in the call graph:\n";
+              errs().resetColor();
               errs() << *Ins << "\n";
               errs() << "  " << Callee->getName() << "\n";
             }
@@ -74,10 +76,13 @@ bool CallGraphChecker::runOnModule(Module &M) {
   }
 
   if (NumMissingCallEdges == 0) {
-    errs() << "=== Congrats! You passed all the tests. ===\n";
+    errs().changeColor(raw_ostream::GREEN, true);
+    errs() << "Congrats! You passed all the tests.\n";
+    errs().resetColor();
   } else {
-    errs() << "=== Detected " << NumMissingCallEdges <<
-        " missing call edges. ===\n";
+    errs().changeColor(raw_ostream::RED, true);
+    errs() << "Detected " << NumMissingCallEdges << " missing call edges.\n";
+    errs().resetColor();
   }
 
   return false;
