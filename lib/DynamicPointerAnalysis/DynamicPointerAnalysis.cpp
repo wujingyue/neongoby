@@ -1,11 +1,14 @@
 // Author: Jingyue
 
+#define DEBUG_TYPE "dyn-pa"
+
 #include <cstdio>
 using namespace std;
 
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/Statistic.h"
 using namespace llvm;
 
 #include "dyn-aa/DynamicPointerAnalysis.h"
@@ -23,26 +26,27 @@ static cl::opt<string> LogFileName("log-file",
                                             "running the instrumented program"),
                                    cl::init(""));
 
+STATISTIC(NumAddrTakenDecls, "Number of addr-taken declaration records");
+STATISTIC(NumAddrTakenPointTos, "Number of addr-taken point-to records");
+STATISTIC(NumTopLevelPointTos, "Number of top-level point-tos records");
+STATISTIC(NumRecords, "Number of all records");
+
 char DynamicPointerAnalysis::ID = 0;
 
 bool DynamicPointerAnalysis::runOnModule(Module &M) {
   assert(LogFileName != "");
 
-  LogRecordType RecordType;
-  int numRecords = 0;
-  int numAddrTakenDecls = 0;
-  int numAddrTakenPointTos = 0;
-  int numTopLevelPointTos = 0;
-
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
+
+  LogRecordType RecordType;
   while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
-    if (numRecords % 1000000 == 0)
-      errs() << "Processed " << numRecords << " records\n";
-    ++numRecords;
+    if (NumRecords % 1000000 == 0)
+      errs() << "Processed " << NumRecords << " records\n";
+    ++NumRecords;
     switch (RecordType) {
       case AddrTakenDecl:
         {
-          ++numAddrTakenDecls;
+          ++NumAddrTakenDecls;
           AddrTakenDeclLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
           processAddrTakenDecl(Record);
@@ -50,7 +54,7 @@ bool DynamicPointerAnalysis::runOnModule(Module &M) {
         break;
       case TopLevelPointTo:
         {
-          ++numTopLevelPointTos;
+          ++NumTopLevelPointTos;
           TopLevelPointToLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
           processTopLevelPointTo(Record);
@@ -58,7 +62,7 @@ bool DynamicPointerAnalysis::runOnModule(Module &M) {
         break;
       case AddrTakenPointTo:
         {
-          ++numAddrTakenPointTos;
+          ++NumAddrTakenPointTos;
           AddrTakenPointToLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
           processAddrTakenPointTo(Record);
@@ -70,10 +74,9 @@ bool DynamicPointerAnalysis::runOnModule(Module &M) {
     }
   }
 
-  errs() << "Processed " << numRecords << " records\n";
-  errs() << "# of addr-taken decls = " << numAddrTakenDecls << "\n";
-  errs() << "# of addr-taken point-tos = " << numAddrTakenPointTos << "\n";
-  errs() << "# of top-level point-tos = " << numTopLevelPointTos << "\n";
+  fclose(LogFile);
+
+  errs() << "Processed " << NumRecords << " records\n";
 
   return false;
 }
