@@ -28,6 +28,6 @@ clean:
 	llvm-dis $<
 
 %.inst: %.inst.bc
-	clang++ $< ../../lib/MemoryInstrumenter/MemoryHooks.bc -o $@ $(LDFLAGS)
+	clang++ $< $(LLVM_ROOT)/install/lib/libMemoryHooks.a -o $@ $(LDFLAGS)
 
 .PHONY: clean

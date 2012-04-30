@@ -25,9 +25,8 @@ if __name__ == "__main__":
     cmd += "< " + prog_name + ".bc "
     invoke(cmd)
 
-    # FIXME: Avoid hard-coding the path. 
     cmd = "clang++ " + instrumented_bc + " "
-    cmd += "~/Research/dyn-aa/lib/MemoryInstrumenter/MemoryHooks.bc "
+    cmd += "$LLVM_ROOT/install/lib/libMemoryHooks.a "
     cmd += "-o " + instrumented_exe + " -pthread "
     if prog_name.startswith("pbzip2"):
         cmd += "-lbz2 "
