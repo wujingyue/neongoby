@@ -51,7 +51,7 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-fpcg'))
     cmd = ' '.join((cmd, '-check-cg'))
     cmd = ' '.join((cmd, '-log-file', args.log))
-    cmd = ' '.join((cmd, '<', args.bc, '-disable-output'))
+    cmd = ' '.join((cmd, '-disable-output', '<', args.bc))
 
     ret = os.system(cmd)
     sys.exit(ret)
