@@ -275,6 +275,10 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
       errs() << F->getName() << " is not treated as a malloc function.\n";
       assert(false);
     }
+    // TODO: getline
+    if (F->isDeclaration() && F->getName() == "getline") {
+      assert(false);
+    }
   }
 
   // Sequential types except pointer types shouldn't be used as the type of
