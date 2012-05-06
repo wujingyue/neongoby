@@ -34,9 +34,9 @@ STATISTIC(NumRecords, "Number of all records");
 char DynamicPointerAnalysis::ID = 0;
 
 bool DynamicPointerAnalysis::runOnModule(Module &M) {
-  assert(LogFileName != "");
-
+  assert(LogFileName != "" && "Didn't specify the log file.");
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
+  assert(LogFile && "The log file doesn't exist.");
 
   LogRecordType RecordType;
   while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
