@@ -8,18 +8,22 @@
 #include "llvm/Value.h"
 
 namespace dyn_aa {
-// Address range. 
-typedef pair<unsigned long, unsigned long> Interval;
-
-// All intervals in the interval tree are disjoint. 
-// This IntervalComparer treats overlapping intervals as equal. 
-struct IntervalComparer {
-  bool operator()(const Interval &I1, const Interval &I2) const {
-    return I1.second <= I2.first;
+// Address range.
+// All intervals in the interval tree are disjoint.
+// The comparer treats overlapping intervals as equal.
+struct Interval {
+  Interval(unsigned long S, unsigned long E): Start(S), End(E) {}
+  bool operator<(const Interval &Second) const {
+    return End <= Second.Start;
   }
+
+  unsigned long Start;
+  unsigned long End;
 };
 
-typedef std::map<Interval, llvm::Value *, IntervalComparer> IntervalTree;
+template <typename T>
+struct IntervalTree: public std::map<Interval, T> {
+};
 }
 
 #endif

@@ -9,12 +9,11 @@ import sys
 def load_plugin(cmd, plugin):
     return ' '.join((cmd, '-load $LLVM_ROOT/install/lib/' + plugin + '.so'))
 
-def get_base_cmd():
+def get_base_cmd(args):
     base_cmd = 'opt'
     base_cmd = load_plugin(base_cmd, 'ID')
     base_cmd = load_plugin(base_cmd, 'CFG')
-    base_cmd = load_plugin(base_cmd, 'PointerAnalysis')
-    base_cmd = load_plugin(base_cmd, 'DynamicPointerAnalysis')
+    base_cmd = load_plugin(base_cmd, 'DynamicAliasAnalysis')
     base_cmd = load_plugin(base_cmd, 'CallGraphChecker')
     return base_cmd
 
@@ -31,12 +30,13 @@ if __name__ == '__main__':
             choices = aa_choices)
     args = parser.parse_args()
 
-    cmd = get_base_cmd()
+    cmd = get_base_cmd(args)
     # Some AAs require additional plugins.
     # TODO: Should be specified in a configuration file.
     if args.aa == 'ds-aa':
         cmd = load_plugin(cmd, 'LLVMDataStructure')
     elif args.aa == 'anders-aa':
+        cmd = load_plugin(cmd, 'PointerAnalysis')
         cmd = load_plugin(cmd, 'Andersens')
     elif args.aa == 'bc2bdd-aa':
         if not os.path.exists('bc2bdd.conf'):

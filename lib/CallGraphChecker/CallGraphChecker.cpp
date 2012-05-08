@@ -7,9 +7,13 @@
 #include "llvm/Pass.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/raw_ostream.h"
-using namespace llvm;
+#include "llvm/Support/CommandLine.h"
 
 #include "dyn-aa/DynamicPointerAnalysis.h"
+#include "dyn-aa/DynamicAliasAnalysis.h"
+
+using namespace llvm;
+using namespace rcs;
 using namespace dyn_aa;
 
 namespace dyn_aa {
@@ -40,26 +44,44 @@ char CallGraphChecker::ID = 0;
 
 void CallGraphChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
-  AU.addRequired<DynamicPointerAnalysis>();
+  AU.addRequired<DynamicAliasAnalysis>();
   AU.addRequired<CallGraph>();
 }
 
 bool CallGraphChecker::runOnModule(Module &M) {
-  PointerAnalysis &PA = getAnalysis<DynamicPointerAnalysis>();
-
   unsigned NumMissingCallEdges = 0;
+
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
         CallSite CS(Ins);
         if (CS && CS.getCalledFunction() == NULL) {
           Value *FP = CS.getCalledValue();
+
+          // Get all the targets of <FP>.
+          FuncList Callees;
+#if 0
+          // Use DynamicPointerAnalysis if not fine-grained.
+          PointerAnalysis &PA = getAnalysis<DynamicPointerAnalysis>();
           ValueList Pointees;
           PA.getPointees(FP, Pointees);
           for (size_t j = 0; j < Pointees.size(); ++j) {
-            Value *Pointee = Pointees[j];
-            assert(Pointee);
-            Function *Callee = dyn_cast<Function>(Pointee);
+            assert(Pointees[j]);
+            Callees.push_back(cast<Function>(Pointees[j]));
+          }
+#endif
+          // Use DynamicAliasAnalysis if fine-grained.
+          // <Callees> contains real callees in the execution.
+          AliasAnalysis &AA = getAnalysis<DynamicAliasAnalysis>();
+          for (Module::iterator PotentialCallee = M.begin();
+               PotentialCallee != M.end(); ++PotentialCallee) {
+            if (AA.alias(FP, PotentialCallee))
+              Callees.push_back(PotentialCallee);
+          }
+
+          // Check whether these targets are captured in the call graph.
+          for (size_t j = 0; j < Callees.size(); ++j) {
+            Function *Callee = Callees[j];
             assert(Callee);
             if (!existsInCallGraph(Ins, Callee)) {
               ++NumMissingCallEdges;

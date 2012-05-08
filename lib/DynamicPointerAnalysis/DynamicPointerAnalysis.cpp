@@ -1,17 +1,19 @@
 // Author: Jingyue
 
-#define DEBUG_TYPE "dyn-pa"
+#define DEBUG_TYPE "dyn-aa"
 
 #include <cstdio>
-using namespace std;
 
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ADT/Statistic.h"
-using namespace llvm;
 
 #include "dyn-aa/DynamicPointerAnalysis.h"
+
+using namespace std;
+using namespace llvm;
+using namespace rcs;
 using namespace dyn_aa;
 
 static RegisterPass<DynamicPointerAnalysis> X("dyn-pa",
@@ -99,7 +101,7 @@ void DynamicPointerAnalysis::processAddrTakenDecl(
 
   unsigned long Start = (unsigned long)Record.Address;
   Interval I(Start, Start + Record.Bound);
-  pair<IntervalTree::iterator, IntervalTree::iterator> ER =
+  pair<IntervalTree<Value *>::iterator, IntervalTree<Value *>::iterator> ER =
       AddrTakenDecls.equal_range(I);
   AddrTakenDecls.erase(ER.first, ER.second);
   AddrTakenDecls.insert(make_pair(I, Allocator));
@@ -125,7 +127,7 @@ void DynamicPointerAnalysis::processAddrTakenPointTo(
 
 Value *DynamicPointerAnalysis::lookupAddress(void *Addr) const {
   Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
-  IntervalTree::const_iterator Pos = AddrTakenDecls.find(I);
+  IntervalTree<Value *>::const_iterator Pos = AddrTakenDecls.find(I);
   if (Pos == AddrTakenDecls.end())
     return NULL;
   return Pos->second;

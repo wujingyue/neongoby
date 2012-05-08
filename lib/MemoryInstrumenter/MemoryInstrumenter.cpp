@@ -272,8 +272,10 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     // 0 is the return, 1 is the first parameter.
     if (F->isDeclaration() && F->doesNotAlias(0) && !isMalloc(F)) {
-      errs() << F->getName() << " is not treated as a malloc function.\n";
-      assert(false);
+      errs().changeColor(raw_ostream::RED);
+      errs() << F->getName() << "'s return value is marked noalias, ";
+      errs() << "but the function is not treated as malloc.\n";
+      errs().resetColor();
     }
     // TODO: getline
     if (F->isDeclaration() && F->getName() == "getline") {
