@@ -130,18 +130,21 @@ void DynamicAliasAnalysis::processTopLevelPointTo(
   addPointingTo(PointerVID, PointeeAddress, Version);
 
   // Report aliases.
-  if (Version != UnknownVersion) {
-    PointedByMapTy::iterator I = BeingPointedBy.find(
-        make_pair(PointeeAddress, Version));
-    assert(I != BeingPointedBy.end()); // We just added a point-to in.
-    addAliasPairs(PointerVID, I->second);
-  } else {
-    // Iterate through all elements in the BeingPointedBy table.
-    // TODO: Could be optimized by using a two-level hash table.
-    for (PointedByMapTy::iterator I = BeingPointedBy.begin();
-         I != BeingPointedBy.end(); ++I) {
-      if (I->first.first == PointeeAddress)
-        addAliasPairs(PointerVID, I->second);
+  if (PointeeAddress) {
+    // We don't consider NULLs as aliases.
+    if (Version != UnknownVersion) {
+      PointedByMapTy::iterator I = BeingPointedBy.find(
+          make_pair(PointeeAddress, Version));
+      assert(I != BeingPointedBy.end()); // We just added a point-to in.
+      addAliasPairs(PointerVID, I->second);
+    } else {
+      // Iterate through all elements in the BeingPointedBy table.
+      // TODO: Could be optimized by using a two-level hash table.
+      for (PointedByMapTy::iterator I = BeingPointedBy.begin();
+           I != BeingPointedBy.end(); ++I) {
+        if (I->first.first == PointeeAddress)
+          addAliasPairs(PointerVID, I->second);
+      }
     }
   }
 }
