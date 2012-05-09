@@ -115,8 +115,7 @@ void AliasAnalysisChecker::PrintValue(raw_ostream &O, const Value *V) {
   } else if (const Argument *Arg = dyn_cast<Argument>(V)) {
     O << Arg->getParent()->getName() << ":  " << *Arg;
   } else if (const Instruction *Ins = dyn_cast<Instruction>(V)) {
-    O << Ins->getParent()->getParent()->getName();
-    O << "." << Ins->getParent()->getName() << ":";
+    O << Ins->getParent()->getParent()->getName() << ":";
     O << *Ins;
   } else {
     O << *V;
