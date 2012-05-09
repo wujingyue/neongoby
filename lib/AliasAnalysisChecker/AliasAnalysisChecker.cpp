@@ -27,8 +27,14 @@ struct AliasAnalysisChecker: public ModulePass {
 
  private:
   static void PrintValue(raw_ostream &O, const Value *V);
+  static bool isIntraProcQuery(const Value *V1, const Value *V2);
+  static const Function *getContainingFunction(const Value *V);
 };
 }
+
+static cl::opt<bool> IntraProc(
+    "intra",
+    cl::desc("Whether the checked AA supports intra-procedural queries only"));
 
 static RegisterPass<AliasAnalysisChecker> X(
     "check-aa",
@@ -74,6 +80,10 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
     ValueSet::iterator J = I;
     for (++J; J != PointerOperands.end(); ++J) {
       Value *V2 = *J;
+      // If the checked AA supports only intra-procedural queries,
+      // and V1 and V2 belong to different functions, skip this query.
+      if (IntraProc && !isIntraProcQuery(V1, V2))
+        continue;
       if (AA.alias(V1, V2) == AliasAnalysis::NoAlias &&
           DAA.alias(V1, V2) != AliasAnalysis::NoAlias) {
         ++NumMissingAliases;
@@ -111,4 +121,19 @@ void AliasAnalysisChecker::PrintValue(raw_ostream &O, const Value *V) {
   } else {
     O << *V;
   }
+}
+
+bool AliasAnalysisChecker::isIntraProcQuery(const Value *V1, const Value *V2) {
+  assert(V1->getType()->isPointerTy() && V2->getType()->isPointerTy());
+  const Function *F1 = getContainingFunction(V1);
+  const Function *F2 = getContainingFunction(V2);
+  return F1 == NULL || F2 == NULL || F1 == F2;
+}
+
+const Function *AliasAnalysisChecker::getContainingFunction(const Value *V) {
+  if (const Instruction *Ins = dyn_cast<Instruction>(V))
+    return Ins->getParent()->getParent();
+  if (const Argument *Arg = dyn_cast<Argument>(V))
+    return Arg->getParent();
+  return NULL;
 }
