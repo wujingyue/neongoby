@@ -34,4 +34,6 @@ if __name__ == "__main__":
         cmd += "-lgsl -lblas "
     if prog_name.startswith("gpasswd"):
         cmd += "-lcrypt "
+    if prog_name.startswith("cvs"):
+        cmd += "-lcrypt "
     invoke(cmd)
