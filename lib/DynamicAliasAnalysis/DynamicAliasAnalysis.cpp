@@ -130,7 +130,7 @@ void DynamicAliasAnalysis::processTopLevelPointTo(
   addPointingTo(PointerVID, PointeeAddress, Version);
 
   // Report aliases.
-  if (PointeeAddress) {
+  if (PointeeAddress != NULL) {
     // We don't consider NULLs as aliases.
     if (Version != UnknownVersion) {
       PointedByMapTy::iterator I = BeingPointedBy.find(

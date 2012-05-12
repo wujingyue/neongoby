@@ -41,7 +41,10 @@ struct MemoryInstrumenter: public ModulePass {
   // such as "valloc" and "calloc".
   bool isMalloc(Function *F) const;
   void instrumentInstructionIfNecessary(Instruction *I);
-  void instrumentMemoryAllocation(Value *Start, Value *Size, Instruction *Loc);
+  // Emit code to handle memory allocation.
+  // If <Success>, range [<Start>, <Start> + <Size>) is allocated.
+  void instrumentMemoryAllocation(Value *Start, Value *Size, Value *Success,
+                                  Instruction *Loc);
   void instrumentMalloc(const CallSite &CS);
   void instrumentAlloca(AllocaInst *AI);
   void instrumentStoreInst(StoreInst *SI);
@@ -157,16 +160,21 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   // start = alloca type
   // HookMemAlloc
   // HookTopLevel
-  instrumentMemoryAllocation(AI, ConstantInt::get(LongType, TypeSize), Loc);
-  instrumentPointer(AI, Loc);
+  instrumentMemoryAllocation(AI, ConstantInt::get(LongType, TypeSize), NULL,
+                             Loc);
 }
 
-void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start, Value *Size,
+void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
+                                                    Value *Size,
+                                                    Value *Success,
                                                     Instruction *Loc) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   assert(Start->getType()->isPointerTy());
+  assert(Size);
+  // The size argument to HookMemAlloc must be long.
   assert(Size->getType() == LongType);
+  assert(Success == NULL || Success->getType()->isIntegerTy(1));
   assert(Loc);
 
   vector<Value *> Args;
@@ -180,7 +188,22 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start, Value *Size,
   Args.push_back(Start);
   // Arg 3: bound
   Args.push_back(Size);
-  AddedByUs.insert(CallInst::Create(MemAllocHook, Args, "", Loc));
+
+  if (Success == NULL) {
+    AddedByUs.insert(CallInst::Create(MemAllocHook, Args, "", Loc));
+  } else {
+    BasicBlock *BB = Loc->getParent();
+    BasicBlock *RestBB = BB->splitBasicBlock(Loc, "rest");
+    BasicBlock *CallMallocHookBB = BasicBlock::Create(BB->getContext(),
+                                                      "call_malloc_hook",
+                                                      BB->getParent(),
+                                                      RestBB);
+    BB->getTerminator()->eraseFromParent();
+    AddedByUs.insert(BranchInst::Create(CallMallocHookBB, RestBB, Success, BB));
+    AddedByUs.insert(CallInst::Create(MemAllocHook, Args, "",
+                                      CallMallocHookBB));
+    AddedByUs.insert(BranchInst::Create(RestBB, CallMallocHookBB));
+  }
 }
 
 void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
@@ -190,8 +213,6 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   assert(isMalloc(Callee));
 
   Instruction *Ins = CS.getInstruction();
-  // The return type should be (i8 *).
-  assert(Ins->getType() == CharStarType);
 
   // Calculate where to insert.
   // <Loc> will be the next instruction executed.
@@ -204,16 +225,25 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     Loc = cast<InvokeInst>(Ins)->getNormalDest()->getFirstNonPHI();
   }
 
-  // Retrive the allocated size.
-  StringRef CalleeName = Callee->getName();
+  IRBuilder<> Builder(Loc);
+  Value *Start = NULL;
   Value *Size = NULL;
-  if (CalleeName == "malloc" || CalleeName == "valloc" ||
-      CalleeName.startswith("_Zn")) {
+  Value *Success = NULL; // Indicate whether the allocation succeeded.
+
+  StringRef CalleeName = Callee->getName();
+  if (CalleeName == "malloc" || CalleeName == "valloc") {
+    Start = Ins;
+    Size = CS.getArgument(0);
+    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    AddedByUs.insert(cast<Instruction>(Success));
+  } else if (CalleeName.startswith("_Zn")) {
+    Start = Ins;
     Size = CS.getArgument(0);
   } else if (CalleeName == "calloc") {
     // calloc() takes two size_t, i.e. i64.
     // Therefore, no need to worry Mul will have two operands with different
     // types. Also, Size will always be of type i64.
+    Start = Ins;
     assert(CS.getArgument(0)->getType() == LongType);
     assert(CS.getArgument(1)->getType() == LongType);
     Size = BinaryOperator::Create(Instruction::Mul,
@@ -222,33 +252,41 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
                                   "",
                                   Loc);
     AddedByUs.insert(cast<Instruction>(Size));
-  } else if (CalleeName == "memalign") {
+    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    AddedByUs.insert(cast<Instruction>(Success));
+  } else if (CalleeName == "memalign" || CalleeName == "realloc") {
+    Start = Ins;
     Size = CS.getArgument(1);
-  } else if (CalleeName == "realloc") {
-    // Don't worry about the free feature. We ignore free anyway.
-    Size = CS.getArgument(1);
+    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "strdup") {
+    Start = Ins;
     // Use strlen to compute the length of the allocated memory.
-    IRBuilder<> Builder(Loc);
     Value *StrLen = EmitStrLen(Ins, Builder, &TD);
     AddedByUs.insert(cast<Instruction>(StrLen));
     // size = strlen(result) + 1
     Size = Builder.CreateAdd(StrLen, ConstantInt::get(LongType, 1));
     AddedByUs.insert(cast<Instruction>(Size));
+    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    AddedByUs.insert(cast<Instruction>(Success));
+  } else if (CalleeName == "getline") {
+    // getline(char **lineptr, size_t *n, FILE *stream)
+    // start = *lineptr
+    // size = *n
+    // succ = (<rv> != -1)
+    Start = Builder.CreateLoad(CS.getArgument(0));
+    AddedByUs.insert(cast<Instruction>(Start));
+    Size = Builder.CreateLoad(CS.getArgument(1));
+    AddedByUs.insert(cast<Instruction>(Size));
+    Success = Builder.CreateICmpNE(Ins, ConstantInt::get(Ins->getType(), -1));
+    AddedByUs.insert(cast<Instruction>(Success));
   } else {
     assert(false && "Unhandled malloc function call");
   }
-  assert(Size);
-  // The size argument to HookMemAlloc must be long.
-  assert(Size->getType() == LongType);
 
   // start = malloc(size)
-  // =>
-  // start = malloc(size)
   // HookMemAlloc
-  // HookTopLevel
-  instrumentMemoryAllocation(Ins, Size, Loc);
-  instrumentPointer(Ins, Loc);
+  instrumentMemoryAllocation(Start, Size, Success, Loc);
 }
 
 void MemoryInstrumenter::checkFeatures(Module &M) {
@@ -276,10 +314,6 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
       errs() << F->getName() << "'s return value is marked noalias, ";
       errs() << "but the function is not treated as malloc.\n";
       errs().resetColor();
-    }
-    // TODO: getline
-    if (F->isDeclaration() && F->getName() == "getline") {
-      assert(false);
     }
   }
 
@@ -408,7 +442,8 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
       continue;
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
     TypeSize = BitLengthToByteLength(TypeSize);
-    instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), Ret);
+    instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), NULL,
+                               Ret);
     instrumentPointer(GI, Ret);
   }
 
@@ -426,7 +461,8 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     uint64_t TypeSize = TD.getTypeSizeInBits(F->getType());
     TypeSize = BitLengthToByteLength(TypeSize);
     assert(TypeSize == TD.getPointerSize());
-    instrumentMemoryAllocation(F, ConstantInt::get(LongType, TypeSize), Ret);
+    instrumentMemoryAllocation(F, ConstantInt::get(LongType, TypeSize), NULL,
+                               Ret);
     instrumentPointer(F, Ret);
   }
 }
@@ -442,6 +478,7 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   MallocNames.push_back("_Znaj");
   MallocNames.push_back("_Znam");
   MallocNames.push_back("strdup");
+  MallocNames.push_back("getline");
 
   // Check whether there are unsupported language features.
   checkFeatures(M);
@@ -606,24 +643,20 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
 
   // Instrument memory allocation function calls.
   CallSite CS(I);
-  if (CS.getInstruction()) {
+  if (CS) {
     // TODO: A function pointer can possibly point to memory allocation
     // or memroy free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
     Function *Callee = CS.getCalledFunction();
-    if (Callee && isMalloc(Callee)) {
+    if (Callee && isMalloc(Callee))
       instrumentMalloc(CS);
-      return;
-    }
   }
 
   // Instrument AllocaInsts.
-  if (AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
+  if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
     instrumentAlloca(AI);
-    return;
-  }
 
-  // Regular pointers, i.e. not the results of mallocs or allocs.
+  // Any instructions of a pointer type, including mallocs and AllocaInsts.
   if (I->getType()->isPointerTy())
     instrumentPointerInstruction(I);
 }
