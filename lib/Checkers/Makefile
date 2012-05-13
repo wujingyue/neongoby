@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = AliasAnalysisChecker
+LIBRARYNAME = Checkers
 
 LOADABLE_MODULE = 1
 

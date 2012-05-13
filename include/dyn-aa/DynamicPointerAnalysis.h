@@ -11,13 +11,13 @@
 
 #include "common/PointerAnalysis.h"
 
-#include "dyn-aa/LogRecord.h"
 #include "dyn-aa/IntervalTree.h"
+#include "dyn-aa/LogProcessor.h"
 
 using namespace llvm;
 
 namespace dyn_aa {
-struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis {
+struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis, public LogProcessor {
   static char ID;
 
   DynamicPointerAnalysis(): ModulePass(ID) {}
@@ -29,10 +29,12 @@ struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis {
   virtual bool getPointees(const Value *Pointer, rcs::ValueList &Pointees);
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
 
- private:
+  // Interfaces of LogProcessor.
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
   void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
   void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
+
+ private:
   // Returns the value ID of <Addr>'s allocator.
   // Possible allocators include malloc function calls, AllocaInsts, and
   // global variables.

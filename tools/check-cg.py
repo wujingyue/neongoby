@@ -13,8 +13,9 @@ def get_base_cmd(args):
     base_cmd = 'opt'
     base_cmd = load_plugin(base_cmd, 'ID')
     base_cmd = load_plugin(base_cmd, 'CFG')
-    base_cmd = load_plugin(base_cmd, 'DynamicAliasAnalysis')
-    base_cmd = load_plugin(base_cmd, 'CallGraphChecker')
+    base_cmd = load_plugin(base_cmd, 'PointerAnalysis')
+    base_cmd = load_plugin(base_cmd, 'DynamicAnalyses')
+    base_cmd = load_plugin(base_cmd, 'Checkers')
     return base_cmd
 
 if __name__ == '__main__':
@@ -36,7 +37,6 @@ if __name__ == '__main__':
     if args.aa == 'ds-aa':
         cmd = load_plugin(cmd, 'LLVMDataStructure')
     elif args.aa == 'anders-aa':
-        cmd = load_plugin(cmd, 'PointerAnalysis')
         cmd = load_plugin(cmd, 'Andersens')
     elif args.aa == 'bc2bdd-aa':
         if not os.path.exists('bc2bdd.conf'):

@@ -11,11 +11,12 @@
 
 #include "dyn-aa/IntervalTree.h"
 #include "dyn-aa/LogRecord.h"
+#include "dyn-aa/LogProcessor.h"
 
 using namespace llvm;
 
 namespace dyn_aa {
-struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis {
+struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public LogProcessor {
   typedef DenseMap<std::pair<void *, unsigned>, std::vector<unsigned> >
       PointedByMapTy;
   typedef DenseMap<unsigned, std::pair<void *, unsigned> > PointsToMapTy;
@@ -33,11 +34,12 @@ struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis {
   AliasAnalysis::AliasResult alias(const Location &L1, const Location &L2);
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
 
- private:
-  // TODO: These functions are very similar to those in DynamicPointerAnalysis.
-  // Maybe we should use the visitor mode.
+  // Interfaces of LogProcessor.
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
   void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
+  void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
+
+ private:
   // Returns the current version of <Addr>.
   unsigned lookupAddress(void *Addr) const;
   void removePointingTo(unsigned ValueID);

@@ -6,7 +6,7 @@ def get_base_cmd():
     base_cmd = "opt -debug "
     base_cmd += "-load $LLVM_ROOT/install/lib/ID.so "
     base_cmd += "-load $LLVM_ROOT/install/lib/PointerAnalysis.so "
-    base_cmd += "-load $LLVM_ROOT/install/lib/DynamicPointerAnalysis.so "
+    base_cmd += "-load $LLVM_ROOT/install/lib/DynamicAnalyses.so "
     base_cmd += "-load $LLVM_ROOT/install/lib/LLVMDataStructure.so "
     return base_cmd
 

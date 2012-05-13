@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = DynamicAliasAnalysis
+LIBRARYNAME = DynamicAnalyses
 
 LOADABLE_MODULE = 1
 
