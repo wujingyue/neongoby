@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = MemoryInstrumenter
+LIBRARYNAME = Instrumenter
 
 LOADABLE_MODULE = 1
 

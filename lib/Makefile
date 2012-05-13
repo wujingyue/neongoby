@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = MemoryInstrumenter DynamicAnalyses Checkers
+DIRS = DynamicAnalyses Checkers Instrumenters
 
 include $(LEVEL)/Makefile.common
