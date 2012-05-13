@@ -30,15 +30,42 @@ void LogProcessor::processLog() {
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
   assert(LogFile && "The log file doesn't exist.");
 
+  // Count the records.
   LogRecordType RecordType;
   while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
-    if (NumRecords % 1000000 == 0)
-      errs() << "Processed " << NumRecords << " records\n";
     ++NumRecords;
     switch (RecordType) {
       case AddrTakenDecl:
+        ++NumAddrTakenDecls;
+        assert(fseek(LogFile, sizeof(AddrTakenDeclLogRecord), SEEK_CUR) == 0);
+        break;
+      case TopLevelPointTo:
+        ++NumTopLevelPointTos;
+        assert(fseek(LogFile, sizeof(TopLevelPointToLogRecord), SEEK_CUR) == 0);
+        break;
+      case AddrTakenPointTo:
+        ++NumAddrTakenPointTos;
+        assert(fseek(LogFile, sizeof(AddrTakenPointToLogRecord),
+                     SEEK_CUR) == 0);
+        break;
+      default:
+        fprintf(stderr, "RecordType = %d\n", RecordType);
+        assert(false && "Unknown record type");
+    }
+  }
+  assert(NumRecords > 0);
+  errs() << "Need process " << NumRecords << " records.\n";
+
+  // Set the file position to the beginning.
+  rewind(LogFile);
+
+  // Actually process these log records.
+  unsigned NumRecordsProcessed = 0;
+  printProgressBar(NumRecordsProcessed, NumRecords);
+  while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
+    switch (RecordType) {
+      case AddrTakenDecl:
         {
-          ++NumAddrTakenDecls;
           AddrTakenDeclLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
           processAddrTakenDecl(Record);
@@ -46,7 +73,6 @@ void LogProcessor::processLog() {
         break;
       case TopLevelPointTo:
         {
-          ++NumTopLevelPointTos;
           TopLevelPointToLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
           processTopLevelPointTo(Record);
@@ -54,19 +80,34 @@ void LogProcessor::processLog() {
         break;
       case AddrTakenPointTo:
         {
-          ++NumAddrTakenPointTos;
           AddrTakenPointToLogRecord Record;
           assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
-          // Do nothing on AddrTakenPointTo.
+          processAddrTakenPointTo(Record);
         }
         break;
       default:
-        fprintf(stderr, "RecordType = %d\n", RecordType);
-        assert(false && "Unknown record type");
+        assert(false);
     }
+    ++NumRecordsProcessed;
+    printProgressBar(NumRecordsProcessed, NumRecords);
   }
+  errs() << "\n";
 
   fclose(LogFile);
+}
 
-  errs() << "Processed " << NumRecords << " records\n";
+void LogProcessor::printProgressBar(unsigned Processed, unsigned Total) {
+  assert(Processed >= 0 && Processed <= Total);
+  assert(Total > 0);
+
+  errs().changeColor(raw_ostream::BLUE);
+  if (Processed == 0) {
+    errs() << " [0%]";
+  } else {
+    unsigned CurrentPercentage = Processed * 10 / Total;
+    unsigned OldPercentage = (Processed - 1) * 10 / Total;
+    if (CurrentPercentage != OldPercentage)
+      errs() << " [" << CurrentPercentage * 10 << "%]";
+  }
+  errs().resetColor();
 }
