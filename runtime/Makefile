@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = MemoryHooks
+DIRS = MemoryHooks AliasChecker
 
 include $(LEVEL)/Makefile.common

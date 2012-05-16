@@ -12,6 +12,7 @@
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
 #include "common/IntraReach.h"
+#include "common/IDAssigner.h"
 
 using namespace std;
 using namespace llvm;
@@ -36,7 +37,7 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   Function *AssertNoAliasHook;
   // Types.
   Type *VoidType;
-  IntegerType *CharType;
+  IntegerType *CharType, *IntType;
   PointerType *CharStarType;
 };
 }
@@ -56,7 +57,7 @@ char AliasCheckerInstrumenter::ID = 0;
 AliasCheckerInstrumenter::AliasCheckerInstrumenter(): FunctionPass(ID) {
   AssertNoAliasHook = NULL;
   VoidType = NULL;
-  CharType = NULL;
+  CharType = IntType = NULL;
   CharStarType = NULL;
 }
 
@@ -64,6 +65,7 @@ void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<AliasAnalysis>();
   AU.addRequired<IntraReach>();
   AU.addRequired<DominatorTree>();
+  AU.addRequired<IDAssigner>();
 }
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
@@ -96,7 +98,7 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   for (size_t i = 0; i < ToBeChecked.size(); ++i)
     addAliasChecker(ToBeChecked[i].first, ToBeChecked[i].second);
 
-  errs() << "Added " << ToBeChecked.size() << " AssertNoAlias function calls "
+  errs() << "Added " << ToBeChecked.size() << " AssertNoAlias calls "
       << "in function " << F.getName() << "\n";
 
   return true;
@@ -124,13 +126,18 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
   // Initialize basic types.
   VoidType = Type::getVoidTy(M.getContext());
   CharType = Type::getInt8Ty(M.getContext());
+  IntType = Type::getInt32Ty(M.getContext());
   CharStarType = PointerType::getUnqual(CharType);
 
   // Initialize function types.
-  FunctionType *AssertNoAliasHookType = FunctionType::get(
-      VoidType,
-      vector<Type *>(2, CharStarType),
-      false);
+  vector<Type *> ArgTypes;
+  ArgTypes.push_back(CharStarType);
+  ArgTypes.push_back(IntType);
+  ArgTypes.push_back(CharStarType);
+  ArgTypes.push_back(IntType);
+  FunctionType *AssertNoAliasHookType = FunctionType::get(VoidType,
+                                                          ArgTypes,
+                                                          false);
 
   // Initialize hooks.
   AssertNoAliasHook = Function::Create(AssertNoAliasHookType,
@@ -144,6 +151,7 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
 void AliasCheckerInstrumenter::addAliasChecker(Instruction *P, Instruction *Q) {
   // It's safe to use DominatorTree here, because SSAUpdater preserves CFG.
   DominatorTree &DT = getAnalysis<DominatorTree>();
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   // Compute the location to add the checker.
   BasicBlock::iterator Loc = Q;
@@ -157,10 +165,17 @@ void AliasCheckerInstrumenter::addAliasChecker(Instruction *P, Instruction *Q) {
   // Convert <P> and <Q> to "char *".
   BitCastInst *P2 = new BitCastInst(P, CharStarType, "", Loc);
   BitCastInst *Q2 = new BitCastInst(Q, CharStarType, "", Loc);
+
+  // Compute <P> and <Q>'s value IDs.
+  unsigned VIDOfP = IDA.getValueID(P), VIDOfQ = IDA.getValueID(Q);
+  assert(VIDOfP != IDAssigner::INVALID_ID && VIDOfQ != IDAssigner::INVALID_ID);
+
   // Add a function call to AssertNoAlias.
   vector<Value *> Args;
   Args.push_back(P2);
+  Args.push_back(ConstantInt::get(IntType, VIDOfP));
   Args.push_back(Q2);
+  Args.push_back(ConstantInt::get(IntType, VIDOfQ));
   CallInst::Create(AssertNoAliasHook, Args, "", Loc);
 
   // The function call just added may be broken, because <P> may not
