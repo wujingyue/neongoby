@@ -30,6 +30,7 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   virtual bool runOnFunction(Function &F);
 
  private:
+  bool isFree(Function *F) const;
   static bool Reachable(Instruction *P, Instruction *Q,
                         const ConstBBSet &ReachableFromP);
   void addAliasChecker(Instruction *P, Instruction *Q);
@@ -39,6 +40,8 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   Type *VoidType;
   IntegerType *CharType, *IntType;
   PointerType *CharStarType;
+  // List of freers.
+  vector<string> FreeNames;
 };
 }
 
@@ -101,6 +104,17 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   errs() << "Added " << ToBeChecked.size() << " AssertNoAlias calls "
       << "in function " << F.getName() << "\n";
 
+  // Remove deallocators.
+  for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
+    for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ) {
+      BasicBlock::iterator NextIns = Ins; ++NextIns;
+      CallSite CS(Ins);
+      if (CS && isFree(CS.getCalledFunction()))
+        Ins->eraseFromParent();
+      Ins = NextIns;
+    }
+  }
+
   return true;
 }
 
@@ -123,6 +137,11 @@ bool AliasCheckerInstrumenter::Reachable(Instruction *P, Instruction *Q,
 }
 
 bool AliasCheckerInstrumenter::doInitialization(Module &M) {
+  // Initialize freer list.
+  FreeNames.push_back("free");
+  FreeNames.push_back("_ZdlPv");
+  FreeNames.push_back("_ZdaPv");
+
   // Initialize basic types.
   VoidType = Type::getVoidTy(M.getContext());
   CharType = Type::getInt8Ty(M.getContext());
@@ -192,4 +211,14 @@ void AliasCheckerInstrumenter::addAliasChecker(Instruction *P, Instruction *Q) {
     assert(P2->getOperand(0) == P);
     SU.RewriteUse(P2->getOperandUse(0));
   }
+}
+
+bool AliasCheckerInstrumenter::isFree(Function *F) const {
+  if (!F)
+    return false;
+
+  vector<string>::const_iterator Pos = find(FreeNames.begin(),
+                                            FreeNames.end(),
+                                            F->getName());
+  return Pos != FreeNames.end();
 }
