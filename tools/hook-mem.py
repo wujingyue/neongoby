@@ -5,7 +5,8 @@ import os, sys
 def get_opt_base():
     return "opt " + \
             "-load $LLVM_ROOT/install/lib/ID.so " + \
-            "-load $LLVM_ROOT/install/lib/Instrumenter.so "
+            "-load $LLVM_ROOT/install/lib/CFG.so " + \
+            "-load $LLVM_ROOT/install/lib/Instrumenters.so "
 
 def invoke(cmd):
     print >> sys.stderr, cmd
