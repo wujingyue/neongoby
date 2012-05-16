@@ -10,6 +10,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "common/typedefs.h"
+#include "common/IDAssigner.h"
 
 #include "dyn-aa/DynamicAliasAnalysis.h"
 
@@ -50,35 +51,52 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   // AliasAnalysis group.
   AU.addRequired<DynamicAliasAnalysis>();
   AU.addRequired<AliasAnalysis>();
+  AU.addRequired<IDAssigner>();
 }
 
 bool AliasAnalysisChecker::runOnModule(Module &M) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   AliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
 
+  ValueSet Pointers;
+#if 0
   // We don't want to include all pointers yet.
   // For now, we include all pointers used as a pointer operand of
   // a Load/Store instruction.
-  ValueSet PointerOperands;
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
         if (StoreInst *SI = dyn_cast<StoreInst>(Ins))
-          PointerOperands.insert(SI->getPointerOperand());
+          Pointers.insert(SI->getPointerOperand());
         if (LoadInst *LI = dyn_cast<LoadInst>(Ins))
-          PointerOperands.insert(LI->getPointerOperand());
+          Pointers.insert(LI->getPointerOperand());
       }
     }
   }
-  errs() << "# of pointer operands to process = "
-      << PointerOperands.size() << "\n";
+#endif
+  unsigned NumValues = IDA.getNumValues();
+  for (unsigned ValueID = 0; ValueID < NumValues; ++ValueID) {
+    Value *V = IDA.getValue(ValueID);
+    assert(V);
+    // Skip non-pointers.
+    if (!V->getType()->isPointerTy())
+      continue;
+    // DSAA hasn't supported this case.
+    if (Argument *Arg = dyn_cast<Argument>(V)) {
+      if (Arg->getParent()->isDeclaration())
+        continue;
+    }
+    Pointers.insert(IDA.getValue(ValueID));
+  }
+  errs() << "# of pointers to process = " << Pointers.size() << "\n";
 
   unsigned NumMissingAliases = 0;
-  for (ValueSet::iterator I = PointerOperands.begin();
-       I != PointerOperands.end(); ++I) {
+  for (ValueSet::iterator I = Pointers.begin();
+       I != Pointers.end(); ++I) {
     Value *V1 = *I;
     ValueSet::iterator J = I;
-    for (++J; J != PointerOperands.end(); ++J) {
+    for (++J; J != Pointers.end(); ++J) {
       Value *V2 = *J;
       // If the checked AA supports only intra-procedural queries,
       // and V1 and V2 belong to different functions, skip this query.
