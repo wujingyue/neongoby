@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = Instrumenter
+LIBRARYNAME = Instrumenters
 
 LOADABLE_MODULE = 1
 

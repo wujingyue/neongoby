@@ -1,9 +1,8 @@
 // Author: Jingyue
 
-#define DEBUG_TYPE "instrument-memory"
+#define DEBUG_TYPE "dyn-aa"
 
 #include <string>
-using namespace std;
 
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
@@ -15,9 +14,11 @@ using namespace std;
 #include "llvm/Target/TargetData.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
-using namespace llvm;
 
 #include "common/IDAssigner.h"
+
+using namespace llvm;
+using namespace std;
 using namespace rcs;
 
 namespace dyn_aa {
@@ -73,6 +74,7 @@ struct MemoryInstrumenter: public ModulePass {
   DenseSet<Instruction *> AddedByUs;
 };
 }
+
 using namespace dyn_aa;
 
 char MemoryInstrumenter::ID = 0;
