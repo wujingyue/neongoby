@@ -2,7 +2,8 @@
 *Debug+Asserts/
 *Release/
 *Debug/
-autoconf/
+autoconf/aclocal.m4
+autoconf/autom4te.cache
 eval/
 Makefile.common
 *.swp
