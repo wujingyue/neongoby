@@ -567,6 +567,8 @@ PACKAGE_URL=''
 ac_unique_file=""Makefile.common.in""
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+RCS_COMMON_OBJ
+RCS_COMMON_SRC
 LLVM_OBJ
 LLVM_SRC
 target_alias
@@ -612,6 +614,8 @@ ac_user_opts='
 enable_option_checking
 with_llvmsrc
 with_llvmobj
+with_rcscommonsrc
+with_rcscommonobj
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1228,6 +1232,8 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-llvmsrc          Location of LLVM Source Code
   --with-llvmobj          Location of LLVM Object Code
+  --with-rcscommonsrc     Location of RCS Common Source Code
+  --with-rcscommonobj     Location of RCS Common Object Code
 
 Report bugs to <jingyue@cs.columbia.edu>.
 _ACEOF
@@ -1658,18 +1664,14 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-LLVM_SRC_ROOT="/home/jingyue/Research/llvm/llvm-2.9"
-LLVM_OBJ_ROOT="/home/jingyue/Research/llvm/llvm-2.9"
-
-LLVM_ABS_SRC_ROOT="`cd $srcdir ; cd $LLVM_SRC_ROOT ; pwd`"
-LLVM_ABS_OBJ_ROOT="`cd $LLVM_OBJ_ROOT ; pwd`"
-
+LLVM_SRC_ROOT="."
+LLVM_OBJ_ROOT="."
 
 # Check whether --with-llvmsrc was given.
 if test "${with_llvmsrc+set}" = set; then :
   withval=$with_llvmsrc; llvm_src="$withval"
 else
-  llvm_src="$LLVM_ABS_SRC_ROOT"
+  llvm_src="$LLVM_SRC_ROOT"
 fi
 
   LLVM_SRC=$llvm_src
@@ -1679,12 +1681,36 @@ fi
 if test "${with_llvmobj+set}" = set; then :
   withval=$with_llvmobj; llvm_obj="$withval"
 else
-  llvm_obj="$LLVM_ABS_OBJ_ROOT"
+  llvm_obj="$LLVM_OBJ_ROOT"
 fi
 
   LLVM_OBJ=$llvm_obj
 
   ac_config_commands="$ac_config_commands setup"
+
+
+
+RCS_COMMON_SRC_ROOT="."
+RCS_COMMON_OBJ_ROOT="."
+
+# Check whether --with-rcscommonsrc was given.
+if test "${with_rcscommonsrc+set}" = set; then :
+  withval=$with_rcscommonsrc; rcs_common_src="$withval"
+else
+  rcs_common_src="$RCS_COMMON_SRC_ROOT"
+fi
+
+  RCS_COMMON_SRC=$rcs_common_src
+
+
+# Check whether --with-rcscommonobj was given.
+if test "${with_rcscommonobj+set}" = set; then :
+  withval=$with_rcscommonobj; rcs_common_obj="$withval"
+else
+  rcs_common_obj="$RCS_COMMON_OBJ_ROOT"
+fi
+
+  RCS_COMMON_OBJ=$rcs_common_obj
 
 
 
