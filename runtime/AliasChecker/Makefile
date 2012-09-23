@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = AliasChecker
+LIBRARYNAME = DynAAAliasChecker
 
 BYTECODE_LIBRARY = 1
 

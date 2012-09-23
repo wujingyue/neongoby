@@ -9,8 +9,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 
-#include "common/typedefs.h"
-#include "common/IDAssigner.h"
+#include "rcs/typedefs.h"
+#include "rcs/IDAssigner.h"
 
 #include "dyn-aa/DynamicAliasAnalysis.h"
 

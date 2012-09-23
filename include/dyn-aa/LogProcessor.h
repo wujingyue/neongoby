@@ -11,9 +11,6 @@ struct LogProcessor {
   virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &) = 0;
   virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &) = 0;
   virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &) = 0;
-
- private:
-  void printProgressBar(unsigned Processed, unsigned Total);
 };
 }
 

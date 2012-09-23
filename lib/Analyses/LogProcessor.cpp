@@ -9,6 +9,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "dyn-aa/Utils.h"
 #include "dyn-aa/LogProcessor.h"
 
 using namespace std;
@@ -54,14 +55,14 @@ void LogProcessor::processLog() {
     }
   }
   assert(NumRecords > 0);
-  errs() << "Need process " << NumRecords << " records.\n";
+  errs() << "[LogProcessor] Need process " << NumRecords << " records.\n";
 
   // Set the file position to the beginning.
   rewind(LogFile);
 
   // Actually process these log records.
   unsigned NumRecordsProcessed = 0;
-  printProgressBar(NumRecordsProcessed, NumRecords);
+  DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
   while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
     switch (RecordType) {
       case AddrTakenDecl:
@@ -89,25 +90,9 @@ void LogProcessor::processLog() {
         assert(false);
     }
     ++NumRecordsProcessed;
-    printProgressBar(NumRecordsProcessed, NumRecords);
+    DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
   }
   errs() << "\n";
 
   fclose(LogFile);
-}
-
-void LogProcessor::printProgressBar(unsigned Processed, unsigned Total) {
-  assert(Processed >= 0 && Processed <= Total);
-  assert(Total > 0);
-
-  errs().changeColor(raw_ostream::BLUE);
-  if (Processed == 0) {
-    errs() << " [0%]";
-  } else {
-    unsigned CurrentPercentage = Processed * 10 / Total;
-    unsigned OldPercentage = (Processed - 1) * 10 / Total;
-    if (CurrentPercentage != OldPercentage)
-      errs() << " [" << CurrentPercentage * 10 << "%]";
-  }
-  errs().resetColor();
 }

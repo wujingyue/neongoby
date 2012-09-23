@@ -21,9 +21,9 @@ clean:
 
 %.dot: %.pts ../Original/%.bc
 	opt -disable-output \
-		-load $(LLVM_ROOT)/install/lib/ID.so \
-		-load $(LLVM_ROOT)/install/lib/PointerAnalysis.so \
-		-load $(LLVM_ROOT)/install/lib/DynamicPointerAnalysis.so \
+		-load `llvm-config --prefix`/lib/RCSID.so \
+		-load `llvm-config --prefix`/lib/RCSPointerAnalysis.so \
+		-load `llvm-config --prefix`/lib/DynAAAnalyses.so \
 		-dyn-pa \
 		-draw-point-to \
 		-log-file $< \

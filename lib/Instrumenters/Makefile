@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = Instrumenters
+LIBRARYNAME = DynAAInstrumenters
 
 LOADABLE_MODULE = 1
 

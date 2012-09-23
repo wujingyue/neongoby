@@ -27,7 +27,7 @@ while true ; do
 done
 echo "Regenerating aclocal.m4 with aclocal"
 rm -f aclocal.m4
-aclocal -I $llvm_m4 -I $rcs_common_m4 || die "aclocal failed"
+aclocal -I $rcs_common_m4 -I $llvm_m4 || die "aclocal failed"
 echo "Regenerating configure with autoconf"
 autoconf --warnings=all -o ../configure configure.ac || die "autoconf failed"
 cd ..

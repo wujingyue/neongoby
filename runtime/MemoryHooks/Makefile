@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = MemoryHooks
+LIBRARYNAME = DynAAMemoryHooks
 
 BYTECODE_LIBRARY = 1
 

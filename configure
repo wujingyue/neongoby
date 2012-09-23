@@ -567,8 +567,8 @@ PACKAGE_URL=''
 ac_unique_file=""Makefile.common.in""
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
-RCS_COMMON_OBJ
-RCS_COMMON_SRC
+RCS_OBJ
+RCS_SRC
 LLVM_OBJ
 LLVM_SRC
 target_alias
@@ -614,8 +614,8 @@ ac_user_opts='
 enable_option_checking
 with_llvmsrc
 with_llvmobj
-with_rcscommonsrc
-with_rcscommonobj
+with_rcssrc
+with_rcsobj
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1232,8 +1232,8 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-llvmsrc          Location of LLVM Source Code
   --with-llvmobj          Location of LLVM Object Code
-  --with-rcscommonsrc     Location of RCS Common Source Code
-  --with-rcscommonobj     Location of RCS Common Object Code
+  --with-rcssrc           Location of RCS Source Code
+  --with-rcsobj           Location of RCS Object Code
 
 Report bugs to <jingyue@cs.columbia.edu>.
 _ACEOF
@@ -1690,27 +1690,27 @@ fi
 
 
 
-RCS_COMMON_SRC_ROOT="."
-RCS_COMMON_OBJ_ROOT="."
+RCS_SRC_ROOT="."
+RCS_OBJ_ROOT="."
 
-# Check whether --with-rcscommonsrc was given.
-if test "${with_rcscommonsrc+set}" = set; then :
-  withval=$with_rcscommonsrc; rcs_common_src="$withval"
+# Check whether --with-rcssrc was given.
+if test "${with_rcssrc+set}" = set; then :
+  withval=$with_rcssrc; rcs_src="$withval"
 else
-  rcs_common_src="$RCS_COMMON_SRC_ROOT"
+  rcs_src="$RCS_SRC_ROOT"
 fi
 
-  RCS_COMMON_SRC=$rcs_common_src
+  RCS_SRC=$rcs_src
 
 
-# Check whether --with-rcscommonobj was given.
-if test "${with_rcscommonobj+set}" = set; then :
-  withval=$with_rcscommonobj; rcs_common_obj="$withval"
+# Check whether --with-rcsobj was given.
+if test "${with_rcsobj+set}" = set; then :
+  withval=$with_rcsobj; rcs_obj="$withval"
 else
-  rcs_common_obj="$RCS_COMMON_OBJ_ROOT"
+  rcs_obj="$RCS_OBJ_ROOT"
 fi
 
-  RCS_COMMON_OBJ=$rcs_common_obj
+  RCS_OBJ=$rcs_obj
 
 
 

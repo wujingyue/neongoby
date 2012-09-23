@@ -15,7 +15,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
 
-#include "common/IDAssigner.h"
+#include "rcs/IDAssigner.h"
 
 using namespace llvm;
 using namespace std;

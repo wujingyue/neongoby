@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-LIBRARYNAME = DynamicAnalyses
+LIBRARYNAME = DynAAUtils
 
 LOADABLE_MODULE = 1
 

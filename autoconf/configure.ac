@@ -10,10 +10,10 @@ LLVM_OBJ_ROOT="."
 LLVM_CONFIG_PROJECT($LLVM_SRC_ROOT,$LLVM_OBJ_ROOT)
 
 dnl Tell autoconf that this project uses the RCS common project
-dnl This provides the --with-rcscommonsrc and --with-rcscommonobj options
-RCS_COMMON_SRC_ROOT="."
-RCS_COMMON_OBJ_ROOT="."
-RCS_COMMON_CONFIG_PROJECT($RCS_COMMON_SRC_ROOT,$RCS_COMMON_OBJ_ROOT)
+dnl This provides the --with-rcssrc and --with-rcsobj options
+RCS_SRC_ROOT="."
+RCS_OBJ_ROOT="."
+RCS_CONFIG_PROJECT($RCS_SRC_ROOT,$RCS_OBJ_ROOT)
 
 dnl Tell autoconf that the auxilliary files are actually located in
 dnl the LLVM autoconf directory, not here.

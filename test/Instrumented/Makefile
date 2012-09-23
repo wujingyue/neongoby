@@ -18,8 +18,9 @@ clean:
 
 %.inst.bc: ../Original/%.bc
 	opt \
-		-load $(LLVM_ROOT)/install/lib/ID.so \
-		-load $(LLVM_ROOT)/install/lib/Instrumenter.so \
+		-load `llvm-config --prefix`/lib/RCSID.so \
+		-load `llvm-config --prefix`/lib/RCSCFG.so \
+		-load `llvm-config --prefix`/lib/DynAAInstrumenters.so \
 		-instrument-memory \
 		-o $@ \
 		< $<
@@ -28,6 +29,6 @@ clean:
 	llvm-dis $<
 
 %.inst: %.inst.bc
-	clang++ $< $(LLVM_ROOT)/install/lib/libMemoryHooks.a -o $@ $(LDFLAGS)
+	clang++ $< `llvm-config --prefix`/lib/libDynAAMemoryHooks.a -o $@ $(LDFLAGS)
 
 .PHONY: clean

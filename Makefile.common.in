@@ -10,10 +10,10 @@ LLVM_SRC_ROOT = @LLVM_SRC@
 LLVM_OBJ_ROOT = @LLVM_OBJ@
 
 # Set this variable to the top of the RCS common source tree.
-RCS_COMMON_SRC_ROOT = @RCS_COMMON_SRC@
+RCS_SRC_ROOT = @RCS_SRC@
 
 # Set this variable to the top level directory where RCS common was built.
-RCS_COMMON_OBJ_ROOT = @RCS_COMMON_OBJ@
+RCS_OBJ_ROOT = @RCS_OBJ@
 
 # Set the directory root of this project's source files
 PROJ_SRC_ROOT := $(subst //,/,@abs_top_srcdir@)
@@ -33,6 +33,6 @@ LLVMCC_EMITIR_FLAG = -emit-llvm
 include $(LLVM_SRC_ROOT)/Makefile.common
 
 # Add additional include paths.
-AdditionalIncludes = -I$(RCS_COMMON_SRC_ROOT)/include
+AdditionalIncludes = -I$(RCS_SRC_ROOT)/include
 CFLAGS += $(AdditionalIncludes)
 CXXFLAGS += $(AdditionalIncludes)

@@ -1,7 +1,5 @@
 LEVEL = ../..
 
-LIBRARYNAME = DynAACheckers
-
-LOADABLE_MODULE = 1
+TOOLNAME = dynaa_dump_log
 
 include $(LEVEL)/Makefile.common

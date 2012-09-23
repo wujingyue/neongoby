@@ -11,8 +11,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
-#include "common/IntraReach.h"
-#include "common/IDAssigner.h"
+#include "rcs/IntraReach.h"
+#include "rcs/IDAssigner.h"
 
 using namespace std;
 using namespace llvm;

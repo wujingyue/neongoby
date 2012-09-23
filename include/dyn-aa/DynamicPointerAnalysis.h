@@ -9,7 +9,7 @@
 #include "llvm/Pass.h"
 #include "llvm/ADT/DenseMap.h"
 
-#include "common/PointerAnalysis.h"
+#include "rcs/PointerAnalysis.h"
 
 #include "dyn-aa/IntervalTree.h"
 #include "dyn-aa/LogProcessor.h"
