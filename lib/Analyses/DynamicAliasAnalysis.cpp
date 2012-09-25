@@ -97,9 +97,6 @@ void DynamicAliasAnalysis::processAddrTakenPointTo(
 void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
   PointsToMapTy::iterator I = PointingTo.find(ValueID);
   if (I != PointingTo.end()) {
-    // Remove from PointingTo.
-    PointingTo.erase(I);
-
     // Remove from BeingPointedBy.
     PointedByMapTy::iterator J = BeingPointedBy.find(I->second);
     assert(J != BeingPointedBy.end());
@@ -108,6 +105,9 @@ void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
                                         ValueID);
     assert(K != J->second.end());
     J->second.erase(K);
+
+    // Remove from PointingTo.
+    PointingTo.erase(I);
   }
 }
 

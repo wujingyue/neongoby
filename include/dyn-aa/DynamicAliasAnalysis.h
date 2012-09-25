@@ -9,6 +9,8 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 
+#include "rcs/typedefs.h"
+
 #include "dyn-aa/IntervalTree.h"
 #include "dyn-aa/LogRecord.h"
 #include "dyn-aa/LogProcessor.h"
@@ -38,6 +40,10 @@ struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public Log
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
   void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
   void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
+
+  const DenseSet<rcs::ValuePair> &getAllAliases() const {
+    return Aliases;
+  }
 
  private:
   // Returns the current version of <Addr>.

@@ -27,9 +27,9 @@ struct AliasAnalysisChecker: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  static void PrintValue(raw_ostream &O, const Value *V);
-  static bool isIntraProcQuery(const Value *V1, const Value *V2);
-  static const Function *getContainingFunction(const Value *V);
+  void printValue(raw_ostream &O, const Value *V);
+  static bool IsIntraProcQuery(const Value *V1, const Value *V2);
+  static const Function *GetContainingFunction(const Value *V);
 };
 }
 
@@ -56,7 +56,7 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
 
 bool AliasAnalysisChecker::runOnModule(Module &M) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  AliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();
+  DynamicAliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   ValueSet Pointers;
@@ -92,6 +92,23 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   errs() << "# of pointers to process = " << Pointers.size() << "\n";
 
   unsigned NumMissingAliases = 0;
+  const DenseSet<ValuePair> &DynamicAliases = DAA.getAllAliases();
+  for (DenseSet<ValuePair>::const_iterator I = DynamicAliases.begin();
+       I != DynamicAliases.end(); ++I) {
+    Value *V1 = I->first, *V2 = I->second;
+    if (IntraProc && !IsIntraProcQuery(V1, V2))
+      continue;
+    if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
+      ++NumMissingAliases;
+      errs().changeColor(raw_ostream::RED);
+      errs() << "Missing alias:\n";
+      errs().resetColor();
+      printValue(errs(), V1); errs() << "\n";
+      printValue(errs(), V2); errs() << "\n";
+    }
+  }
+
+#if 0
   for (ValueSet::iterator I = Pointers.begin();
        I != Pointers.end(); ++I) {
     Value *V1 = *I;
@@ -100,7 +117,7 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
       Value *V2 = *J;
       // If the checked AA supports only intra-procedural queries,
       // and V1 and V2 belong to different functions, skip this query.
-      if (IntraProc && !isIntraProcQuery(V1, V2))
+      if (IntraProc && !IsIntraProcQuery(V1, V2))
         continue;
       if (AA.alias(V1, V2) == AliasAnalysis::NoAlias &&
           DAA.alias(V1, V2) != AliasAnalysis::NoAlias) {
@@ -108,11 +125,12 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
         errs().changeColor(raw_ostream::RED);
         errs() << "Missing alias:\n";
         errs().resetColor();
-        PrintValue(errs(), V1); errs() << "\n";
-        PrintValue(errs(), V2); errs() << "\n";
+        printValue(errs(), V1); errs() << "\n";
+        printValue(errs(), V2); errs() << "\n";
       }
     }
   }
+#endif
 
   if (NumMissingAliases == 0) {
     errs().changeColor(raw_ostream::GREEN, true);
@@ -127,7 +145,9 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   return false;
 }
 
-void AliasAnalysisChecker::PrintValue(raw_ostream &O, const Value *V) {
+void AliasAnalysisChecker::printValue(raw_ostream &O, const Value *V) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  O << "[" << IDA.getValueID(V) << "] ";
   if (isa<Function>(V)) {
     O << V->getName();
   } else if (const Argument *Arg = dyn_cast<Argument>(V)) {
@@ -140,14 +160,14 @@ void AliasAnalysisChecker::PrintValue(raw_ostream &O, const Value *V) {
   }
 }
 
-bool AliasAnalysisChecker::isIntraProcQuery(const Value *V1, const Value *V2) {
+bool AliasAnalysisChecker::IsIntraProcQuery(const Value *V1, const Value *V2) {
   assert(V1->getType()->isPointerTy() && V2->getType()->isPointerTy());
-  const Function *F1 = getContainingFunction(V1);
-  const Function *F2 = getContainingFunction(V2);
+  const Function *F1 = GetContainingFunction(V1);
+  const Function *F2 = GetContainingFunction(V2);
   return F1 == NULL || F2 == NULL || F1 == F2;
 }
 
-const Function *AliasAnalysisChecker::getContainingFunction(const Value *V) {
+const Function *AliasAnalysisChecker::GetContainingFunction(const Value *V) {
   if (const Instruction *Ins = dyn_cast<Instruction>(V))
     return Ins->getParent()->getParent();
   if (const Argument *Arg = dyn_cast<Argument>(V))

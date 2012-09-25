@@ -236,7 +236,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   if (CalleeName == "malloc" || CalleeName == "valloc") {
     Start = Ins;
     Size = CS.getArgument(0);
-    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
     AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName.startswith("_Zn")) {
     Start = Ins;
@@ -254,12 +254,12 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
                                   "",
                                   Loc);
     AddedByUs.insert(cast<Instruction>(Size));
-    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
     AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "memalign" || CalleeName == "realloc") {
     Start = Ins;
     Size = CS.getArgument(1);
-    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
     AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "strdup") {
     Start = Ins;
@@ -269,7 +269,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     // size = strlen(result) + 1
     Size = Builder.CreateAdd(StrLen, ConstantInt::get(LongType, 1));
     AddedByUs.insert(cast<Instruction>(Size));
-    Success = Builder.CreateICmpEQ(Ins, ConstantPointerNull::get(CharStarType));
+    Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
     AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "getline") {
     // getline(char **lineptr, size_t *n, FILE *stream)
