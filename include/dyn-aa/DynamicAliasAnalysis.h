@@ -71,7 +71,7 @@ struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public Log
   // Value <vid> is pointing to <address> at version <version>.
   PointsToMapTy PointingTo;
   // Stores all alias pairs.
-  DenseSet<std::pair<Value *, Value *> > Aliases;
+  DenseSet<rcs::ValuePair> Aliases;
 };
 }
 

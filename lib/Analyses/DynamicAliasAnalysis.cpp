@@ -28,17 +28,32 @@ static RegisterPass<DynamicAliasAnalysis> X("dyn-aa",
 // graph.
 // static RegisterAnalysisGroup<AliasAnalysis> Y(X);
 
+static cl::opt<string> OutputDynamicAliases(
+    "output-dyn-aliases",
+    cl::desc("Dump all dynamic aliases"));
+
 char DynamicAliasAnalysis::ID = 0;
 
 const unsigned DynamicAliasAnalysis::UnknownVersion = (unsigned)-1;
 
 bool DynamicAliasAnalysis::runOnModule(Module &M) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
   InitializeAliasAnalysis(this);
 
   processLog();
-  
+
   errs() << "# of aliases = " << Aliases.size() << "\n";
-  
+  if (OutputDynamicAliases != "") {
+    string ErrorInfo;
+    raw_fd_ostream OutputFile(OutputDynamicAliases.c_str(), ErrorInfo);
+    for (DenseSet<ValuePair>::iterator I = Aliases.begin();
+         I != Aliases.end(); ++I) {
+      Value *V1 = I->first, *V2 = I->second;
+      OutputFile << IDA.getValueID(V1) << " " << IDA.getValueID(V2) << "\n";
+    }
+  }
+
   return false;
 }
 

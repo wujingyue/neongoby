@@ -3,6 +3,9 @@
 // Checks whether a specified call graph is sound by comparing it with another
 // call graph generated on DynamicAliasAnalysis
 
+#include <string>
+#include <fstream>
+
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/Analysis/CallGraph.h"
@@ -14,6 +17,7 @@
 
 #include "dyn-aa/DynamicAliasAnalysis.h"
 
+using namespace std;
 using namespace llvm;
 using namespace rcs;
 using namespace dyn_aa;
@@ -36,6 +40,9 @@ struct AliasAnalysisChecker: public ModulePass {
 static cl::opt<bool> IntraProc(
     "intra",
     cl::desc("Whether the checked AA supports intra-procedural queries only"));
+static cl::opt<string> InputDynamicAliases(
+    "input-dyn-aliases",
+    cl::desc("Input dynamic aliases"));
 
 static RegisterPass<AliasAnalysisChecker> X(
     "check-aa",
@@ -49,14 +56,15 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
   // Note that DynamicAliasAnalysis is not registered to the
   // AliasAnalysis group.
-  AU.addRequired<DynamicAliasAnalysis>();
+  if (InputDynamicAliases == "") {
+    AU.addRequired<DynamicAliasAnalysis>();
+  }
   AU.addRequired<AliasAnalysis>();
   AU.addRequired<IDAssigner>();
 }
 
 bool AliasAnalysisChecker::runOnModule(Module &M) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  DynamicAliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   ValueSet Pointers;
@@ -91,9 +99,22 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   }
   errs() << "# of pointers to process = " << Pointers.size() << "\n";
 
+  DenseSet<ValuePair> DynamicAliases;
+  if (InputDynamicAliases == "") {
+    DynamicAliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();
+    DynamicAliases.insert(DAA.getAllAliases().begin(),
+                          DAA.getAllAliases().end());
+  } else {
+    ifstream InputFile(InputDynamicAliases.c_str());
+    unsigned VID1, VID2;
+    while (InputFile >> VID1 >> VID2) {
+      Value *V1 = IDA.getValue(VID1), *V2 = IDA.getValue(VID2);
+      DynamicAliases.insert(make_pair(V1, V2));
+    }
+  }
+
   unsigned NumMissingAliases = 0;
-  const DenseSet<ValuePair> &DynamicAliases = DAA.getAllAliases();
-  for (DenseSet<ValuePair>::const_iterator I = DynamicAliases.begin();
+  for (DenseSet<ValuePair>::iterator I = DynamicAliases.begin();
        I != DynamicAliases.end(); ++I) {
     Value *V1 = I->first, *V2 = I->second;
     if (IntraProc && !IsIntraProcQuery(V1, V2))
@@ -107,30 +128,6 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
       printValue(errs(), V2); errs() << "\n";
     }
   }
-
-#if 0
-  for (ValueSet::iterator I = Pointers.begin();
-       I != Pointers.end(); ++I) {
-    Value *V1 = *I;
-    ValueSet::iterator J = I;
-    for (++J; J != Pointers.end(); ++J) {
-      Value *V2 = *J;
-      // If the checked AA supports only intra-procedural queries,
-      // and V1 and V2 belong to different functions, skip this query.
-      if (IntraProc && !IsIntraProcQuery(V1, V2))
-        continue;
-      if (AA.alias(V1, V2) == AliasAnalysis::NoAlias &&
-          DAA.alias(V1, V2) != AliasAnalysis::NoAlias) {
-        ++NumMissingAliases;
-        errs().changeColor(raw_ostream::RED);
-        errs() << "Missing alias:\n";
-        errs().resetColor();
-        printValue(errs(), V1); errs() << "\n";
-        printValue(errs(), V2); errs() << "\n";
-      }
-    }
-  }
-#endif
 
   if (NumMissingAliases == 0) {
     errs().changeColor(raw_ostream::GREEN, true);

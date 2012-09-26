@@ -43,6 +43,7 @@ if __name__ == '__main__':
     cmd = string.join((cmd, '-' + args.aa))
     cmd = string.join((cmd, '-check-aa'))
     cmd = string.join((cmd, '-log-file', args.log))
+    cmd = string.join((cmd, '-output-dyn-aliases', '/tmp/dyn-aliases'))
     cmd = string.join((cmd, '-disable-output', '<', args.bc))
 
     rcs_utils.invoke(cmd)
