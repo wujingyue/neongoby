@@ -286,8 +286,10 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     assert(false && "Unhandled malloc function call");
   }
 
-  // start = malloc(size)
-  // HookMemAlloc
+  //      start = malloc(size)
+  //      if (success)
+  //        HookMemAlloc
+  // Loc:
   instrumentMemoryAllocation(Start, Size, Success, Loc);
 }
 
@@ -643,11 +645,18 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     return;
   }
 
+  // Any instructions of a pointer type, including mallocs and AllocaInsts.
+  // Call instrumentPointerInstruction before instrumentMalloc so that
+  // HookMemAlloc will be added before HookTopLevel which prevents us from
+  // using an outdated version number.
+  if (I->getType()->isPointerTy())
+    instrumentPointerInstruction(I);
+
   // Instrument memory allocation function calls.
   CallSite CS(I);
   if (CS) {
     // TODO: A function pointer can possibly point to memory allocation
-    // or memroy free functions. We don't handle this case for now.
+    // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
     Function *Callee = CS.getCalledFunction();
     if (Callee && isMalloc(Callee))
@@ -657,10 +666,6 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   // Instrument AllocaInsts.
   if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
     instrumentAlloca(AI);
-
-  // Any instructions of a pointer type, including mallocs and AllocaInsts.
-  if (I->getType()->isPointerTy())
-    instrumentPointerInstruction(I);
 }
 
 void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
