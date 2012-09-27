@@ -32,6 +32,9 @@ static cl::opt<string> OutputDynamicAliases(
     "output-dyn-aliases",
     cl::desc("Dump all dynamic aliases"));
 
+STATISTIC(NumRemoveOps, "Number of remove operations");
+STATISTIC(NumInsertOps, "Number of insert operations");
+
 char DynamicAliasAnalysis::ID = 0;
 
 const unsigned DynamicAliasAnalysis::UnknownVersion = (unsigned)-1;
@@ -82,7 +85,8 @@ void DynamicAliasAnalysis::processTopLevelPointTo(
 
   // Modify the mappings.
   removePointingTo(PointerVID);
-  addPointingTo(PointerVID, PointeeAddress, Version);
+  if (PointeeAddress != NULL)
+    addPointingTo(PointerVID, PointeeAddress, Version);
 
   // Report aliases.
   if (PointeeAddress != NULL) {
@@ -110,10 +114,10 @@ void DynamicAliasAnalysis::processAddrTakenPointTo(
 }
 
 void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
-  PointsToMapTy::iterator I = PointingTo.find(ValueID);
-  if (I != PointingTo.end()) {
+  ++NumRemoveOps;
+  if (ValueID < PointingTo.size() && PointingTo[ValueID].first != NULL) {
     // Remove from BeingPointedBy.
-    PointedByMapTy::iterator J = BeingPointedBy.find(I->second);
+    PointedByMapTy::iterator J = BeingPointedBy.find(PointingTo[ValueID]);
     assert(J != BeingPointedBy.end());
     vector<unsigned>::iterator K = find(J->second.begin(),
                                         J->second.end(),
@@ -122,14 +126,19 @@ void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
     J->second.erase(K);
 
     // Remove from PointingTo.
-    PointingTo.erase(I);
+    PointingTo[ValueID].first = NULL;
+    PointingTo[ValueID].second = UnknownVersion;
   }
 }
 
 void DynamicAliasAnalysis::addPointingTo(unsigned ValueID,
                                          void *Address,
                                          unsigned Version) {
-  PointingTo.insert(make_pair(ValueID, make_pair(Address, Version)));
+  ++NumInsertOps;
+  if (ValueID >= PointingTo.size())
+    PointingTo.resize(ValueID + 1);
+  PointingTo[ValueID].first = Address;
+  PointingTo[ValueID].second = Version;
   BeingPointedBy[make_pair(Address, Version)].push_back(ValueID);
 }
 

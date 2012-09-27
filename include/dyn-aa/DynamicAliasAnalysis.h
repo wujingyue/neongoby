@@ -21,7 +21,7 @@ namespace dyn_aa {
 struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public LogProcessor {
   typedef DenseMap<std::pair<void *, unsigned>, std::vector<unsigned> >
       PointedByMapTy;
-  typedef DenseMap<unsigned, std::pair<void *, unsigned> > PointsToMapTy;
+  typedef std::vector<std::pair<void *, unsigned> > PointsToMapTy;
 
   static char ID;
   static const unsigned UnknownVersion;
