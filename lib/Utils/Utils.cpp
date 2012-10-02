@@ -13,14 +13,17 @@ void DynAAUtils::PrintProgressBar(uint64_t Finished, uint64_t Total) {
   assert(Finished <= Total);
   assert(Total > 0);
 
-  errs().changeColor(raw_ostream::BLUE);
   if (Finished == 0) {
+    errs().changeColor(raw_ostream::BLUE);
     errs() << " [0%]";
+    errs().resetColor();
   } else {
     unsigned CurrentPercentage = Finished * 10 / Total;
     unsigned OldPercentage = (Finished - 1) * 10 / Total;
-    if (CurrentPercentage != OldPercentage)
+    if (CurrentPercentage != OldPercentage) {
+      errs().changeColor(raw_ostream::BLUE);
       errs() << " [" << CurrentPercentage * 10 << "%]";
+      errs().resetColor();
+    }
   }
-  errs().resetColor();
 }

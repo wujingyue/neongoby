@@ -11,7 +11,7 @@ using namespace dyn_aa;
 
 static void PrintAddrTakenDecl(
     const AddrTakenDeclLogRecord &Record) {
-  printf("%p, %u\n", Record.Address, Record.AllocatedBy);
+  printf("%u: %p, %lu\n", Record.AllocatedBy, Record.Address, Record.Bound);
 }
 
 static void PrintTopLevelPointTo(const TopLevelPointToLogRecord &Record) {

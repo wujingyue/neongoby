@@ -56,12 +56,14 @@ void PrintLogRecord(LogRecordType RecordType, const T &Record) {
 
 extern "C" void HookMemAlloc(unsigned ValueID, void *StartAddr,
                              unsigned long Bound) {
-  pthread_mutex_lock(&Global->Lock);
-  assert(Bound > 0);
-  // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
-  PrintLogRecord(AddrTakenDecl,
-                 AddrTakenDeclLogRecord(StartAddr, Bound, ValueID));
-  pthread_mutex_unlock(&Global->Lock);
+  // Bound is sometimes zero for array allocation.
+  if (Bound > 0) {
+    pthread_mutex_lock(&Global->Lock);
+    // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
+    PrintLogRecord(AddrTakenDecl,
+                   AddrTakenDeclLogRecord(StartAddr, Bound, ValueID));
+    pthread_mutex_unlock(&Global->Lock);
+  }
 }
 
 extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],

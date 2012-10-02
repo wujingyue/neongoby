@@ -57,6 +57,16 @@ bool DynamicAliasAnalysis::runOnModule(Module &M) {
     }
   }
 
+#if 1
+  errs() << PointersVersionUnknown.size()
+      << " pointers whose version is unknown:\n";
+  for (ValueSet::iterator I = PointersVersionUnknown.begin();
+       I != PointersVersionUnknown.end(); ++I) {
+    IDA.printValue(errs(), *I);
+    errs() << "\n";
+  }
+#endif
+
   return false;
 }
 
@@ -66,45 +76,64 @@ void DynamicAliasAnalysis::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IDAssigner>();
 }
 
-void DynamicAliasAnalysis::processAddrTakenDecl(
-    const AddrTakenDeclLogRecord &Record) {
-  unsigned long Start = (unsigned long)Record.Address;
-  Interval I(Start, Start + Record.Bound);
+void DynamicAliasAnalysis::updateVersion(void *Start,
+                                         unsigned long Bound,
+                                         unsigned Version) {
+  Interval I((unsigned long)Start, (unsigned long)Start + Bound);
+#if 0
+  FILE *LogFile = fopen("/tmp/ops", "a");
+  fprintf(LogFile, "interval %lu %lu %u\n",
+          Start, Start + Record.Bound, CurrentVersion);
+  fclose(LogFile);
+#endif
   pair<IntervalTree<unsigned>::iterator, IntervalTree<unsigned>::iterator> ER =
       AddressVersion.equal_range(I);
   AddressVersion.erase(ER.first, ER.second);
-  AddressVersion.insert(make_pair(I, CurrentVersion));
+  AddressVersion.insert(make_pair(I, Version));
+}
+
+void DynamicAliasAnalysis::processAddrTakenDecl(
+    const AddrTakenDeclLogRecord &Record) {
+  updateVersion(Record.Address, Record.Bound, CurrentVersion);
   ++CurrentVersion;
+  // Check for numeric overflow.
+  assert(CurrentVersion != UnknownVersion);
 }
 
 void DynamicAliasAnalysis::processTopLevelPointTo(
     const TopLevelPointToLogRecord &Record) {
   unsigned PointerVID = Record.PointerValueID;
   void *PointeeAddress = Record.PointeeAddress;
-  unsigned Version = lookupAddress(PointeeAddress);
 
-  // Modify the mappings.
+  // No matter the new address is NULL or not, remove the original mapping.
   removePointingTo(PointerVID);
-  if (PointeeAddress != NULL)
-    addPointingTo(PointerVID, PointeeAddress, Version);
 
-  // Report aliases.
+  // We don't consider NULLs as aliases.
   if (PointeeAddress != NULL) {
-    // We don't consider NULLs as aliases.
-    if (Version != UnknownVersion) {
-      PointedByMapTy::iterator I = BeingPointedBy.find(
-          make_pair(PointeeAddress, Version));
-      assert(I != BeingPointedBy.end()); // We just added a point-to in.
-      addAliasPairs(PointerVID, I->second);
-    } else {
-      // Iterate through all elements in the BeingPointedBy table.
-      // TODO: Could be optimized by using a two-level hash table.
-      for (PointedByMapTy::iterator I = BeingPointedBy.begin();
-           I != BeingPointedBy.end(); ++I) {
-        if (I->first.first == PointeeAddress)
-          addAliasPairs(PointerVID, I->second);
+    unsigned Version = lookupAddress(PointeeAddress);
+
+#if 1
+    // Report the pointers pointing to unversioned address.
+    if (Version == UnknownVersion) {
+      if (!AddressesVersionUnknown.count(PointeeAddress)) {
+        AddressesVersionUnknown.insert(PointeeAddress);
+#if 0
+        errs() << "Unknown version: " << PointerVID << " => "
+            << PointeeAddress << "\n";
+#endif
+        IDAssigner &IDA = getAnalysis<IDAssigner>();
+        PointersVersionUnknown.insert(IDA.getValue(PointerVID));
       }
     }
+#endif
+
+    addPointingTo(PointerVID, PointeeAddress, Version);
+
+    // Report aliases.
+    PointedByMapTy::iterator I = BeingPointedBy.find(
+        make_pair(PointeeAddress, Version));
+    assert(I != BeingPointedBy.end()); // We just added a point-to in.
+    addAliasPairs(PointerVID, I->second);
   }
 }
 
@@ -114,6 +143,11 @@ void DynamicAliasAnalysis::processAddrTakenPointTo(
 }
 
 void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
+#if 0
+  FILE *LogFile = fopen("/tmp/ops", "a");
+  fprintf(LogFile, "remove %u\n", ValueID);
+  fclose(LogFile);
+#endif
   ++NumRemoveOps;
   if (ValueID < PointingTo.size() && PointingTo[ValueID].first != NULL) {
     // Remove from BeingPointedBy.
@@ -134,6 +168,11 @@ void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
 void DynamicAliasAnalysis::addPointingTo(unsigned ValueID,
                                          void *Address,
                                          unsigned Version) {
+#if 0
+  FILE *LogFile = fopen("/tmp/ops", "a");
+  fprintf(LogFile, "add %u %p %u\n", ValueID, Address, Version);
+  fclose(LogFile);
+#endif
   ++NumInsertOps;
   if (ValueID >= PointingTo.size())
     PointingTo.resize(ValueID + 1);
@@ -144,6 +183,11 @@ void DynamicAliasAnalysis::addPointingTo(unsigned ValueID,
 
 unsigned DynamicAliasAnalysis::lookupAddress(void *Addr) const {
   Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
+#if 0
+  FILE *LogFile = fopen("/tmp/ops", "a");
+  fprintf(LogFile, "lookup %p\n", Addr);
+  fclose(LogFile);
+#endif
   IntervalTree<unsigned>::const_iterator Pos = AddressVersion.find(I);
   if (Pos == AddressVersion.end())
     return UnknownVersion;
@@ -175,9 +219,8 @@ void DynamicAliasAnalysis::addAliasPair(Value *V1, Value *V2) {
 }
 
 void DynamicAliasAnalysis::addAliasPair(unsigned VID1, unsigned VID2) {
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-
   assert(VID1 != IDAssigner::INVALID_ID && VID2 != IDAssigner::INVALID_ID);
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
   addAliasPair(IDA.getValue(VID1), IDA.getValue(VID2));
 }
 

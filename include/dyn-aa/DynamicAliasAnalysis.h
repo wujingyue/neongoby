@@ -18,10 +18,12 @@
 using namespace llvm;
 
 namespace dyn_aa {
-struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public LogProcessor {
-  typedef DenseMap<std::pair<void *, unsigned>, std::vector<unsigned> >
-      PointedByMapTy;
-  typedef std::vector<std::pair<void *, unsigned> > PointsToMapTy;
+struct DynamicAliasAnalysis: public ModulePass,
+                             public AliasAnalysis,
+                             public LogProcessor {
+  typedef std::pair<void *, unsigned> AddressTy;
+  typedef DenseMap<AddressTy, std::vector<unsigned> > PointedByMapTy;
+  typedef std::vector<AddressTy> PointsToMapTy;
 
   static char ID;
   static const unsigned UnknownVersion;
@@ -48,6 +50,7 @@ struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public Log
  private:
   // Returns the current version of <Addr>.
   unsigned lookupAddress(void *Addr) const;
+  void updateVersion(void *Start, unsigned long Bound, unsigned Version);
   void removePointingTo(unsigned ValueID);
   void addPointingTo(unsigned ValueID, void *Address, unsigned Version);
   // A convenient wrapper for a batch of reports.
@@ -72,6 +75,10 @@ struct DynamicAliasAnalysis: public ModulePass, public AliasAnalysis, public Log
   PointsToMapTy PointingTo;
   // Stores all alias pairs.
   DenseSet<rcs::ValuePair> Aliases;
+  // Pointers that ever point to unversioned addresses.
+  rcs::ValueSet PointersVersionUnknown;
+  // Addresses whose version is unknown.
+  DenseSet<void *> AddressesVersionUnknown;
 };
 }
 

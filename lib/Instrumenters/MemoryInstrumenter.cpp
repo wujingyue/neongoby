@@ -161,9 +161,16 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   // =>
   // start = alloca type
   // HookMemAlloc
-  // HookTopLevel
-  instrumentMemoryAllocation(AI, ConstantInt::get(LongType, TypeSize), NULL,
-                             Loc);
+  Value *Size = ConstantInt::get(LongType, TypeSize);
+  if (AI->isArrayAllocation()) {
+    // e.g. %32 = alloca i8, i64 %conv164
+    Size = BinaryOperator::Create(Instruction::Mul,
+                                  Size,
+                                  AI->getArraySize(),
+                                  "",
+                                  Loc);
+  }
+  instrumentMemoryAllocation(AI, Size, NULL, Loc);
 }
 
 void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
@@ -444,6 +451,12 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     // Therefore, don't instrument it.
     if (GI->getName() == "llvm.global_ctors")
       continue;
+    // Prevent global variables from sharing the same address, because it
+    // breaks the assumption that global variables do not alias.
+    // The same goes to functions.
+    if (GI->hasUnnamedAddr()) {
+      GI->setUnnamedAddr(false);
+    }
     uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
     TypeSize = BitLengthToByteLength(TypeSize);
     instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), NULL,
@@ -462,6 +475,10 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     // functions.
     if (F->isIntrinsic())
       continue;
+    // Prevent functions from sharing the same address.
+    if (F->hasUnnamedAddr()) {
+      F->setUnnamedAddr(false);
+    }
     uint64_t TypeSize = TD.getTypeSizeInBits(F->getType());
     TypeSize = BitLengthToByteLength(TypeSize);
     assert(TypeSize == TD.getPointerSize());
