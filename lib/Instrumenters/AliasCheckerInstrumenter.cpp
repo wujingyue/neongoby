@@ -98,11 +98,11 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
     }
   }
 
+  errs() << "Adding " << ToBeChecked.size() << " AssertNoAlias calls "
+      << "in function " << F.getName() << "...\n";
+
   for (size_t i = 0; i < ToBeChecked.size(); ++i)
     addAliasChecker(ToBeChecked[i].first, ToBeChecked[i].second);
-
-  errs() << "Added " << ToBeChecked.size() << " AssertNoAlias calls "
-      << "in function " << F.getName() << "\n";
 
   // Remove deallocators.
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {

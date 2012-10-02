@@ -33,6 +33,7 @@ struct AliasAnalysisChecker: public ModulePass {
  private:
   void printValue(raw_ostream &O, const Value *V);
   static bool IsIntraProcQuery(const Value *V1, const Value *V2);
+  static bool IsAccessed(Value *V);
   static const Function *GetContainingFunction(const Value *V);
 };
 }
@@ -63,12 +64,27 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IDAssigner>();
 }
 
+bool AliasAnalysisChecker::IsAccessed(Value *V) {
+  assert(V->getType()->isPointerTy());
+  for (Value::use_iterator UI = V->use_begin(); UI != V->use_end(); ++UI) {
+    if (LoadInst *LI = dyn_cast<LoadInst>(*UI)) {
+      if (LI->getPointerOperand() == V)
+        return true;
+    }
+    if (StoreInst *SI = dyn_cast<StoreInst>(*UI)) {
+      if (SI->getPointerOperand() == V)
+        return true;
+    }
+  }
+  return false;
+}
+
 bool AliasAnalysisChecker::runOnModule(Module &M) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-  ValueSet Pointers;
 #if 0
+  ValueSet Pointers;
   // We don't want to include all pointers yet.
   // For now, we include all pointers used as a pointer operand of
   // a Load/Store instruction.
@@ -82,7 +98,6 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
       }
     }
   }
-#endif
   unsigned NumValues = IDA.getNumValues();
   for (unsigned ValueID = 0; ValueID < NumValues; ++ValueID) {
     Value *V = IDA.getValue(ValueID);
@@ -98,6 +113,7 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
     Pointers.insert(IDA.getValue(ValueID));
   }
   errs() << "# of pointers to process = " << Pointers.size() << "\n";
+#endif
 
   DenseSet<ValuePair> DynamicAliases;
   if (InputDynamicAliases == "") {
@@ -117,8 +133,12 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   for (DenseSet<ValuePair>::iterator I = DynamicAliases.begin();
        I != DynamicAliases.end(); ++I) {
     Value *V1 = I->first, *V2 = I->second;
-    if (IntraProc && !IsIntraProcQuery(V1, V2))
+    if (IntraProc && !IsIntraProcQuery(V1, V2)) {
       continue;
+    }
+    if (!IsAccessed(V1) || !IsAccessed(V2)) {
+      continue;
+    }
     if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
       ++NumMissingAliases;
       errs().changeColor(raw_ostream::RED);

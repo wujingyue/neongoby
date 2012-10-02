@@ -3,17 +3,13 @@
 # Author: Jingyue
 
 import argparse
-import os
-import sys
 import string
-import rcs_utils
 import dynaa_utils
+import rcs_utils
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-            description = 'Check the soundness of the specified AA')
+    parser = argparse.ArgumentParser(description = 'Insert alias checker')
     parser.add_argument('bc', help = 'the bitcode of the program')
-    parser.add_argument('log', help = 'the point-to log')
     aa_choices = ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa']
     parser.add_argument('aa',
             help = 'the checked alias analysis: ' + str(aa_choices),
@@ -41,10 +37,25 @@ if __name__ == '__main__':
         cmd = rcs_utils.load_plugin(cmd, 'bc2bdd')
 
     cmd = string.join((cmd, '-' + args.aa))
-    cmd = string.join((cmd, '-check-aa'))
-    cmd = string.join((cmd, '-log-file', args.log))
-    # cmd = string.join((cmd, '-output-dyn-aliases', '/tmp/dyn-aliases'))
-    cmd = string.join((cmd, '-stats'))
-    cmd = string.join((cmd, '-disable-output', '<', args.bc))
+    cmd = string.join((cmd, '-instrument-alias-checker'))
+    assert args.bc.endswith('.bc')
+    output_bc = args.bc[0:-3] + '.alias_checker.bc'
+    cmd = string.join((cmd, '-o', output_bc, '<', args.bc))
+    rcs_utils.invoke(cmd)
 
+    cmd = string.join(('clang++',
+                       output_bc,
+                       '-o',
+                       args.bc[0:-3] + '.alias_checker',
+                       '-pthread'))
+    if args.bc.startswith('pbzip2'):
+        cmd = string.join((cmd, '-lbz2'))
+    if args.bc.startswith('ferret'):
+        cmd = string.join((cmd, '-lgsl', '-lblas'))
+    if args.bc.startswith('gpasswd'):
+        cmd = string.join((cmd, '-lcrypt'))
+    if args.bc.startswith('cvs'):
+        cmd = string.join((cmd, '-lcrypt'))
+    if args.bc.startswith('mysqld'):
+        cmd = string.join((cmd, '-lcrypt', '-ldl', '-lz'))
     rcs_utils.invoke(cmd)
