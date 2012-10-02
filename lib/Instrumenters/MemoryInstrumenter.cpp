@@ -15,6 +15,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
 
+#include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
 
 using namespace llvm;
@@ -59,6 +60,8 @@ struct MemoryInstrumenter: public ModulePass {
   void setupHooks(Module &M);
   void lowerGlobalCtors(Module &M);
   void addNewGlobalCtor(Module &M);
+  void replaceUndefsWithNull(Module &M);
+  void replaceUndefsWithNull(User *I, ValueSet &Replaced);
 
   Function *MemAllocHook;
   Function *MainArgsAllocHook;
@@ -169,6 +172,7 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
                                   AI->getArraySize(),
                                   "",
                                   Loc);
+    AddedByUs.insert(cast<Instruction>(Size));
   }
   instrumentMemoryAllocation(AI, Size, NULL, Loc);
 }
@@ -551,7 +555,42 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   AddedByUs.insert(CallInst::Create(MemHooksIniter, "", OldEntry));
   AddedByUs.insert(CallInst::Create(GlobalsAllocHook, "", OldEntry));
 
+  replaceUndefsWithNull(M);
+
   return true;
+}
+
+void MemoryInstrumenter::replaceUndefsWithNull(Module &M) {
+  ValueSet Replaced;
+  for (Module::global_iterator GI = M.global_begin(); GI != M.global_end();
+       ++GI) {
+    if (GI->hasInitializer()) {
+      replaceUndefsWithNull(GI->getInitializer(), Replaced);
+    }
+  }
+  for (Module::iterator F = M.begin(); F != M.end(); ++F) {
+    for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
+      for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
+        replaceUndefsWithNull(Ins, Replaced);
+      }
+    }
+  }
+}
+
+void MemoryInstrumenter::replaceUndefsWithNull(User *I, ValueSet &Replaced) {
+  if (Replaced.count(I))
+    return;
+  Replaced.insert(I);
+  // errs() << "replaceUndefsWithNull " << *I << "\n";
+  for (User::op_iterator OI = I->op_begin(); OI != I->op_end(); ++OI) {
+    Value *V = OI->get();
+    if (isa<UndefValue>(V) && V->getType()->isPointerTy()) {
+      OI->set(ConstantPointerNull::get(cast<PointerType>(V->getType())));
+    }
+    if (User *I2 = dyn_cast<User>(V)) {
+      replaceUndefsWithNull(I2, Replaced);
+    }
+  }
 }
 
 void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
