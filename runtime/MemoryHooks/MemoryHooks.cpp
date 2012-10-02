@@ -27,10 +27,15 @@ using namespace dyn_aa;
 
 struct Environment {
   static const string LogFileName;
+  FILE *LogFile;
 
   Environment() {
     pthread_mutex_init(&Lock, NULL);
-    FILE *LogFile = fopen(LogFileName.c_str(), "wb");
+    LogFile = fopen(LogFileName.c_str(), "wb");
+    assert(LogFile && "fail to open log file");
+  }
+
+  ~Environment() {
     fclose(LogFile);
   }
 
@@ -48,10 +53,8 @@ extern "C" void InitMemHooks() {
 // Must be called with Global->Lock held.
 template<class T>
 void PrintLogRecord(LogRecordType RecordType, const T &Record) {
-  FILE *LogFile = fopen(Environment::LogFileName.c_str(), "ab");
-  fwrite(&RecordType, sizeof RecordType, 1, LogFile);
-  fwrite(&Record, sizeof Record, 1, LogFile);
-  fclose(LogFile);
+  fwrite(&RecordType, sizeof RecordType, 1, Global->LogFile);
+  fwrite(&Record, sizeof Record, 1, Global->LogFile);
 }
 
 extern "C" void HookMemAlloc(unsigned ValueID, void *StartAddr,
