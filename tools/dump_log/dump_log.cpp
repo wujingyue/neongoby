@@ -29,21 +29,24 @@ int main(int argc, char *argv[]) {
       case AddrTakenDecl:
         {
           AddrTakenDeclLogRecord Record;
-          assert(fread(&Record, sizeof Record, 1, stdin) == 1);
+          size_t R = fread(&Record, sizeof Record, 1, stdin);
+          assert(R == 1);
           PrintAddrTakenDecl(Record);
         }
         break;
       case TopLevelPointTo:
         {
           TopLevelPointToLogRecord Record;
-          assert(fread(&Record, sizeof Record, 1, stdin) == 1);
+          size_t R = fread(&Record, sizeof Record, 1, stdin);
+          assert(R == 1);
           PrintTopLevelPointTo(Record);
         }
         break;
       case AddrTakenPointTo:
         {
           AddrTakenPointToLogRecord Record;
-          assert(fread(&Record, sizeof Record, 1, stdin) == 1);
+          size_t R = fread(&Record, sizeof Record, 1, stdin);
+          assert(R == 1);
           PrintAddrTakenPointTo(Record);
         }
         break;

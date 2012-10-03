@@ -37,17 +37,25 @@ void LogProcessor::processLog() {
     ++NumRecords;
     switch (RecordType) {
       case AddrTakenDecl:
-        ++NumAddrTakenDecls;
-        assert(fseek(LogFile, sizeof(AddrTakenDeclLogRecord), SEEK_CUR) == 0);
+        {
+          ++NumAddrTakenDecls;
+          int R = fseek(LogFile, sizeof(AddrTakenDeclLogRecord), SEEK_CUR);
+          assert(R == 0);
+        }
         break;
       case TopLevelPointTo:
-        ++NumTopLevelPointTos;
-        assert(fseek(LogFile, sizeof(TopLevelPointToLogRecord), SEEK_CUR) == 0);
+        {
+          ++NumTopLevelPointTos;
+          int R = fseek(LogFile, sizeof(TopLevelPointToLogRecord), SEEK_CUR);
+          assert(R == 0);
+        }
         break;
       case AddrTakenPointTo:
-        ++NumAddrTakenPointTos;
-        assert(fseek(LogFile, sizeof(AddrTakenPointToLogRecord),
-                     SEEK_CUR) == 0);
+        {
+          ++NumAddrTakenPointTos;
+          int R = fseek(LogFile, sizeof(AddrTakenPointToLogRecord), SEEK_CUR);
+          assert(R == 0);
+        }
         break;
       default:
         fprintf(stderr, "RecordType = %d\n", RecordType);
@@ -68,21 +76,24 @@ void LogProcessor::processLog() {
       case AddrTakenDecl:
         {
           AddrTakenDeclLogRecord Record;
-          assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
+          size_t R = fread(&Record, sizeof Record, 1, LogFile);
+          assert(R == 1);
           processAddrTakenDecl(Record);
         }
         break;
       case TopLevelPointTo:
         {
           TopLevelPointToLogRecord Record;
-          assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
+          size_t R = fread(&Record, sizeof Record, 1, LogFile);
+          assert(R == 1);
           processTopLevelPointTo(Record);
         }
         break;
       case AddrTakenPointTo:
         {
           AddrTakenPointToLogRecord Record;
-          assert(fread(&Record, sizeof Record, 1, LogFile) == 1);
+          size_t R = fread(&Record, sizeof Record, 1, LogFile);
+          assert(R == 1);
           processAddrTakenPointTo(Record);
         }
         break;
