@@ -16,6 +16,7 @@
 #include "rcs/IDAssigner.h"
 
 #include "dyn-aa/DynamicAliasAnalysis.h"
+#include "dyn-aa/Utils.h"
 
 using namespace std;
 using namespace llvm;
@@ -33,7 +34,6 @@ struct AliasAnalysisChecker: public ModulePass {
  private:
   void printValue(raw_ostream &O, const Value *V);
   static bool IsIntraProcQuery(const Value *V1, const Value *V2);
-  static bool IsAccessed(Value *V);
   static const Function *GetContainingFunction(const Value *V);
 };
 }
@@ -62,21 +62,6 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   }
   AU.addRequired<AliasAnalysis>();
   AU.addRequired<IDAssigner>();
-}
-
-bool AliasAnalysisChecker::IsAccessed(Value *V) {
-  assert(V->getType()->isPointerTy());
-  for (Value::use_iterator UI = V->use_begin(); UI != V->use_end(); ++UI) {
-    if (LoadInst *LI = dyn_cast<LoadInst>(*UI)) {
-      if (LI->getPointerOperand() == V)
-        return true;
-    }
-    if (StoreInst *SI = dyn_cast<StoreInst>(*UI)) {
-      if (SI->getPointerOperand() == V)
-        return true;
-    }
-  }
-  return false;
 }
 
 bool AliasAnalysisChecker::runOnModule(Module &M) {
@@ -136,7 +121,8 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
     if (IntraProc && !IsIntraProcQuery(V1, V2)) {
       continue;
     }
-    if (!IsAccessed(V1) || !IsAccessed(V2)) {
+    if (!DynAAUtils::PointerIsAccessed(V1) ||
+        !DynAAUtils::PointerIsAccessed(V2)) {
       continue;
     }
     if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {

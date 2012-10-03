@@ -5,9 +5,12 @@
 
 #include <stdint.h>
 
+#include <llvm/Value.h>
+
 namespace dyn_aa {
 struct DynAAUtils {
   static void PrintProgressBar(uint64_t Finished, uint64_t Total);
+  static bool PointerIsAccessed(const llvm::Value *V);
 };
 }
 

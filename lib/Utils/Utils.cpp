@@ -3,6 +3,8 @@
 #include <cassert>
 
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Type.h"
+#include "llvm/Instructions.h"
 
 #include "dyn-aa/Utils.h"
 
@@ -26,4 +28,20 @@ void DynAAUtils::PrintProgressBar(uint64_t Finished, uint64_t Total) {
       errs().resetColor();
     }
   }
+}
+
+bool DynAAUtils::PointerIsAccessed(const Value *V) {
+  assert(V->getType()->isPointerTy());
+  for (Value::const_use_iterator UI = V->use_begin();
+       UI != V->use_end(); ++UI) {
+    if (const LoadInst *LI = dyn_cast<LoadInst>(*UI)) {
+      if (LI->getPointerOperand() == V)
+        return true;
+    }
+    if (const StoreInst *SI = dyn_cast<StoreInst>(*UI)) {
+      if (SI->getPointerOperand() == V)
+        return true;
+    }
+  }
+  return false;
 }

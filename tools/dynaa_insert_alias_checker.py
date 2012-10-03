@@ -22,9 +22,6 @@ if __name__ == '__main__':
     # TODO: Should be specified in a configuration file.
     if args.aa == 'ds-aa':
         cmd = rcs_utils.load_plugin(cmd, 'LLVMDataStructure')
-        cmd = string.join((cmd, '-intra'))
-    elif args.aa == 'basicaa':
-        cmd = string.join((cmd, '-intra'))
     elif args.aa == 'anders-aa':
         cmd = rcs_utils.load_plugin(cmd, 'RCSAndersens')
     elif args.aa == 'bc2bdd-aa':
