@@ -42,6 +42,7 @@ if __name__ == '__main__':
 
     cmd = string.join(('clang++',
                        output_bc,
+                       rcs_utils.get_libdir() + '/libDynAAAliasChecker.a',
                        '-o',
                        args.bc[0:-3] + '.alias_checker',
                        '-pthread'))
