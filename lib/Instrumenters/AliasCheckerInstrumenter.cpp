@@ -34,8 +34,6 @@ struct AliasCheckerInstrumenter: public FunctionPass {
 
  private:
   bool isFree(Function *F) const;
-  static bool Reachable(Instruction *P, Instruction *Q,
-                        const ConstBBSet &ReachableFromP);
   // Returns the number of alias checkers added.
   void addAliasCheckers(Instruction *P, const InstList &Qs);
 
@@ -76,56 +74,43 @@ void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IntraReach &IR = getAnalysis<IntraReach>();
-  // IDAssigner &IDA = getAnalysis<IDAssigner>();
-
-#if 1
-  if (F.getName() != "_Z10MYSQLparsePv")
-    return false;
-#endif
 
   errs() << "Processing function " << F.getName() << "...\n";
 
   // TODO: consider arguments
 
-#if 0
-  InstList PointerInsts;
+  DenseMap<BasicBlock *, InstList> PointerInsts;
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
       if (!Ins->getType()->isPointerTy())
         continue;
       if (!DynAAUtils::PointerIsAccessed(Ins))
         continue;
-      PointerInsts.push_back(Ins);
+      PointerInsts[BB].push_back(Ins);
     }
   }
-#endif
 
-#if 1
-  // Do not query AA on modified bc.
+  // Do not query AA on modified bc. Therefore, we store the checks we are
+  // going to add in ToBeChecked, and add them to the program later.
   vector<InstPair> ToBeChecked;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
+    if (!PointerInsts.count(B1))
+      continue;
     ConstBBSet ReachableBBs;
     IR.floodfill(B1, ConstBBSet(), ReachableBBs);
-    // B1 should be able to itself.
     assert(ReachableBBs.count(B1));
-    for (BasicBlock::iterator I1 = B1->begin(); I1 != B1->end(); ++I1) {
-      if (!I1->getType()->isPointerTy())
-        continue;
-      if (!DynAAUtils::PointerIsAccessed(I1))
-        continue;
-      for (ConstBBSet::iterator J = ReachableBBs.begin();
-           J != ReachableBBs.end(); ++J) {
-        BasicBlock *B2 = const_cast<BasicBlock *>(*J);
-        BasicBlock::iterator I2 = B2->begin();
-        if (B2 == B1) {
-          I2 = I1;
-          ++I2;
-        }
-        for (; I2 != B2->end(); ++I2) {
-          if (!I2->getType()->isPointerTy())
-            continue;
-          if (!DynAAUtils::PointerIsAccessed(I2))
-            continue;
+    InstList &PointerInstsInB1 = PointerInsts[B1];
+    for (size_t i1 = 0, e1 = PointerInstsInB1.size(); i1 < e1; ++i1) {
+      Instruction *I1 = PointerInstsInB1[i1];
+      for (ConstBBSet::iterator IB2 = ReachableBBs.begin();
+           IB2 != ReachableBBs.end(); ++IB2) {
+        BasicBlock *B2 = const_cast<BasicBlock *>(*IB2);
+        if (!PointerInsts.count(B2))
+          continue;
+        InstList &PointerInstsInB2 = PointerInsts[B2];
+        for (size_t i2 = (B2 == B1 ? i1 + 1 : 0), e2 = PointerInstsInB2.size();
+             i2 < e2; ++i2) {
+          Instruction *I2 = PointerInstsInB2[i2];
           if (AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
             ToBeChecked.push_back(make_pair(I1, I2));
           }
@@ -133,24 +118,8 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
       }
     }
   }
-#endif
 
-#if 0
-  for (size_t i = 0; i < PointerInsts.size(); ++i) {
-    Instruction *P = PointerInsts[i];
-    ConstBBSet ReachableBBs;
-    IR.floodfill(P->getParent(), ConstBBSet(), ReachableBBs);
-    for (size_t j = 0; j < PointerInsts.size(); ++j) {
-      Instruction *Q = PointerInsts[j];
-      if (AA.alias(P, Q) == AliasAnalysis::NoAlias &&
-          Reachable(P, Q, ReachableBBs)) {
-        ToBeChecked.push_back(make_pair(P, Q));
-      }
-    }
-  }
-#endif
-  
-  errs() << "Adding " << ToBeChecked.size() << " alias checkers.\n";
+  errs() << "Adding " << ToBeChecked.size() << " alias checkers...\n";
   for (size_t i = 0; i < ToBeChecked.size(); ) {
     InstList Qs;
     size_t j = i;
@@ -162,45 +131,6 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
     addAliasCheckers(ToBeChecked[i].first, Qs);
     i = j;
   }
-  
-
-#if 0
-  unsigned NumAliasCheckers = 0;
-  for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
-    ConstBBSet ReachableBBs;
-    IR.floodfill(B1, ConstBBSet(), ReachableBBs);
-    // B1 should be able to itself.
-    assert(ReachableBBs.count(B1));
-    for (BasicBlock::iterator I1 = B1->begin(); I1 != B1->end(); ++I1) {
-      if (!I1->getType()->isPointerTy())
-        continue;
-      if (IDA.getValueID(I1) == IDAssigner::INVALID_ID)
-        continue;
-      InstList ToBeChecked;
-      for (ConstBBSet::iterator J = ReachableBBs.begin();
-           J != ReachableBBs.end(); ++J) {
-        BasicBlock *B2 = const_cast<BasicBlock *>(*J);
-        BasicBlock::iterator I2 = B2->begin();
-        if (B2 == B1) {
-          I2 = I1;
-          ++I2;
-        }
-        for (; I2 != B2->end(); ++I2) {
-          if (IDA.getValueID(I2) == IDAssigner::INVALID_ID)
-            continue;
-          if (!I2->getType()->isPointerTy())
-            continue;
-          if (AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
-            ToBeChecked.push_back(I2);
-          }
-        }
-      }
-      addAliasCheckers(I1, ToBeChecked);
-      NumAliasCheckers += ToBeChecked.size();
-    }
-  }
-  errs() << "Added " << NumAliasCheckers << " alias checkers.\n";
-#endif
 
   // Remove deallocators.
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
@@ -214,24 +144,6 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   }
 
   return true;
-}
-
-bool AliasCheckerInstrumenter::Reachable(Instruction *P, Instruction *Q,
-                                         const ConstBBSet &ReachableFromP) {
-  BasicBlock *BBOfP = P->getParent(), *BBOfQ = Q->getParent();
-  
-  if (BBOfP == BBOfQ) {
-    // If <P> and <Q> happen to be in the same BB, returns whether
-    // <P> is strictly before <Q>.
-    BasicBlock::iterator I = P;
-    for (++I; I != BBOfP->end(); ++I) {
-      if (Q == I)
-        return true;
-    }
-    return false;
-  }
-
-  return ReachableFromP.count(BBOfQ);
 }
 
 bool AliasCheckerInstrumenter::doInitialization(Module &M) {
