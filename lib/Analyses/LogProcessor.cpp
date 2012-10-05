@@ -33,7 +33,7 @@ void LogProcessor::processLog() {
 
   // Count the records.
   LogRecordType RecordType;
-  while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
+  while (fread(&RecordType, sizeof(LogRecordType), 1, LogFile) == 1) {
     ++NumRecords;
     switch (RecordType) {
       case AddrTakenDecl:
@@ -71,12 +71,13 @@ void LogProcessor::processLog() {
   // Actually process these log records.
   unsigned NumRecordsProcessed = 0;
   DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
-  while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
+  while (fread(&RecordType, sizeof(LogRecordType), 1, LogFile) == 1) {
     switch (RecordType) {
       case AddrTakenDecl:
         {
           AddrTakenDeclLogRecord Record;
-          size_t R = fread(&Record, sizeof Record, 1, LogFile);
+          size_t R = fread(&Record, sizeof(AddrTakenDeclLogRecord), 1,
+                           LogFile);
           assert(R == 1);
           processAddrTakenDecl(Record);
         }
@@ -84,7 +85,8 @@ void LogProcessor::processLog() {
       case TopLevelPointTo:
         {
           TopLevelPointToLogRecord Record;
-          size_t R = fread(&Record, sizeof Record, 1, LogFile);
+          size_t R = fread(&Record, sizeof(TopLevelPointToLogRecord), 1,
+                           LogFile);
           assert(R == 1);
           processTopLevelPointTo(Record);
         }
@@ -92,7 +94,8 @@ void LogProcessor::processLog() {
       case AddrTakenPointTo:
         {
           AddrTakenPointToLogRecord Record;
-          size_t R = fread(&Record, sizeof Record, 1, LogFile);
+          size_t R = fread(&Record, sizeof(AddrTakenPointToLogRecord), 1,
+                           LogFile);
           assert(R == 1);
           processAddrTakenPointTo(Record);
         }

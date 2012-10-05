@@ -8,7 +8,7 @@ enum LogRecordType {
   AddrTakenDecl = 0,
   TopLevelPointTo,
   AddrTakenPointTo
-};
+} __attribute__((packed));
 
 struct AddrTakenDeclLogRecord {
   AddrTakenDeclLogRecord() {}
@@ -18,7 +18,7 @@ struct AddrTakenDeclLogRecord {
   void *Address;
   unsigned long Bound;
   unsigned AllocatedBy;
-};
+} __attribute__((packed));
 
 struct TopLevelPointToLogRecord {
   TopLevelPointToLogRecord() {}
@@ -27,7 +27,7 @@ struct TopLevelPointToLogRecord {
 
   unsigned PointerValueID;
   void *PointeeAddress;
-};
+} __attribute__((packed));
 
 struct AddrTakenPointToLogRecord {
   AddrTakenPointToLogRecord() {}
@@ -38,7 +38,7 @@ struct AddrTakenPointToLogRecord {
   void *PointeeAddress;
   // <InstructionID> is not a must, but makes debugging a lot easier. 
   unsigned InstructionID;
-};
+} __attribute__((packed));
 }
 
 #endif
