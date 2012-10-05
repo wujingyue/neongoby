@@ -9,6 +9,7 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
 #include "rcs/IntraReach.h"
@@ -52,6 +53,11 @@ static RegisterPass<AliasCheckerInstrumenter> X(
     "Instrument the alias checker",
     false, // Is CFG Only?
     false); // Is Analysis?
+
+static cl::opt<unsigned> MaxNumAliasChecks(
+    "max-alias-checks",
+    cl::desc("Add at most this many alias checks. Used for debugging"),
+    cl::init((unsigned)-1));
 
 const string AliasCheckerInstrumenter::AssertNoAliasHookName = "AssertNoAlias";
 
@@ -119,11 +125,14 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
     }
   }
 
-  errs() << "Adding " << ToBeChecked.size() << " alias checkers...\n";
-  for (size_t i = 0; i < ToBeChecked.size(); ) {
+  unsigned RealSize = ToBeChecked.size();
+  if (MaxNumAliasChecks < RealSize)
+    RealSize = MaxNumAliasChecks;
+  errs() << "Adding " << RealSize << " alias checkers...\n";
+  for (size_t i = 0; i < RealSize; ) {
     InstList Qs;
     size_t j = i;
-    while (j < ToBeChecked.size() &&
+    while (j < RealSize &&
            ToBeChecked[j].first == ToBeChecked[i].first) {
       Qs.push_back(ToBeChecked[j].second);
       ++j;
