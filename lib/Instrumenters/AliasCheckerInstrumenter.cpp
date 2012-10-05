@@ -81,6 +81,9 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IntraReach &IR = getAnalysis<IntraReach>();
 
+  if (F.getName() != "_Z10MYSQLparsePv")
+    return false;
+
   errs() << "Processing function " << F.getName() << "...\n";
 
   // TODO: consider arguments
@@ -119,20 +122,26 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
           Instruction *I2 = PointerInstsInB2[i2];
           if (AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
             ToBeChecked.push_back(make_pair(I1, I2));
+            if (ToBeChecked.size() == MaxNumAliasChecks)
+              break;
           }
         }
+        if (ToBeChecked.size() == MaxNumAliasChecks)
+          break;
       }
+      if (ToBeChecked.size() == MaxNumAliasChecks)
+        break;
     }
+    if (ToBeChecked.size() == MaxNumAliasChecks)
+      break;
   }
+  assert(ToBeChecked.size() <= MaxNumAliasChecks);
 
-  unsigned RealSize = ToBeChecked.size();
-  if (MaxNumAliasChecks < RealSize)
-    RealSize = MaxNumAliasChecks;
-  errs() << "Adding " << RealSize << " alias checkers...\n";
-  for (size_t i = 0; i < RealSize; ) {
+  errs() << "Adding " << ToBeChecked.size() << " alias checkers...\n";
+  for (size_t i = 0; i < ToBeChecked.size(); ) {
     InstList Qs;
     size_t j = i;
-    while (j < RealSize &&
+    while (j < ToBeChecked.size() &&
            ToBeChecked[j].first == ToBeChecked[i].first) {
       Qs.push_back(ToBeChecked[j].second);
       ++j;

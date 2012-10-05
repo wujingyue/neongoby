@@ -2,9 +2,12 @@
 
 # Author: Jingyue
 
+import os
+
 def ok(max_alias_checks):
-    os.system('dynaa_insert_alias_checker mysqld.bc basicaa --max-alias-checks ' + max_alias_checks)
+    os.system('dynaa_insert_alias_checker.py mysqld.bc basicaa --max-alias-checks ' + str(max_alias_checks))
     os.system('./mysqld.alias_checker &')
+    os.system('sleep 1')
     ret = os.system("$HOME/Research/apps/mysql/mysql-install/bin/mysql -u root -e 'show databases'")
     os.system('killall mysqld.alias_checker')
     os.system('sleep 1')

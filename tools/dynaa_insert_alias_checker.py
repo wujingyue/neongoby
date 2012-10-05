@@ -15,7 +15,7 @@ if __name__ == '__main__':
             help = 'the checked alias analysis: ' + str(aa_choices),
             metavar = 'aa',
             choices = aa_choices)
-    parse.add_argument('--max-alias-checks',
+    parser.add_argument('--max-alias-checks',
                        help = 'maximum number of alias checks to add',
                        type = int)
     args = parser.parse_args()
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     cmd = string.join((cmd, '-' + args.aa))
     cmd = string.join((cmd, '-instrument-alias-checker'))
     if args.max_alias_checks is not None:
-        cmd = string.join((cmd, '-max-alias-checks', args.max_alias_checks))
+        cmd = string.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
     assert args.bc.endswith('.bc')
     output_bc = args.bc[0:-3] + '.alias_checker.bc'
     cmd = string.join((cmd, '-o', output_bc, '<', args.bc))
