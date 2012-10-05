@@ -74,7 +74,6 @@ struct MemoryInstrumenter: public ModulePass {
   PointerType *CharStarType;
   Type *VoidType;
   vector<string> MallocNames;
-  DenseSet<Instruction *> AddedByUs;
 };
 }
 
@@ -143,10 +142,11 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
   assert(Arg2->getType()->isPointerTy());
   assert(cast<PointerType>(Arg2->getType())->getElementType() == CharStarType);
 
-  Value *Args[3] = {Arg1, Arg2,
-    ConstantInt::get(IntType, IDA.getValueID(Arg2))};
-  AddedByUs.insert(CallInst::Create(MainArgsAllocHook, Args, "",
-                                    Main->begin()->getFirstNonPHI()));
+  Value *Args[3] = {Arg1,
+                    Arg2,
+                    ConstantInt::get(IntType, IDA.getValueID(Arg2))};
+  CallInst::Create(MainArgsAllocHook, Args, "",
+                   Main->begin()->getFirstNonPHI());
 }
 
 void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
@@ -172,7 +172,6 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
                                   AI->getArraySize(),
                                   "",
                                   Loc);
-    AddedByUs.insert(cast<Instruction>(Size));
   }
   instrumentMemoryAllocation(AI, Size, NULL, Loc);
 }
@@ -196,14 +195,13 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
   // Arg 2: starting address
   if (Start->getType() != CharStarType) {
     Start = new BitCastInst(Start, CharStarType, "", Loc);
-    AddedByUs.insert(cast<Instruction>(Start));
   }
   Args.push_back(Start);
   // Arg 3: bound
   Args.push_back(Size);
 
   if (Success == NULL) {
-    AddedByUs.insert(CallInst::Create(MemAllocHook, Args, "", Loc));
+    CallInst::Create(MemAllocHook, Args, "", Loc);
   } else {
     BasicBlock *BB = Loc->getParent();
     BasicBlock *RestBB = BB->splitBasicBlock(Loc, "rest");
@@ -212,10 +210,9 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
                                                       BB->getParent(),
                                                       RestBB);
     BB->getTerminator()->eraseFromParent();
-    AddedByUs.insert(BranchInst::Create(CallMallocHookBB, RestBB, Success, BB));
-    AddedByUs.insert(CallInst::Create(MemAllocHook, Args, "",
-                                      CallMallocHookBB));
-    AddedByUs.insert(BranchInst::Create(RestBB, CallMallocHookBB));
+    BranchInst::Create(CallMallocHookBB, RestBB, Success, BB);
+    CallInst::Create(MemAllocHook, Args, "", CallMallocHookBB);
+    BranchInst::Create(RestBB, CallMallocHookBB);
   }
 }
 
@@ -248,7 +245,6 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     Start = Ins;
     Size = CS.getArgument(0);
     Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
-    AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName.startswith("_Zn")) {
     Start = Ins;
     Size = CS.getArgument(0);
@@ -264,35 +260,26 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
                                   CS.getArgument(1),
                                   "",
                                   Loc);
-    AddedByUs.insert(cast<Instruction>(Size));
     Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
-    AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "memalign" || CalleeName == "realloc") {
     Start = Ins;
     Size = CS.getArgument(1);
     Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
-    AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "strdup") {
     Start = Ins;
     // Use strlen to compute the length of the allocated memory.
     Value *StrLen = EmitStrLen(Ins, Builder, &TD);
-    AddedByUs.insert(cast<Instruction>(StrLen));
     // size = strlen(result) + 1
     Size = Builder.CreateAdd(StrLen, ConstantInt::get(LongType, 1));
-    AddedByUs.insert(cast<Instruction>(Size));
     Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
-    AddedByUs.insert(cast<Instruction>(Success));
   } else if (CalleeName == "getline") {
     // getline(char **lineptr, size_t *n, FILE *stream)
     // start = *lineptr
     // size = *n
     // succ = (<rv> != -1)
     Start = Builder.CreateLoad(CS.getArgument(0));
-    AddedByUs.insert(cast<Instruction>(Start));
     Size = Builder.CreateLoad(CS.getArgument(1));
-    AddedByUs.insert(cast<Instruction>(Size));
     Success = Builder.CreateICmpNE(Ins, ConstantInt::get(Ins->getType(), -1));
-    AddedByUs.insert(cast<Instruction>(Success));
   } else {
     assert(false && "Unhandled malloc function call");
   }
@@ -447,7 +434,6 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   BasicBlock *BB = BasicBlock::Create(M.getContext(), "entry",
                                       GlobalsAllocHook);
   Instruction *Ret = ReturnInst::Create(M.getContext(), BB);
-  AddedByUs.insert(Ret);
 
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
@@ -552,8 +538,8 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   // Call the memory hook initializer and the global variable allocation hook
   // at the very beginning.
   Instruction *OldEntry = Main->begin()->getFirstNonPHI();
-  AddedByUs.insert(CallInst::Create(MemHooksIniter, "", OldEntry));
-  AddedByUs.insert(CallInst::Create(GlobalsAllocHook, "", OldEntry));
+  CallInst::Create(MemHooksIniter, "", OldEntry);
+  CallInst::Create(GlobalsAllocHook, "", OldEntry);
 
   replaceUndefsWithNull(M);
 
@@ -623,7 +609,7 @@ void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
       break;  // Found a null terminator, exit.
 
     // Explicitly call the constructor at the main entry.
-    AddedByUs.insert(CallInst::Create(FP, "", Main->begin()->getFirstNonPHI()));
+    CallInst::Create(FP, "", Main->begin()->getFirstNonPHI());
   }
 
   // Clear the global_ctors array.
@@ -662,28 +648,19 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
     vector<Value *> Args;
 
     if (ValueType == LongType) {
-      Instruction *ValueCast = new IntToPtrInst(ValueStored, CharStarType,
-                                                "", SI);
-      AddedByUs.insert(ValueCast);
-      Args.push_back(ValueCast);
+      Args.push_back(new IntToPtrInst(ValueStored, CharStarType, "", SI));
     } else {
-      Instruction *ValueCast = new BitCastInst(ValueStored, CharStarType,
-                                               "", SI);
-      AddedByUs.insert(ValueCast);
-      Args.push_back(ValueCast);
+      Args.push_back(new BitCastInst(ValueStored, CharStarType, "", SI));
     }
 
-    Instruction *PointerCast = new BitCastInst(SI->getPointerOperand(),
-                                               CharStarType,
-                                               "", SI);
-    AddedByUs.insert(PointerCast);
-    Args.push_back(PointerCast);
+    Args.push_back(new BitCastInst(SI->getPointerOperand(),
+                                   CharStarType, "", SI));
 
     unsigned InsID = IDA.getInstructionID(SI);
     assert(InsID != IDAssigner::INVALID_ID);
     Args.push_back(ConstantInt::get(IntType, InsID));
 
-    AddedByUs.insert(CallInst::Create(AddrTakenHook, Args, "", SI));
+    CallInst::Create(AddrTakenHook, Args, "", SI);
   }
 }
 
@@ -691,7 +668,8 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   DEBUG(dbgs() << "Processing" << *I << "\n";);
 
   // Skip those instructions added by us.
-  if (AddedByUs.count(I))
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  if (IDA.getValueID(I) == IDAssigner::INVALID_ID)
     return;
 
   // Instrument pointer stores, i.e. store X *, X **.
@@ -751,11 +729,9 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   assert(ValueID != IDAssigner::INVALID_ID);
 
   vector<Value *> Args;
-  Instruction *Cast = new BitCastInst(V, CharStarType, "", Loc);
-  AddedByUs.insert(Cast);
-  Args.push_back(Cast);
+  Args.push_back(new BitCastInst(V, CharStarType, "", Loc));
   Args.push_back(ConstantInt::get(IntType, ValueID));
-  AddedByUs.insert(CallInst::Create(TopLevelHook, Args, "", Loc));
+  CallInst::Create(TopLevelHook, Args, "", Loc);
 }
 
 void MemoryInstrumenter::instrumentPointerParameters(Function *F) {
