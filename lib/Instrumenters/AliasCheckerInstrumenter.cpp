@@ -34,8 +34,8 @@ struct AliasCheckerInstrumenter: public FunctionPass {
 
  private:
   bool isFree(Function *F) const;
-  // Returns the number of alias checkers added.
   void addAliasCheckers(Instruction *P, const InstList &Qs);
+  void addAliasChecker(Instruction *P, Instruction *Q, SSAUpdater &SU);
 
   Function *AssertNoAliasHook;
   // Types.
@@ -179,10 +179,6 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
 
 void AliasCheckerInstrumenter::addAliasCheckers(Instruction *P,
                                                 const InstList &Qs) {
-  // It's safe to use DominatorTree here, because SSAUpdater preserves CFG.
-  DominatorTree &DT = getAnalysis<DominatorTree>();
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-
   SSAUpdater SU;
   PointerType *TypeOfP = cast<PointerType>(P->getType());
   SU.Initialize(TypeOfP, P->getName());
@@ -193,39 +189,47 @@ void AliasCheckerInstrumenter::addAliasCheckers(Instruction *P,
   }
 
   for (size_t i = 0; i < Qs.size(); ++i) {
-    Instruction *Q = Qs[i];
+    addAliasChecker(P, Qs[i], SU);
+  }
+}
 
-    // Compute the location to add the checker.
-    BasicBlock::iterator Loc = Q;
-    if (isa<PHINode>(Loc))
-      Loc = Loc->getParent()->getFirstNonPHI();
-    else if (!Loc->isTerminator())
-      ++Loc;
-    else
-      Loc = cast<InvokeInst>(Loc)->getNormalDest()->getFirstNonPHI();
+void AliasCheckerInstrumenter::addAliasChecker(Instruction *P,
+                                               Instruction *Q,
+                                               SSAUpdater &SU) {
+  // It's safe to use DominatorTree here, because SSAUpdater preserves CFG.
+  DominatorTree &DT = getAnalysis<DominatorTree>();
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-    // Convert <P> and <Q> to "char *".
-    BitCastInst *P2 = new BitCastInst(P, CharStarType, "", Loc);
-    BitCastInst *Q2 = new BitCastInst(Q, CharStarType, "", Loc);
+  // Compute the location to add the checker.
+  BasicBlock::iterator Loc = Q;
+  if (isa<PHINode>(Loc))
+    Loc = Loc->getParent()->getFirstNonPHI();
+  else if (!Loc->isTerminator())
+    ++Loc;
+  else
+    Loc = cast<InvokeInst>(Loc)->getNormalDest()->getFirstNonPHI();
 
-    // Compute <P> and <Q>'s value IDs.
-    unsigned VIDOfP = IDA.getValueID(P), VIDOfQ = IDA.getValueID(Q);
-    assert(VIDOfP != IDAssigner::INVALID_ID && VIDOfQ != IDAssigner::INVALID_ID);
+  // Convert <P> and <Q> to "char *".
+  BitCastInst *P2 = new BitCastInst(P, CharStarType, "", Loc);
+  BitCastInst *Q2 = new BitCastInst(Q, CharStarType, "", Loc);
 
-    // Add a function call to AssertNoAlias.
-    vector<Value *> Args;
-    Args.push_back(P2);
-    Args.push_back(ConstantInt::get(IntType, VIDOfP));
-    Args.push_back(Q2);
-    Args.push_back(ConstantInt::get(IntType, VIDOfQ));
-    CallInst::Create(AssertNoAliasHook, Args, "", Loc);
+  // Compute <P> and <Q>'s value IDs.
+  unsigned VIDOfP = IDA.getValueID(P), VIDOfQ = IDA.getValueID(Q);
+  assert(VIDOfP != IDAssigner::INVALID_ID && VIDOfQ != IDAssigner::INVALID_ID);
 
-    // The function call just added may be broken, because <P> may not
-    // dominate <Q>. Use SSAUpdater to fix it if necessary.
-    if (!DT.dominates(P, P2)) {
-      assert(P2->getOperand(0) == P);
-      SU.RewriteUse(P2->getOperandUse(0));
-    }
+  // Add a function call to AssertNoAlias.
+  vector<Value *> Args;
+  Args.push_back(P2);
+  Args.push_back(ConstantInt::get(IntType, VIDOfP));
+  Args.push_back(Q2);
+  Args.push_back(ConstantInt::get(IntType, VIDOfQ));
+  CallInst::Create(AssertNoAliasHook, Args, "", Loc);
+
+  // The function call just added may be broken, because <P> may not
+  // dominate <Q>. Use SSAUpdater to fix it if necessary.
+  if (!DT.dominates(P, P2)) {
+    assert(P2->getOperand(0) == P);
+    SU.RewriteUse(P2->getOperandUse(0));
   }
 }
 
