@@ -4,7 +4,7 @@ DIRS = dump_log
 
 include $(LEVEL)/Makefile.common
 
-Scripts = dynaa_check_aa.py dynaa_check_cg.py dynaa_display_pts.py dynaa_utils.py dynaa_hook_mem.py dynaa_insert_alias_checker.py
+Scripts = dynaa_check_aa.py dynaa_check_cg.py dynaa_display_pts.py dynaa_utils.py dynaa_hook_mem.py dynaa_insert_alias_checker.py dynaa_reduce.py
 
 install-local::
 	$(Verb) for script in $(Scripts) ; do \
