@@ -40,7 +40,7 @@ void DynamicPointerAnalysis::processAddrTakenDecl(
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   Value *Allocator = NULL;
-  if (Record.AllocatedBy != IDAssigner::INVALID_ID)
+  if (Record.AllocatedBy != IDAssigner::InvalidID)
     Allocator = IDA.getValue(Record.AllocatedBy);
   // Allocator may be NULL.
   // In that case, the memory block is allocated by an external instruction.

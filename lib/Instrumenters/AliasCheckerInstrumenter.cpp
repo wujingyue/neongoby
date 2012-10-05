@@ -233,7 +233,7 @@ void AliasCheckerInstrumenter::addAliasChecker(Instruction *P,
 
   // Compute <P> and <Q>'s value IDs.
   unsigned VIDOfP = IDA.getValueID(P), VIDOfQ = IDA.getValueID(Q);
-  assert(VIDOfP != IDAssigner::INVALID_ID && VIDOfQ != IDAssigner::INVALID_ID);
+  assert(VIDOfP != IDAssigner::InvalidID && VIDOfQ != IDAssigner::InvalidID);
 
   // Add a function call to AssertNoAlias.
   vector<Value *> Args;

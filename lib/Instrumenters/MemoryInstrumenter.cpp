@@ -657,7 +657,7 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
                                    CharStarType, "", SI));
 
     unsigned InsID = IDA.getInstructionID(SI);
-    assert(InsID != IDAssigner::INVALID_ID);
+    assert(InsID != IDAssigner::InvalidID);
     Args.push_back(ConstantInt::get(IntType, InsID));
 
     CallInst::Create(AddrTakenHook, Args, "", SI);
@@ -669,7 +669,7 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
 
   // Skip those instructions added by us.
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  if (IDA.getValueID(I) == IDAssigner::INVALID_ID)
+  if (IDA.getValueID(I) == IDAssigner::InvalidID)
     return;
 
   // Instrument pointer stores, i.e. store X *, X **.
@@ -724,9 +724,9 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   assert(V->getType()->isPointerTy());
 
   unsigned ValueID = IDA.getValueID(V);
-  if (ValueID == IDAssigner::INVALID_ID)
+  if (ValueID == IDAssigner::InvalidID)
     errs() << *V << "\n";
-  assert(ValueID != IDAssigner::INVALID_ID);
+  assert(ValueID != IDAssigner::InvalidID);
 
   vector<Value *> Args;
   Args.push_back(new BitCastInst(V, CharStarType, "", Loc));

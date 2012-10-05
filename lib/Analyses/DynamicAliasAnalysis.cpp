@@ -219,7 +219,7 @@ void DynamicAliasAnalysis::addAliasPair(Value *V1, Value *V2) {
 }
 
 void DynamicAliasAnalysis::addAliasPair(unsigned VID1, unsigned VID2) {
-  assert(VID1 != IDAssigner::INVALID_ID && VID2 != IDAssigner::INVALID_ID);
+  assert(VID1 != IDAssigner::InvalidID && VID2 != IDAssigner::InvalidID);
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   addAliasPair(IDA.getValue(VID1), IDA.getValue(VID2));
 }
