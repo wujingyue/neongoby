@@ -77,12 +77,16 @@ void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IDAssigner>();
 }
 
+#if 0
+static bool SortBBByName(const BasicBlock *B1, const BasicBlock *B2) {
+  assert(B1->hasName() && B2->hasName());
+  return B1->getName() < B2->getName();
+}
+#endif
+
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IntraReach &IR = getAnalysis<IntraReach>();
-
-  if (F.getName() != "_Z10MYSQLparsePv")
-    return false;
 
   errs() << "Processing function " << F.getName() << "...\n";
 
