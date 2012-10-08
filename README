@@ -1,0 +1,21 @@
+Need to build repo rcs first
+
+./configure --with-llvmsrc=`llvm-config --src-root` --with-llvmobj=`llvm-config --obj-root` --with-rcssrc=<rcs srouce directory> --with-rcsobj=<rcs object directory> --prefix=`llvm-config --prefix`
+make
+make install
+
+Generate a bitcode file using clang 3.0
+e.g. clang++ hello.cpp -o hello.bc -c -emit-llvm
+
+Online mode
+dynaa_insert_alias_checker.py hello.bc <aa> [--inline]
+If --inline is specified, the output executable is hello.inlined; otherwise,
+the output executable is hello.alias_checker.
+Run the output executable. If it aborts or fails asserts, there is an error in
+the alias analysis we are checking.
+
+Offline mode
+dynaa_hook_mem.py hello
+./hello.inst
+mv /tmp/pts hello.pts
+dynaa_check_aa.py hello.bc hello.pts <aa>
