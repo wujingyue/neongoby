@@ -5,6 +5,7 @@
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/Instructions.h"
+#include "llvm/IntrinsicInst.h"
 #include "llvm/Constants.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Support/raw_ostream.h"
@@ -24,7 +25,7 @@ struct AliasCheckerInliner: public FunctionPass {
   virtual bool runOnFunction(Function &F);
 
  private:
-  BasicBlock *AbortBB;
+  BasicBlock *TrapBB;
   Function *AssertNoAliasHook;
 };
 }
@@ -48,8 +49,11 @@ bool AliasCheckerInliner::doInitialization(Module &M) {
 }
 
 bool AliasCheckerInliner::runOnFunction(Function &F) {
-  AbortBB = BasicBlock::Create(F.getContext(), "abort", &F);
-  new UnreachableInst(F.getContext(), AbortBB);
+  TrapBB = BasicBlock::Create(F.getContext(), "trap", &F);
+  Function *LLVMTrap = Intrinsic::getDeclaration(F.getParent(),
+                                                 Intrinsic::trap);
+  CallInst::Create(LLVMTrap, "", TrapBB);
+  new UnreachableInst(F.getContext(), TrapBB);
 
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
@@ -78,7 +82,7 @@ bool AliasCheckerInliner::runOnFunction(Function &F) {
           //   C1 = icmp eq P, Q
           //   C2 = icmp ne P, null
           //   C3 = and C1, C2
-          //   br C3, AbortBB, NewBB
+          //   br C3, TrapBB, NewBB
           // NewBB:
           //   yyy
           BasicBlock *NewBB = BB->splitBasicBlock(Ins, "bb");
@@ -88,7 +92,7 @@ bool AliasCheckerInliner::runOnFunction(Function &F) {
                                    ConstantPointerNull::get(
                                        cast<PointerType>(P->getType())));
           Value *C3 = BinaryOperator::Create(Instruction::And, C1, C2, "", BB);
-          BranchInst::Create(AbortBB, NewBB, C3, BB);
+          BranchInst::Create(TrapBB, NewBB, C3, BB);
           Ins->eraseFromParent();
           Ins = BB->getTerminator();
         }
