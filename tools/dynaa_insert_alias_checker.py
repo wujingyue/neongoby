@@ -9,7 +9,7 @@ import rcs_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Insert alias checker')
-    parser.add_argument('bc', help = 'the bitcode of the program')
+    parser.add_argument('prog', help = 'the program name (e.g. mysqld)')
     aa_choices = ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa']
     parser.add_argument('aa',
             help = 'the checked alias analysis: ' + str(aa_choices),
@@ -23,6 +23,10 @@ if __name__ == '__main__':
                         action = 'store_true',
                         default = False)
     args = parser.parse_args()
+
+    bc_orig = args.prog + '.bc'
+    bc_with_alias_checker = args.prog + '.alias_checker.bc'
+    bc_inlined = args.prog + '.inlined.bc'
 
     cmd = dynaa_utils.load_all_plugins('opt')
     # Some AAs require additional plugins.
@@ -45,17 +49,14 @@ if __name__ == '__main__':
     if args.max_alias_checks is not None:
         cmd = string.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
     cmd = string.join((cmd, '-O3'))
-    assert args.bc.endswith('.bc')
-    bc_with_alias_checker = args.bc[0:-3] + '.alias_checker.bc'
     cmd = string.join((cmd,
                        '-o', bc_with_alias_checker,
-                       '<', args.bc))
+                       '<', bc_orig))
     rcs_utils.invoke(cmd)
 
     if args.inline:
         cmd = dynaa_utils.load_all_plugins('opt')
         cmd = string.join((cmd, '-inline-alias-checker'))
-        bc_inlined = args.bc[0:-3] + '.inlined.bc'
         cmd = string.join((cmd,
                            '-o', bc_inlined,
                            '<', bc_with_alias_checker))
@@ -71,14 +72,14 @@ if __name__ == '__main__':
                            rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
         cmd = string.join((cmd, '-o', bc_with_alias_checker[0:-3]))
     cmd = string.join((cmd, '-pthread'))
-    if args.bc.startswith('pbzip2'):
+    if args.prog.startswith('pbzip2'):
         cmd = string.join((cmd, '-lbz2'))
-    if args.bc.startswith('ferret'):
+    if args.prog.startswith('ferret'):
         cmd = string.join((cmd, '-lgsl', '-lblas'))
-    if args.bc.startswith('gpasswd'):
+    if args.prog.startswith('gpasswd'):
         cmd = string.join((cmd, '-lcrypt'))
-    if args.bc.startswith('cvs'):
+    if args.prog.startswith('cvs'):
         cmd = string.join((cmd, '-lcrypt'))
-    if args.bc.startswith('mysqld'):
+    if args.prog.startswith('mysqld'):
         cmd = string.join((cmd, '-lcrypt', '-ldl', '-lz'))
     rcs_utils.invoke(cmd)

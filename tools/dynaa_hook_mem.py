@@ -9,7 +9,7 @@ import dynaa_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Add tracing code for pointers')
-    parser.add_argument('prog', help = 'the program name')
+    parser.add_argument('prog', help = 'the program name (e.g. mysqld)')
     args = parser.parse_args()
 
     instrumented_bc = args.prog + '.inst.bc'

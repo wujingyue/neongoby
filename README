@@ -4,11 +4,14 @@ Need to build repo rcs first
 make
 make install
 
+From now on in this manual, we assume the program name is hello, and the alias
+analysis we are checking is basicaa.
+
 Generate a bitcode file using clang 3.0
-e.g. clang++ hello.cpp -o hello.bc -c -emit-llvm
+clang++ hello.cpp -o hello.bc -c -emit-llvm
 
 Online mode
-dynaa_insert_alias_checker.py hello.bc <aa> [--inline]
+dynaa_insert_alias_checker.py hello basicaa [--inline]
 If --inline is specified, the output executable is hello.inlined; otherwise,
 the output executable is hello.alias_checker.
 Run the output executable. If it aborts or fails asserts, there is an error in
@@ -18,4 +21,4 @@ Offline mode
 dynaa_hook_mem.py hello
 ./hello.inst
 mv /tmp/pts hello.pts
-dynaa_check_aa.py hello.bc hello.pts <aa>
+dynaa_check_aa.py hello.bc hello.pts basicaa
