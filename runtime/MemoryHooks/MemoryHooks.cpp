@@ -16,6 +16,7 @@
 #include <pthread.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 #include <cassert>
@@ -26,12 +27,15 @@ using namespace std;
 using namespace dyn_aa;
 
 struct Environment {
-  static const string LogFileName;
   FILE *LogFile;
 
   Environment() {
+    const char *LogFileName = getenv("LOG_FILE");
+    if (!LogFileName) {
+      LogFileName = "/tmp/pts";
+    }
     pthread_mutex_init(&Lock, NULL);
-    LogFile = fopen(LogFileName.c_str(), "wb");
+    LogFile = fopen(LogFileName, "wb");
     assert(LogFile && "fail to open log file");
   }
 
@@ -41,8 +45,6 @@ struct Environment {
 
   pthread_mutex_t Lock;
 };
-
-const string Environment::LogFileName = "/tmp/pts";
 
 Environment *Global;
 
