@@ -18,6 +18,8 @@
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
 
+#include "dyn-aa/Utils.h"
+
 using namespace llvm;
 using namespace std;
 using namespace rcs;
@@ -727,6 +729,10 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
   if (ValueID == IDAssigner::InvalidID)
     errs() << *V << "\n";
   assert(ValueID != IDAssigner::InvalidID);
+
+  // opt: skip unaccessed pointers
+  if (!DynAAUtils::PointerIsAccessed(V))
+    return;
 
   vector<Value *> Args;
   Args.push_back(new BitCastInst(V, CharStarType, "", Loc));
