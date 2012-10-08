@@ -18,6 +18,10 @@ if __name__ == '__main__':
     parser.add_argument('--max-alias-checks',
                        help = 'maximum number of alias checks to add',
                        type = int)
+    parser.add_argument('--inline',
+                        help = 'whether to inline AssertNoAlias',
+                        action = 'store_true',
+                        default = False)
     args = parser.parse_args()
 
     cmd = dynaa_utils.load_all_plugins('opt')
@@ -41,13 +45,29 @@ if __name__ == '__main__':
     if args.max_alias_checks is not None:
         cmd = string.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
     assert args.bc.endswith('.bc')
-    output_bc = args.bc[0:-3] + '.alias_checker.bc'
-    cmd = string.join((cmd, '-o', output_bc, '<', args.bc))
+    bc_with_alias_checker = args.bc[0:-3] + '.alias_checker.bc'
+    cmd = string.join((cmd,
+                       '-o', bc_with_alias_checker,
+                       '<', args.bc))
     rcs_utils.invoke(cmd)
 
-    cmd = string.join(('clang++',
-                       output_bc,
-                       rcs_utils.get_libdir() + '/libDynAAAliasChecker.a',
+    if args.inline:
+        cmd = dynaa_utils.load_all_plugins('opt')
+        cmd = string.join((cmd, '-inline-alias-checker'))
+        bc_inlined = args.bc[0:-3] + '.inlined.bc'
+        cmd = string.join((cmd,
+                           '-o', bc_inlined,
+                           '<', bc_with_alias_checker))
+        rcs_utils.invoke(cmd)
+
+    cmd = string.join(('clang++', '-O3'))
+    if args.inline:
+        cmd = string.join((cmd, bc_inlined))
+    else:
+        cmd = string.join((cmd,
+                           bc_with_alias_checker,
+                           rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
+    cmd = string.join((cmd,
                        '-o',
                        args.bc[0:-3] + '.alias_checker',
                        '-pthread'))
