@@ -44,6 +44,7 @@ if __name__ == '__main__':
     cmd = string.join((cmd, '-instrument-alias-checker'))
     if args.max_alias_checks is not None:
         cmd = string.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
+    cmd = string.join((cmd, '-O3'))
     assert args.bc.endswith('.bc')
     bc_with_alias_checker = args.bc[0:-3] + '.alias_checker.bc'
     cmd = string.join((cmd,
@@ -60,17 +61,16 @@ if __name__ == '__main__':
                            '<', bc_with_alias_checker))
         rcs_utils.invoke(cmd)
 
-    cmd = string.join(('clang++', '-O3'))
+    cmd = 'clang++'
     if args.inline:
         cmd = string.join((cmd, bc_inlined))
+        cmd = string.join((cmd, '-o', bc_inlined[0:-3]))
     else:
         cmd = string.join((cmd,
                            bc_with_alias_checker,
                            rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
-    cmd = string.join((cmd,
-                       '-o',
-                       args.bc[0:-3] + '.alias_checker',
-                       '-pthread'))
+        cmd = string.join((cmd, '-o', bc_with_alias_checker[0:-3]))
+    cmd = string.join((cmd, '-pthread'))
     if args.bc.startswith('pbzip2'):
         cmd = string.join((cmd, '-lbz2'))
     if args.bc.startswith('ferret'):
