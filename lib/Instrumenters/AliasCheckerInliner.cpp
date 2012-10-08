@@ -5,20 +5,27 @@
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/Instructions.h"
+#include "llvm/Constants.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/CallSite.h"
 
 using namespace std;
 using namespace llvm;
 
 namespace dyn_aa {
-struct AliasCheckerInliner: public ModulePass {
+struct AliasCheckerInliner: public FunctionPass {
   static const string AssertNoAliasHookName;
 
   static char ID;
 
-  AliasCheckerInliner(): ModulePass(ID) {}
-  virtual bool runOnModule(Module &M);
+  AliasCheckerInliner(): FunctionPass(ID) {}
+  virtual bool doInitialization(Module &M);
+  virtual bool runOnFunction(Function &F);
+
+ private:
+  BasicBlock *AbortBB;
+  Function *AssertNoAliasHook;
 };
 }
 
@@ -34,21 +41,58 @@ const string AliasCheckerInliner::AssertNoAliasHookName = "AssertNoAlias";
 
 char AliasCheckerInliner::ID = 0;
 
-bool AliasCheckerInliner::runOnModule(Module &M) {
-  Function *AssertNoAliasHook = M.getFunction(AssertNoAliasHookName);
+bool AliasCheckerInliner::doInitialization(Module &M) {
+  AssertNoAliasHook = M.getFunction(AssertNoAliasHookName);
   assert(AssertNoAliasHook && "Cannot find AssertNoAlias");
-  InlineFunctionInfo IFI;
-  unsigned NumCallSitesProcessed = 0;
-  for (Value::use_iterator UI = AssertNoAliasHook->use_begin();
-       UI != AssertNoAliasHook->use_end(); ++UI) {
-    ++NumCallSitesProcessed;
-    if (CallInst *CI = dyn_cast<CallInst>(*UI)) {
-      if (CI->getCalledFunction() == AssertNoAliasHook) {
-        InlineFunction(CI, IFI);
+  return false;
+}
+
+bool AliasCheckerInliner::runOnFunction(Function &F) {
+  AbortBB = BasicBlock::Create(F.getContext(), "abort", &F);
+  new UnreachableInst(F.getContext(), AbortBB);
+
+  for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
+    for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
+      if (CallInst *CI = dyn_cast<CallInst>(Ins)) {
+        if (CI->getCalledFunction() == AssertNoAliasHook) {
+          CallSite CS(CI);
+          Value *P = CS.getArgument(0), *Q = CS.getArgument(2);
+          // BB:
+          //   xxx
+          //   call AssertNoAlias(P, VID(P), Q, VID(Q))
+          //   yyy
+          //
+          // =>
+          //
+          // BB:
+          //   xxx
+          //   br NewBB
+          // NewBB:
+          //   call AssertNoAlias(P, VID(P), Q, VID(Q))
+          //   yyy
+          //
+          // =>
+          //
+          // BB:
+          //   xxx
+          //   C1 = icmp eq P, Q
+          //   C2 = icmp ne P, null
+          //   C3 = and C1, C2
+          //   br C3, AbortBB, NewBB
+          // NewBB:
+          //   yyy
+          BasicBlock *NewBB = BB->splitBasicBlock(Ins, "bb");
+          BB->getTerminator()->eraseFromParent();
+          Value *C1 = new ICmpInst(*BB, CmpInst::ICMP_EQ, P, Q);
+          Value *C2 = new ICmpInst(*BB, CmpInst::ICMP_NE, P,
+                                   ConstantPointerNull::get(
+                                       cast<PointerType>(P->getType())));
+          Value *C3 = BinaryOperator::Create(Instruction::And, C1, C2, "", BB);
+          BranchInst::Create(AbortBB, NewBB, C3, BB);
+          Ins->eraseFromParent();
+          Ins = BB->getTerminator();
+        }
       }
-    }
-    if (NumCallSitesProcessed % 1000 == 0) {
-      errs() << NumCallSitesProcessed << "\n";
     }
   }
   return true;
