@@ -8,7 +8,7 @@
 
 extern "C" void AssertNoAlias(void *P, unsigned VIDOfP,
                               void *Q, unsigned VIDOfQ) {
-  if (P && Q && P == Q) {
+  if (P == Q && P) {
     fprintf(stderr, "Value %u and value %u alias.\n", VIDOfP, VIDOfQ);
     fprintf(stderr, "They point to the same location %p\n", P);
     assert(false);
