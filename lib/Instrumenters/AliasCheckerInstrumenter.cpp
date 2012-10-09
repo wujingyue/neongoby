@@ -35,8 +35,10 @@ struct AliasCheckerInstrumenter: public FunctionPass {
 
  private:
   bool isFree(Function *F) const;
-  void addAliasCheckers(Instruction *P, const InstList &Qs);
-  void addAliasChecker(Instruction *P, Instruction *Q, SSAUpdater &SU);
+  void computeAliasChecks(Function &F, vector<InstPair> &Checks);
+  void addAliasChecks(const vector<InstPair> &Checks);
+  void addAliasChecks(Instruction *P, const InstList &Qs);
+  void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
 
   Function *AssertNoAliasHook;
   // Types.
@@ -84,14 +86,12 @@ static bool SortBBByName(const BasicBlock *B1, const BasicBlock *B2) {
 }
 #endif
 
-bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
+void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
+                                                  vector<InstPair> &Checks) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IntraReach &IR = getAnalysis<IntraReach>();
 
-  errs() << "Processing function " << F.getName() << "...\n";
-
   // TODO: consider arguments
-
   DenseMap<BasicBlock *, InstList> PointerInsts;
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
@@ -104,8 +104,8 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   }
 
   // Do not query AA on modified bc. Therefore, we store the checks we are
-  // going to add in ToBeChecked, and add them to the program later.
-  vector<InstPair> ToBeChecked;
+  // going to add in Checks, and add them to the program later.
+  unsigned NumAliasQueries = 0;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
     if (!PointerInsts.count(B1))
       continue;
@@ -124,35 +124,45 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
         for (size_t i2 = (B2 == B1 ? i1 + 1 : 0), e2 = PointerInstsInB2.size();
              i2 < e2; ++i2) {
           Instruction *I2 = PointerInstsInB2[i2];
+          ++NumAliasQueries;
           if (AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
-            ToBeChecked.push_back(make_pair(I1, I2));
-            if (ToBeChecked.size() == MaxNumAliasChecks)
-              break;
+            Checks.push_back(make_pair(I1, I2));
+            if (Checks.size() == MaxNumAliasChecks)
+              return;
           }
         }
-        if (ToBeChecked.size() == MaxNumAliasChecks)
-          break;
       }
-      if (ToBeChecked.size() == MaxNumAliasChecks)
-        break;
     }
-    if (ToBeChecked.size() == MaxNumAliasChecks)
-      break;
   }
-  assert(ToBeChecked.size() <= MaxNumAliasChecks);
+  errs() << "# of alias queries = " << NumAliasQueries << "\n";
+  assert(Checks.size() <= MaxNumAliasChecks);
+}
 
-  errs() << "Adding " << ToBeChecked.size() << " alias checkers...\n";
-  for (size_t i = 0; i < ToBeChecked.size(); ) {
+void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
+  errs() << "Adding " << Checks.size() << " alias checkers...\n";
+  // Checks are clustered on the first item in the pair.
+  for (size_t i = 0; i < Checks.size(); ) {
     InstList Qs;
     size_t j = i;
-    while (j < ToBeChecked.size() &&
-           ToBeChecked[j].first == ToBeChecked[i].first) {
-      Qs.push_back(ToBeChecked[j].second);
+    while (j < Checks.size() &&
+           Checks[j].first == Checks[i].first) {
+      Qs.push_back(Checks[j].second);
       ++j;
     }
-    addAliasCheckers(ToBeChecked[i].first, Qs);
+    addAliasChecks(Checks[i].first, Qs);
     i = j;
   }
+}
+
+bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
+  errs() << "Processing function " << F.getName() << "...\n";
+
+  // Do not query AA on modified bc. Therefore, we store the checks we are
+  // going to add in Checks, and add them to the program later.
+  vector<InstPair> Checks;
+  computeAliasChecks(F, Checks);
+
+  addAliasChecks(Checks);
 
   // Remove deallocators.
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
@@ -199,7 +209,7 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
   return true;
 }
 
-void AliasCheckerInstrumenter::addAliasCheckers(Instruction *P,
+void AliasCheckerInstrumenter::addAliasChecks(Instruction *P,
                                                 const InstList &Qs) {
   SSAUpdater SU;
   PointerType *TypeOfP = cast<PointerType>(P->getType());
@@ -211,13 +221,13 @@ void AliasCheckerInstrumenter::addAliasCheckers(Instruction *P,
   }
 
   for (size_t i = 0; i < Qs.size(); ++i) {
-    addAliasChecker(P, Qs[i], SU);
+    addAliasCheck(P, Qs[i], SU);
   }
 }
 
-void AliasCheckerInstrumenter::addAliasChecker(Instruction *P,
-                                               Instruction *Q,
-                                               SSAUpdater &SU) {
+void AliasCheckerInstrumenter::addAliasCheck(Instruction *P,
+                                             Instruction *Q,
+                                             SSAUpdater &SU) {
   // It's safe to use DominatorTree here, because SSAUpdater preserves CFG.
   DominatorTree &DT = getAnalysis<DominatorTree>();
   IDAssigner &IDA = getAnalysis<IDAssigner>();
