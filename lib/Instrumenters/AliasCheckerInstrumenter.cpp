@@ -36,14 +36,9 @@ struct AliasCheckerInstrumenter: public FunctionPass {
  private:
   bool isFree(Function *F) const;
   void computeAliasChecks(Function &F,
-                          InstList &PointerInsts,
+                          DenseMap<BasicBlock *, InstList> &PointerInsts,
                           vector<InstPair> &Checks);
-  void addAliasChecks(Function &F,
-                      const InstList &PointerInsts,
-                      const vector<InstPair> &Checks);
-  void addAliasChecks(BasicBlock *BB,
-                      const InstList &PointerInsts,
-                      const vector<InstPair> &Checks);
+  void addAliasChecks(const vector<InstPair> &Checks);
   void addAliasChecks(Instruction *P, const InstList &Qs);
   void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
 
@@ -93,14 +88,14 @@ static bool SortBBByName(const BasicBlock *B1, const BasicBlock *B2) {
 }
 #endif
 
-void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
-                                                  InstList &MergedPointerInsts,
-                                                  vector<InstPair> &Checks) {
+void AliasCheckerInstrumenter::computeAliasChecks(
+    Function &F,
+    DenseMap<BasicBlock *, InstList> &PointerInsts,
+    vector<InstPair> &Checks) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IntraReach &IR = getAnalysis<IntraReach>();
 
   // TODO: consider arguments
-  DenseMap<BasicBlock *, InstList> PointerInsts;
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
       if (!Ins->getType()->isPointerTy())
@@ -108,7 +103,6 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
       if (!DynAAUtils::PointerIsAccessed(Ins))
         continue;
       PointerInsts[BB].push_back(Ins);
-      MergedPointerInsts.push_back(Ins);
     }
   }
 
@@ -147,7 +141,6 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
   assert(Checks.size() <= MaxNumAliasChecks);
 }
 
-#if 0
 void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
   errs() << "Adding " << Checks.size() << " alias checkers...\n";
   // Checks are clustered on the first item in the pair.
@@ -163,18 +156,17 @@ void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
     i = j;
   }
 }
-#endif
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   errs() << "Processing function " << F.getName() << "...\n";
 
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
-  InstList PointerInsts;
+  DenseMap<BasicBlock *, InstList> PointerInsts;
   vector<InstPair> Checks;
   computeAliasChecks(F, PointerInsts, Checks);
 
-  addAliasChecks(F, PointerInsts, Checks);
+  addAliasChecks(Checks);
 
   // Remove deallocators.
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
@@ -222,7 +214,7 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
 }
 
 void AliasCheckerInstrumenter::addAliasChecks(Instruction *P,
-                                              const InstList &Qs) {
+                                                const InstList &Qs) {
   SSAUpdater SU;
   PointerType *TypeOfP = cast<PointerType>(P->getType());
   SU.Initialize(TypeOfP, P->getName());
@@ -234,74 +226,6 @@ void AliasCheckerInstrumenter::addAliasChecks(Instruction *P,
 
   for (size_t i = 0; i < Qs.size(); ++i) {
     addAliasCheck(P, Qs[i], SU);
-  }
-}
-
-void AliasCheckerInstrumenter::addAliasChecks(BasicBlock *BB,
-                                              const InstList &PointerInsts,
-                                              const vector<InstPair> &Checks) {
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-  DominatorTree &DT = getAnalysis<DominatorTree>();
-  IntraReach &IR = getAnalysis<IntraReach>();
-
-  ConstBBSet ReachableBBs; // BBs that can reach BB
-  IR.floodfill_r(BB, ConstBBSet(), ReachableBBs);
-
-  InstMapping BitCasts;
-  for (size_t i = 0; i < PointerInsts.size(); ++i) {
-    Instruction *P = PointerInsts[i];
-    // If P does not reach BB, the alias check does not make sense because P
-    // has an undefined value.
-    if (!ReachableBBs.count(P->getParent()))
-      continue;
-
-    BitCastInst *P2 = new BitCastInst(P, CharStarType, "", BB->getTerminator());
-    BitCasts[P] = P2;
-
-    if (!DT.dominates(P->getParent(), BB)) {
-      // equivalent to !DT.dominates(P, P2). BasicBlock version is faster.
-      SSAUpdater SU;
-      PointerType *TypeOfP = cast<PointerType>(P->getType());
-      SU.Initialize(TypeOfP, P->getName());
-      SU.AddAvailableValue(P->getParent(), P);
-      if (P->getParent() != BB->getParent()->begin()) {
-        // P is not in the entry BB.
-        SU.AddAvailableValue(P->getParent()->getParent()->begin(),
-                             ConstantPointerNull::get(TypeOfP));
-      }
-      SU.RewriteUse(P2->getOperandUse(0));
-    }
-  }
-
-  for (size_t i = 0; i < Checks.size(); ++i) {
-    Instruction *P = Checks[i].first, *Q = Checks[i].second;
-    Instruction *P2 = BitCasts.lookup(P), *Q2 = BitCasts.lookup(Q);
-    if (!P2 || !Q2) {
-      // Skip the check if P or Q does not reach BB, because their values
-      // would be undefined.
-      continue;
-    }
-
-    unsigned VIDOfP = IDA.getValueID(P), VIDOfQ = IDA.getValueID(Q);
-    assert(VIDOfP != IDAssigner::InvalidID && VIDOfQ != IDAssigner::InvalidID);
-
-    vector<Value *> Args;
-    Args.push_back(P2);
-    Args.push_back(ConstantInt::get(IntType, VIDOfP));
-    Args.push_back(Q2);
-    Args.push_back(ConstantInt::get(IntType, VIDOfQ));
-    CallInst::Create(AssertNoAliasHook, Args, "", BB->getTerminator());
-  }
-}
-
-void AliasCheckerInstrumenter::addAliasChecks(Function &F,
-                                              const InstList &PointerInsts,
-                                              const vector<InstPair> &Checks) {
-  BBList ReturnBBs;
-  for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
-    if (isa<ReturnInst>(BB->getTerminator())) {
-      addAliasChecks(BB, PointerInsts, Checks);
-    }
   }
 }
 
