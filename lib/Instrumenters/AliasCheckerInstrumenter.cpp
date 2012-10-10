@@ -214,7 +214,7 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
 }
 
 void AliasCheckerInstrumenter::addAliasChecks(Instruction *P,
-                                                const InstList &Qs) {
+                                              const InstList &Qs) {
   SSAUpdater SU;
   PointerType *TypeOfP = cast<PointerType>(P->getType());
   SU.Initialize(TypeOfP, P->getName());
