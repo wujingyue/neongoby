@@ -21,6 +21,8 @@ if __name__ == '__main__':
 
     cmd = dynaa_utils.load_all_plugins('opt')
     cmd = string.join((cmd, '-instrument-memory'))
+    if args.hook_all:
+        cmd = string.join((cmd, '-hook-all-pointers'))
     cmd = string.join((cmd, '-o', instrumented_bc))
     cmd = string.join((cmd, '<', args.prog + '.bc'))
     rcs_utils.invoke(cmd)
