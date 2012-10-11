@@ -11,6 +11,7 @@
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
@@ -92,6 +93,9 @@ const string MemoryInstrumenter::MemHooksIniterName = "InitMemHooks";
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
                                           false, false);
+
+static cl::opt<bool> HookAllPointers("hook-all-pointers",
+                                     cl::desc("Hook all pointers"));
 
 void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
@@ -730,9 +734,11 @@ void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
     errs() << *V << "\n";
   assert(ValueID != IDAssigner::InvalidID);
 
-  // opt: skip unaccessed pointers
-  if (!DynAAUtils::PointerIsAccessed(V))
-    return;
+  if (!HookAllPointers) {
+    // opt: skip unaccessed pointers
+    if (!DynAAUtils::PointerIsAccessed(V))
+      return;
+  }
 
   vector<Value *> Args;
   Args.push_back(new BitCastInst(V, CharStarType, "", Loc));
