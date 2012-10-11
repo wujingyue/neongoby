@@ -1,5 +1,5 @@
 LEVEL = ..
 
-DIRS = Analyses Checkers Instrumenters Utils
+DIRS = Utils Analyses Checkers Instrumenters
 
 include $(LEVEL)/Makefile.common
