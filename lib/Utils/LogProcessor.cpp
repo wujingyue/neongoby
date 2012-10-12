@@ -32,6 +32,7 @@ void LogProcessor::processLog() {
   assert(LogFile && "The log file doesn't exist.");
 
   // Count the records.
+  errs() << "[LogProcessor] Counting the number of records...\n";
   LogRecordType RecordType;
   while (fread(&RecordType, sizeof(LogRecordType), 1, LogFile) == 1) {
     ++NumRecords;
