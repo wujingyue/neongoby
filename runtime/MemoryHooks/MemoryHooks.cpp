@@ -15,15 +15,17 @@
 
 #include <pthread.h>
 
+#include <iostream>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
 #include <cassert>
 #include <string>
-using namespace std;
 
 #include "dyn-aa/LogRecord.h"
+
+using namespace std;
 using namespace dyn_aa;
 
 struct Environment {
@@ -48,8 +50,13 @@ struct Environment {
 
 Environment *Global;
 
+extern "C" void FinalizeMemHooks() {
+  delete Global;
+}
+
 extern "C" void InitMemHooks() {
   Global = new Environment();
+  atexit(FinalizeMemHooks);
 }
 
 // Must be called with Global->Lock held.
@@ -90,10 +97,4 @@ extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
   PrintLogRecord(AddrTakenPointTo,
                  AddrTakenPointToLogRecord(Pointer, Value, InsID));
   pthread_mutex_unlock(&Global->Lock);
-}
-
-// TODO: Unused for now.
-// Memory will be released anyway when the program exits.
-extern "C" void FinalizeMemHooks() {
-  delete Global;
 }
