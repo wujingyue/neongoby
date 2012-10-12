@@ -13,7 +13,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description = 'Check the soundness of the specified AA')
     parser.add_argument('bc', help = 'the bitcode of the program')
-    parser.add_argument('log', help = 'the point-to log')
+    parser.add_argument('log', help = 'the point-to log (.pts)')
     aa_choices = ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa']
     parser.add_argument('aa',
             help = 'the checked alias analysis: ' + str(aa_choices),
