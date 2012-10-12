@@ -346,6 +346,9 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
       }
     }
   }
+
+  // We don't support multi-process programs for now.
+  assert(M.getFunction("fork") == NULL);
 }
 
 void MemoryInstrumenter::setupHooks(Module &M) {
