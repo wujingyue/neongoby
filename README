@@ -22,3 +22,6 @@ dynaa_hook_mem.py hello
 ./hello.inst
 mv /tmp/pts hello.pts
 dynaa_check_aa.py hello.bc hello.pts basicaa
+
+Utilities
+dynaa_dump_log -log-file hello.pts > hello.log
