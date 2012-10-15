@@ -30,14 +30,6 @@ if __name__ == '__main__':
     cmd = string.join(('clang++', instrumented_bc,
                        rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a',
                        '-o', instrumented_exe, '-pthread'))
-    if args.prog.startswith('pbzip2'):
-        cmd = string.join((cmd, '-lbz2'))
-    if args.prog.startswith('ferret'):
-        cmd = string.join((cmd, '-lgsl', '-lblas'))
-    if args.prog.startswith('gpasswd'):
-        cmd = string.join((cmd, '-lcrypt'))
-    if args.prog.startswith('cvs'):
-        cmd = string.join((cmd, '-lcrypt'))
-    if args.prog.startswith('mysqld'):
-        cmd = string.join((cmd, '-lcrypt', '-ldl', '-lz'))
+    extra_linking_flags = dynaa_utils.get_extra_linking_flags(args.bc)
+    cmd = string.join((cmd, string.join(extra_linking_flags)))
     rcs_utils.invoke(cmd)
