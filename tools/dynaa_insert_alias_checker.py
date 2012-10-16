@@ -71,7 +71,6 @@ if __name__ == '__main__':
                            bc_with_alias_checker,
                            rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
         cmd = string.join((cmd, '-o', bc_with_alias_checker[0:-3]))
-    cmd = string.join((cmd, '-pthread'))
-    extra_linking_flags = dynaa_utils.get_extra_linking_flags(args.bc)
+    extra_linking_flags = dynaa_utils.get_extra_linking_flags(args.prog)
     cmd = string.join((cmd, string.join(extra_linking_flags)))
     rcs_utils.invoke(cmd)
