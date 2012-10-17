@@ -33,6 +33,8 @@ struct MemoryInstrumenter: public ModulePass {
   static const string AddrTakenHookName;
   static const string GlobalsAllocHookName;
   static const string MemHooksIniterName;
+  static const string AfterForkHookName;
+  static const string BeforeForkHookName;
 
   static char ID;
 
@@ -50,6 +52,7 @@ struct MemoryInstrumenter: public ModulePass {
   // If <Success>, range [<Start>, <Start> + <Size>) is allocated.
   void instrumentMemoryAllocation(Value *Start, Value *Size, Value *Success,
                                   Instruction *Loc);
+  void instrumentFork(const CallSite &CS);
   void instrumentMalloc(const CallSite &CS);
   void instrumentAlloca(AllocaInst *AI);
   void instrumentStoreInst(StoreInst *SI);
@@ -73,6 +76,8 @@ struct MemoryInstrumenter: public ModulePass {
   Function *GlobalsAllocHook;
   Function *MemHooksIniter;
   Function *Main;
+  Function *AfterForkHook;
+  Function *BeforeForkHook;
   IntegerType *CharType, *LongType, *IntType;
   PointerType *CharStarType;
   Type *VoidType;
@@ -89,6 +94,8 @@ const string MemoryInstrumenter::TopLevelHookName = "HookTopLevel";
 const string MemoryInstrumenter::AddrTakenHookName = "HookAddrTaken";
 const string MemoryInstrumenter::GlobalsAllocHookName = "HookGlobalsAlloc";
 const string MemoryInstrumenter::MemHooksIniterName = "InitMemHooks";
+const string MemoryInstrumenter::AfterForkHookName = "HookFork";
+const string MemoryInstrumenter::BeforeForkHookName = "HookBeforeFork";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
@@ -96,6 +103,8 @@ static RegisterPass<MemoryInstrumenter> X("instrument-memory",
 
 static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
+
+static cl::opt<bool> HookFork("hook-fork", cl::desc("Hook fork() and vfork()"));
 
 void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
@@ -220,6 +229,22 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
     CallInst::Create(MemAllocHook, Args, "", CallMallocHookBB);
     BranchInst::Create(RestBB, CallMallocHookBB);
   }
+}
+
+void MemoryInstrumenter::instrumentFork(const CallSite &CS) {
+  Instruction *Ins = CS.getInstruction();
+  assert(!Ins->isTerminator());
+  Function *Callee = CS.getCalledFunction();
+  StringRef CalleeName = Callee->getName();
+  assert(CalleeName == "fork" || CalleeName == "vfork");
+  BasicBlock::iterator Loc = Ins;
+
+  CallInst::Create(BeforeForkHook, "", Loc);
+
+  ++Loc;
+  vector<Value *> Args;
+  Args.push_back(Ins);
+  CallInst::Create(AfterForkHook, Args, "", Loc);
 }
 
 void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
@@ -348,7 +373,8 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   }
 
   // We don't support multi-process programs for now.
-  assert(M.getFunction("fork") == NULL);
+  if (!HookFork)
+    assert(M.getFunction("fork") == NULL);
 }
 
 void MemoryInstrumenter::setupHooks(Module &M) {
@@ -359,6 +385,8 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(AddrTakenHookName) == NULL);
   assert(M.getFunction(GlobalsAllocHookName) == NULL);
   assert(M.getFunction(MemHooksIniterName) == NULL);
+  assert(M.getFunction(AfterForkHookName) == NULL);
+  assert(M.getFunction(BeforeForkHookName) == NULL);
 
   // Setup MemAllocHook.
   vector<Type *> ArgTypes;
@@ -424,6 +452,23 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                       GlobalValue::ExternalLinkage,
                                       GlobalsAllocHookName,
                                       &M);
+
+  // Setup AfterForkHook
+  ArgTypes.clear();
+  ArgTypes.push_back(IntType);
+  FunctionType *AfterForkHookType = FunctionType::get(VoidType, ArgTypes, false);
+  AfterForkHook = Function::Create(AfterForkHookType,
+                              GlobalValue::ExternalLinkage,
+                              AfterForkHookName,
+                              &M);
+
+  // Setup BeforeForkHook
+  ArgTypes.clear();
+  FunctionType *BeforeForkHookType = FunctionType::get(VoidType, false);
+  BeforeForkHook = Function::Create(BeforeForkHookType,
+                                    GlobalValue::ExternalLinkage,
+                                    BeforeForkHookName,
+                                    &M);
 }
 
 void MemoryInstrumenter::setupScalarTypes(Module &M) {
@@ -466,7 +511,8 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     // These hooks added by us don't have a value ID.
     if (MemAllocHook == F || MainArgsAllocHook == F || TopLevelHook == F ||
-        AddrTakenHook == F || GlobalsAllocHook == F || MemHooksIniter == F) {
+        AddrTakenHook == F || GlobalsAllocHook == F || MemHooksIniter == F ||
+        AfterForkHook == F || BeforeForkHook == F) {
       continue;
     }
     // Ignore intrinsic functions because we cannot take the address of
@@ -701,9 +747,16 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // TODO: A function pointer can possibly point to memory allocation
     // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
-    Function *Callee = CS.getCalledFunction();
-    if (Callee && isMalloc(Callee))
-      instrumentMalloc(CS);
+    if (Function *Callee = CS.getCalledFunction()) {
+      if (isMalloc(Callee))
+        instrumentMalloc(CS);
+      if (HookFork) {
+        StringRef CalleeName = Callee->getName();
+        if (CalleeName == "fork" || CalleeName == "vfork") {
+          instrumentFork(CS);
+        }
+      }
+    }
   }
 
   // Instrument AllocaInsts.

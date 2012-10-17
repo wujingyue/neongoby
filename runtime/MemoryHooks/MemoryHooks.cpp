@@ -22,6 +22,8 @@
 #include <vector>
 #include <cassert>
 #include <string>
+#include <sstream>
+#include <unistd.h>
 
 #include "dyn-aa/LogRecord.h"
 
@@ -31,18 +33,38 @@ using namespace dyn_aa;
 struct Environment {
   FILE *LogFile;
 
-  Environment() {
-    const char *LogFileName = getenv("LOG_FILE");
-    if (!LogFileName) {
+  string GetLogFileName() {
+    const char *LogFileEnv = getenv("LOG_FILE");
+    string LogFileName;
+    if (!LogFileEnv) {
       LogFileName = "/tmp/pts";
+    } else {
+      LogFileName = LogFileEnv;
     }
+    ostringstream OS;
+    OS << LogFileName << "-" << getpid();
+    return OS.str();
+  }
+
+  Environment() {
     pthread_mutex_init(&Lock, NULL);
-    LogFile = fopen(LogFileName, "wb");
+    OpenLogFile(false);
     assert(LogFile && "fail to open log file");
   }
 
   ~Environment() {
+    CloseLogFile();
+  }
+
+  void CloseLogFile() {
     fclose(LogFile);
+  }
+
+  void OpenLogFile(bool append) {
+    if (append)
+      LogFile = fopen(GetLogFileName().c_str(), "ab");
+    else
+      LogFile = fopen(GetLogFileName().c_str(), "wb");
   }
 
   pthread_mutex_t Lock;
@@ -64,6 +86,20 @@ template<class T>
 void PrintLogRecord(LogRecordType RecordType, const T &Record) {
   fwrite(&RecordType, sizeof RecordType, 1, Global->LogFile);
   fwrite(&Record, sizeof Record, 1, Global->LogFile);
+}
+
+extern "C" void HookBeforeFork() {
+  Global->CloseLogFile();
+}
+
+extern "C" void HookFork(int Result) {
+  if (Result == 0) {
+    // child process: open a new log file
+    Global->OpenLogFile(false);
+  } else {
+    // parent process: open the old log file
+    Global->OpenLogFile(true);
+  }
 }
 
 extern "C" void HookMemAlloc(unsigned ValueID, void *StartAddr,

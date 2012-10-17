@@ -59,7 +59,9 @@ void LogProcessor::processLog() {
         }
         break;
       default:
-        fprintf(stderr, "RecordType = %d\n", RecordType);
+        errs() << "RecordType = " << RecordType << "\n";
+        errs() << "Current position: " << ftell(LogFile) << " Records read: " <<
+                NumRecords << "\n";
         assert(false && "Unknown record type");
     }
   }

@@ -1,6 +1,6 @@
 # Author: Jingyue
 
-PROGS = SimpleTest TestCalloc TestStore TestInit TestThread TestTopLevel
+PROGS = SimpleTest TestCalloc TestStore TestInit TestThread TestTopLevel TestFork
 PROGS += TestFP TestFP2
 BCS = $(PROGS:=.bc)
 LLS = $(PROGS:=.ll)
