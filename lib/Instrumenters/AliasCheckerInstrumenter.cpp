@@ -6,6 +6,7 @@
 
 #include "llvm/Pass.h"
 #include "llvm/Module.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
@@ -61,6 +62,9 @@ static cl::opt<unsigned> MaxNumAliasChecks(
     cl::desc("Add at most this many alias checks. Used for debugging"),
     cl::init((unsigned)-1));
 
+STATISTIC(NumAliasQueries, "Number of alias queries");
+STATISTIC(NumAliasChecks, "Number of alias checks");
+
 const string AliasCheckerInstrumenter::AssertNoAliasHookName = "AssertNoAlias";
 
 char AliasCheckerInstrumenter::ID = 0;
@@ -106,7 +110,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(
 
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
-  unsigned NumAliasQueries = 0;
+  unsigned NumAliasQueriesInF = 0;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
     if (!PointerInsts.count(B1))
       continue;
@@ -125,7 +129,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(
         for (size_t i2 = (B2 == B1 ? i1 + 1 : 0), e2 = PointerInstsInB2.size();
              i2 < e2; ++i2) {
           Instruction *I2 = PointerInstsInB2[i2];
-          ++NumAliasQueries;
+          ++NumAliasQueriesInF;
           if (AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
             Checks.push_back(make_pair(I1, I2));
             if (Checks.size() == MaxNumAliasChecks)
@@ -135,12 +139,14 @@ void AliasCheckerInstrumenter::computeAliasChecks(
       }
     }
   }
-  errs() << "# of alias queries = " << NumAliasQueries << "\n";
+  errs() << "  # of alias queries = " << NumAliasQueriesInF << "\n";
+  NumAliasQueries += NumAliasQueriesInF;
   assert(Checks.size() <= MaxNumAliasChecks);
 }
 
 void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
-  errs() << "Adding " << Checks.size() << " alias checkers...\n";
+  errs() << "  Adding " << Checks.size() << " alias checkers... ";
+  NumAliasChecks += Checks.size();
   // Checks are clustered on the first item in the pair.
   for (size_t i = 0; i < Checks.size(); ) {
     InstList Qs;
@@ -153,6 +159,7 @@ void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
     addAliasChecks(Checks[i].first, Qs);
     i = j;
   }
+  errs() << "Done\n";
 }
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
