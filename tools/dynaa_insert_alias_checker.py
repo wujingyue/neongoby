@@ -50,7 +50,6 @@ if __name__ == '__main__':
     cmd = string.join((cmd, '-instrument-alias-checker'))
     if args.max_alias_checks is not None:
         cmd = string.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
-    cmd = string.join((cmd, '-O3'))
     cmd = string.join((cmd,
                        '-o', bc_with_alias_checker_no_opt,
                        '<', bc_orig))
