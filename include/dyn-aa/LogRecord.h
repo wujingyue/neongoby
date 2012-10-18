@@ -22,11 +22,18 @@ struct AddrTakenDeclLogRecord {
 
 struct TopLevelPointToLogRecord {
   TopLevelPointToLogRecord() {}
-  TopLevelPointToLogRecord(unsigned PtrVID, void *PttAddr):
-      PointerValueID(PtrVID), PointeeAddress(PttAddr) {}
+  TopLevelPointToLogRecord(unsigned PtrVID,
+                           void *PttAddr,
+                           void *PointerOperand = NULL):
+      PointerValueID(PtrVID),
+      PointeeAddress(PttAddr),
+      LoadedFrom(PointerOperand) {}
 
   unsigned PointerValueID;
   void *PointeeAddress;
+  // If the pointer is a LoadInst, LoadFrom stores the pointer operand of the
+  // LoadInst; otherwise, LoadedFrom is NULL.
+  void *LoadedFrom;
 } __attribute__((packed));
 
 struct AddrTakenPointToLogRecord {

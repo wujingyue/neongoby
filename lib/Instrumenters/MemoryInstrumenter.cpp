@@ -56,7 +56,9 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentMalloc(const CallSite &CS);
   void instrumentAlloca(AllocaInst *AI);
   void instrumentStoreInst(StoreInst *SI);
-  void instrumentPointer(Value *V, Instruction *Loc);
+  void instrumentPointer(Value *ValueOperand,
+                         Value *PointerOperand,
+                         Instruction *Loc);
   void instrumentPointerInstruction(Instruction *I);
   void instrumentPointerParameters(Function *F);
   void instrumentGlobals(Module &M);
@@ -424,6 +426,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   // Setup TopLevelHook.
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
+  ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(IntType);
   FunctionType *TopLevelHookType = FunctionType::get(VoidType,
                                                      ArgTypes,
@@ -505,7 +508,7 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     TypeSize = BitLengthToByteLength(TypeSize);
     instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), NULL,
                                Ret);
-    instrumentPointer(GI, Ret);
+    instrumentPointer(GI, NULL, Ret);
   }
 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
@@ -529,7 +532,7 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     assert(TypeSize == TD.getPointerSize());
     instrumentMemoryAllocation(F, ConstantInt::get(LongType, TypeSize), NULL,
                                Ret);
-    instrumentPointer(F, Ret);
+    instrumentPointer(F, NULL, Ret);
   }
 }
 
@@ -777,27 +780,38 @@ void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
     assert(isa<InvokeInst>(I));
     Loc = cast<InvokeInst>(I)->getNormalDest()->getFirstNonPHI();
   }
-  instrumentPointer(I, Loc);
+  if (LoadInst *LI = dyn_cast<LoadInst>(I))
+    instrumentPointer(I, LI->getPointerOperand(), Loc);
+  else
+    instrumentPointer(I, NULL, Loc);
 }
 
-void MemoryInstrumenter::instrumentPointer(Value *V, Instruction *Loc) {
+// If ValueOperand is a LoadInst, PointerOperand is the pointer operand;
+// otherwise, it is NULL.
+void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
+                                           Value *PointerOperand,
+                                           Instruction *Loc) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-  assert(V->getType()->isPointerTy());
+  assert(ValueOperand->getType()->isPointerTy());
 
-  unsigned ValueID = IDA.getValueID(V);
+  unsigned ValueID = IDA.getValueID(ValueOperand);
   if (ValueID == IDAssigner::InvalidID)
-    errs() << *V << "\n";
+    errs() << *ValueOperand << "\n";
   assert(ValueID != IDAssigner::InvalidID);
 
   if (!HookAllPointers) {
     // opt: skip unaccessed pointers
-    if (!DynAAUtils::PointerIsAccessed(V))
+    if (!DynAAUtils::PointerIsAccessed(ValueOperand))
       return;
   }
 
   vector<Value *> Args;
-  Args.push_back(new BitCastInst(V, CharStarType, "", Loc));
+  Args.push_back(new BitCastInst(ValueOperand, CharStarType, "", Loc));
+  if (PointerOperand != NULL)
+    Args.push_back(new BitCastInst(PointerOperand, CharStarType, "", Loc));
+  else
+    Args.push_back(ConstantPointerNull::get(CharStarType));
   Args.push_back(ConstantInt::get(IntType, ValueID));
   CallInst::Create(TopLevelHook, Args, "", Loc);
 }
@@ -807,6 +821,6 @@ void MemoryInstrumenter::instrumentPointerParameters(Function *F) {
   Instruction *Entry = F->begin()->getFirstNonPHI();
   for (Function::arg_iterator AI = F->arg_begin(); AI != F->arg_end(); ++AI) {
     if (AI->getType()->isPointerTy())
-      instrumentPointer(AI, Entry);
+      instrumentPointer(AI, NULL, Entry);
   }
 }

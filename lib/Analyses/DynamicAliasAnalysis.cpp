@@ -80,12 +80,6 @@ void DynamicAliasAnalysis::updateVersion(void *Start,
                                          unsigned long Bound,
                                          unsigned Version) {
   Interval I((unsigned long)Start, (unsigned long)Start + Bound);
-#if 0
-  FILE *LogFile = fopen("/tmp/ops", "a");
-  fprintf(LogFile, "interval %lu %lu %u\n",
-          Start, Start + Record.Bound, CurrentVersion);
-  fclose(LogFile);
-#endif
   pair<IntervalTree<unsigned>::iterator, IntervalTree<unsigned>::iterator> ER =
       AddressVersion.equal_range(I);
   AddressVersion.erase(ER.first, ER.second);
@@ -112,7 +106,6 @@ void DynamicAliasAnalysis::processTopLevelPointTo(
   if (PointeeAddress != NULL) {
     unsigned Version = lookupAddress(PointeeAddress);
 
-#if 1
     // Report the pointers pointing to unversioned address.
     if (Version == UnknownVersion) {
       if (!AddressesVersionUnknown.count(PointeeAddress)) {
@@ -125,7 +118,6 @@ void DynamicAliasAnalysis::processTopLevelPointTo(
         PointersVersionUnknown.insert(IDA.getValue(PointerVID));
       }
     }
-#endif
 
     addPointingTo(PointerVID, PointeeAddress, Version);
 
@@ -143,11 +135,6 @@ void DynamicAliasAnalysis::processAddrTakenPointTo(
 }
 
 void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
-#if 0
-  FILE *LogFile = fopen("/tmp/ops", "a");
-  fprintf(LogFile, "remove %u\n", ValueID);
-  fclose(LogFile);
-#endif
   ++NumRemoveOps;
   if (ValueID < PointingTo.size() && PointingTo[ValueID].first != NULL) {
     // Remove from BeingPointedBy.
@@ -168,11 +155,6 @@ void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
 void DynamicAliasAnalysis::addPointingTo(unsigned ValueID,
                                          void *Address,
                                          unsigned Version) {
-#if 0
-  FILE *LogFile = fopen("/tmp/ops", "a");
-  fprintf(LogFile, "add %u %p %u\n", ValueID, Address, Version);
-  fclose(LogFile);
-#endif
   ++NumInsertOps;
   if (ValueID >= PointingTo.size())
     PointingTo.resize(ValueID + 1);
@@ -183,11 +165,6 @@ void DynamicAliasAnalysis::addPointingTo(unsigned ValueID,
 
 unsigned DynamicAliasAnalysis::lookupAddress(void *Addr) const {
   Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
-#if 0
-  FILE *LogFile = fopen("/tmp/ops", "a");
-  fprintf(LogFile, "lookup %p\n", Addr);
-  fclose(LogFile);
-#endif
   IntervalTree<unsigned>::const_iterator Pos = AddressVersion.find(I);
   if (Pos == AddressVersion.end())
     return UnknownVersion;

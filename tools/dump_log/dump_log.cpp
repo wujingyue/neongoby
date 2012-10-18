@@ -32,13 +32,18 @@ void LogDumper::processAddrTakenDecl(const AddrTakenDeclLogRecord &Record) {
 }
 
 void LogDumper::processTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
-  printf("%u => %p\n", Record.PointerValueID, Record.PointeeAddress);
+  printf("%u => %p", Record.PointerValueID, Record.PointeeAddress);
+  if (Record.LoadedFrom) {
+    printf(", from %p", Record.LoadedFrom);
+  }
+  printf("\n");
   TouchedPointers.insert(Record.PointerValueID);
 }
 
 void LogDumper::processAddrTakenPointTo(
     const AddrTakenPointToLogRecord &Record) {
-  printf("%p => %p\n", Record.PointerAddress, Record.PointeeAddress);
+  printf("%u: %p => %p\n",
+         Record.InstructionID, Record.PointerAddress, Record.PointeeAddress);
 }
 
 int main(int argc, char *argv[]) {

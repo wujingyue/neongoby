@@ -121,10 +121,11 @@ extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],
     HookMemAlloc(-1, Argv[i], strlen(Argv[i]) + 1); // ends with '\0'
 }
 
-extern "C" void HookTopLevel(void *Value, unsigned ValueID) {
+extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
   pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
-  PrintLogRecord(TopLevelPointTo, TopLevelPointToLogRecord(ValueID, Value));
+  PrintLogRecord(TopLevelPointTo,
+                 TopLevelPointToLogRecord(ValueID, Value, Pointer));
   pthread_mutex_unlock(&Global->Lock);
 }
 
