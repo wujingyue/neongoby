@@ -26,7 +26,7 @@ STATISTIC(NumAddrTakenPointTos, "Number of addr-taken point-to records");
 STATISTIC(NumTopLevelPointTos, "Number of top-level point-tos records");
 STATISTIC(NumRecords, "Number of all records");
 
-void LogProcessor::processLog() {
+void LogProcessor::processLog(bool Reversed) {
   assert(LogFileName != "" && "Didn't specify the log file.");
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
   assert(LogFile && "The log file doesn't exist.");
@@ -34,7 +34,8 @@ void LogProcessor::processLog() {
   // Count the records.
   errs() << "[LogProcessor] Counting the number of records...\n";
   LogRecordType RecordType;
-  while (fread(&RecordType, sizeof(LogRecordType), 1, LogFile) == 1) {
+  NumRecords = 0;
+  while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
     ++NumRecords;
     switch (RecordType) {
       case AddrTakenDecl:
@@ -64,52 +65,71 @@ void LogProcessor::processLog() {
                 NumRecords << "\n";
         assert(false && "Unknown record type");
     }
+    fread(&RecordType, sizeof RecordType, 1, LogFile);
   }
   assert(NumRecords > 0);
   errs() << "[LogProcessor] Need process " << NumRecords << " records.\n";
 
-  // Set the file position to the beginning.
-  rewind(LogFile);
+  if (!Reversed) {
+    // Set the file position to the beginning.
+    rewind(LogFile);
+  } else {
+    // Set the file position to the end.
+    fseek(LogFile, 0, SEEK_END);
+  }
 
   // Actually process these log records.
   unsigned NumRecordsProcessed = 0;
   DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
-  while (fread(&RecordType, sizeof(LogRecordType), 1, LogFile) == 1) {
+  while (readData(&RecordType, sizeof RecordType, Reversed, LogFile)) {
     switch (RecordType) {
       case AddrTakenDecl:
         {
           AddrTakenDeclLogRecord Record;
-          size_t R = fread(&Record, sizeof(AddrTakenDeclLogRecord), 1,
-                           LogFile);
-          assert(R == 1);
+          bool R = readData(&Record, sizeof Record, Reversed, LogFile);
+          assert(R == true);
           processAddrTakenDecl(Record);
         }
         break;
       case TopLevelPointTo:
         {
           TopLevelPointToLogRecord Record;
-          size_t R = fread(&Record, sizeof(TopLevelPointToLogRecord), 1,
-                           LogFile);
-          assert(R == 1);
+          bool R = readData(&Record, sizeof Record, Reversed, LogFile);
+          assert(R == true);
           processTopLevelPointTo(Record);
         }
         break;
       case AddrTakenPointTo:
         {
           AddrTakenPointToLogRecord Record;
-          size_t R = fread(&Record, sizeof(AddrTakenPointToLogRecord), 1,
-                           LogFile);
-          assert(R == 1);
+          bool R = readData(&Record, sizeof Record, Reversed, LogFile);
+          assert(R == true);
           processAddrTakenPointTo(Record);
         }
         break;
       default:
         assert(false);
     }
+    readData(&RecordType, sizeof RecordType, Reversed, LogFile);
     ++NumRecordsProcessed;
     DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
   }
   errs() << "\n";
 
   fclose(LogFile);
+}
+
+bool LogProcessor::readData(void *P, int Length, bool Reversed, FILE *LogFile) {
+  if (Reversed) {
+    if (fseek(LogFile, -Length, SEEK_CUR) != 0) {
+      return false;
+    }
+  }
+  if (fread(P, Length, 1, LogFile) != 1) {
+    return false;
+  }
+  if (Reversed) {
+    fseek(LogFile, -Length, SEEK_CUR);
+  }
+  return true;
 }

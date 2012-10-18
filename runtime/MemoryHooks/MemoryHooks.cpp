@@ -86,6 +86,7 @@ template<class T>
 void PrintLogRecord(LogRecordType RecordType, const T &Record) {
   fwrite(&RecordType, sizeof RecordType, 1, Global->LogFile);
   fwrite(&Record, sizeof Record, 1, Global->LogFile);
+  fwrite(&RecordType, sizeof RecordType, 1, Global->LogFile);
 }
 
 extern "C" void HookBeforeFork() {

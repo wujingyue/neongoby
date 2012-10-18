@@ -7,10 +7,13 @@
 
 namespace dyn_aa {
 struct LogProcessor {
-  void processLog();
+  void processLog(bool Reversed = false);
   virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &) = 0;
   virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &) = 0;
   virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &) = 0;
+
+private:
+  bool readData(void * P, int Length, bool Reversed, FILE *LogFile);
 };
 }
 
