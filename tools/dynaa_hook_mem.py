@@ -36,6 +36,6 @@ if __name__ == '__main__':
     cmd = string.join(('clang++', instrumented_bc,
                        rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a',
                        '-o', instrumented_exe))
-    extra_linking_flags = dynaa_utils.get_extra_linking_flags(args.prog)
-    cmd = string.join((cmd, string.join(extra_linking_flags)))
+    linking_flags = dynaa_utils.get_linking_flags(args.prog)
+    cmd = string.join((cmd, string.join(linking_flags)))
     rcs_utils.invoke(cmd)

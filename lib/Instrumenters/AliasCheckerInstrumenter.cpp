@@ -42,6 +42,7 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   void addAliasChecks(const vector<InstPair> &Checks);
   void addAliasChecks(Instruction *P, const InstList &Qs);
   void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
+  AliasAnalysis *getBaselineAA();
 
   Function *AssertNoAliasHook;
   // Types.
@@ -61,6 +62,9 @@ static cl::opt<unsigned> MaxNumAliasChecks(
     "max-alias-checks",
     cl::desc("Add at most this many alias checks. Used for debugging"),
     cl::init((unsigned)-1));
+static cl::opt<string> BaselineAAName(
+    "assume-correct",
+    cl::desc("Assume some AA is correct so that we can add fewer checks"));
 
 STATISTIC(NumAliasQueries, "Number of alias queries");
 STATISTIC(NumAliasChecks, "Number of alias checks");
@@ -81,6 +85,11 @@ void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IntraReach>();
   AU.addRequired<DominatorTree>();
   AU.addRequired<IDAssigner>();
+  if (BaselineAAName != "") {
+    const PassInfo *PI = lookupPassInfo(BaselineAAName);
+    assert(PI && "The baseline AA is not registered");
+    AU.addRequiredID(PI->getTypeInfo());
+  }
 }
 
 #if 0
@@ -95,6 +104,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(
     DenseMap<BasicBlock *, InstList> &PointerInsts,
     vector<InstPair> &Checks) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
+  AliasAnalysis *BaselineAA = getBaselineAA();
   IntraReach &IR = getAnalysis<IntraReach>();
 
   // TODO: consider arguments
@@ -130,7 +140,11 @@ void AliasCheckerInstrumenter::computeAliasChecks(
              i2 < e2; ++i2) {
           Instruction *I2 = PointerInstsInB2[i2];
           ++NumAliasQueriesInF;
-          if (AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
+          if (AA.alias(I1, I2) == AliasAnalysis::NoAlias &&
+              (BaselineAA == NULL ||
+               BaselineAA->alias(I1, I2) != AliasAnalysis::NoAlias)) {
+            // Add a check when the baseline AA says "may" and the checked AA
+            // says "no".
             Checks.push_back(make_pair(I1, I2));
             if (Checks.size() == MaxNumAliasChecks)
               return;
@@ -139,13 +153,13 @@ void AliasCheckerInstrumenter::computeAliasChecks(
       }
     }
   }
-  errs() << "  # of alias queries = " << NumAliasQueriesInF << "\n";
+  errs() << "  Issued " << NumAliasQueriesInF << " alias queries\n";
   NumAliasQueries += NumAliasQueriesInF;
   assert(Checks.size() <= MaxNumAliasChecks);
 }
 
 void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
-  errs() << "  Adding " << Checks.size() << " alias checkers... ";
+  errs() << "  Adding " << Checks.size() << " alias checks\n";
   NumAliasChecks += Checks.size();
   // Checks are clustered on the first item in the pair.
   for (size_t i = 0; i < Checks.size(); ) {
@@ -159,11 +173,34 @@ void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
     addAliasChecks(Checks[i].first, Qs);
     i = j;
   }
-  errs() << "Done\n";
+}
+
+AliasAnalysis *AliasCheckerInstrumenter::getBaselineAA() {
+  if (BaselineAAName == "")
+    return NULL;
+
+  // Get the baseline AA.
+  // Don't use getAnalysisID directly. The getAdjustedAnalysisPointer won't
+  // work with <BaselineAA>::ID.
+  // The following code repeats the logic in getAnalysisID except that it
+  // passes AliasAnalysis::ID to getAdjustedAnalysisPointer.
+  const PassInfo *PI = lookupPassInfo(BaselineAAName);
+  assert(PI && "The baseline AA is not registered");
+  Pass *P = getResolver()->findImplPass(PI->getTypeInfo());
+  assert(P);
+  AliasAnalysis *BaselineAA =
+      (AliasAnalysis *)P->getAdjustedAnalysisPointer(&AliasAnalysis::ID);
+
+  // Get the current AA.
+  AliasAnalysis *CurrentAA = &getAnalysis<AliasAnalysis>();
+  assert(BaselineAA != CurrentAA &&
+         "The baseline AA and the current AA should be different");
+
+  return BaselineAA;
 }
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
-  errs() << "Processing function " << F.getName() << "...\n";
+  errs() << "\nProcessing function " << F.getName() << "\n";
 
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
