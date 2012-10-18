@@ -13,7 +13,7 @@ struct LogProcessor {
   virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &) = 0;
 
 private:
-  bool readData(void * P, int Length, bool Reversed, FILE *LogFile);
+  bool readData(void *P, int Length, bool Reversed, FILE *LogFile);
 };
 }
 
