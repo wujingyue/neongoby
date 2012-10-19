@@ -9,7 +9,7 @@
 
 namespace dyn_aa {
 struct DynAAUtils {
-  static void PrintProgressBar(uint64_t Finished, uint64_t Total);
+  static void PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total);
   static bool PointerIsAccessed(const llvm::Value *V);
 };
 }

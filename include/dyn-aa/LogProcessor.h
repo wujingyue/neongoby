@@ -15,7 +15,6 @@ struct LogProcessor {
 private:
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);
   static off_t GetFileSize(FILE *LogFile);
-  static unsigned EstimateNumRecords(FILE *LogFile);
 };
 }
 
