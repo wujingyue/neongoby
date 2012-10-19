@@ -6,6 +6,7 @@
 
 #include "llvm/Pass.h"
 #include "llvm/Module.h"
+#include "llvm/IntrinsicInst.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Dominators.h"
@@ -37,8 +38,16 @@ struct AliasCheckerInstrumenter: public FunctionPass {
 
  private:
   void computeAliasChecks(Function &F,
+                          InstList &Pointers,
                           vector<InstPair> &Checks);
-  void addAliasChecks(const vector<InstPair> &Checks);
+  void addAliasChecks(Function &F,
+                      const InstList &Pointers,
+                      const vector<InstPair> &Checks);
+  void addAliasChecks(BasicBlock *BB,
+                      const InstList &Pointers,
+                      const vector<InstPair> &Checks,
+                      AllocaInst *Slots,
+                      const DenseMap<Instruction *, unsigned> &SlotOfPointer);
   void addAliasChecks(Instruction *P, const InstList &Qs);
   void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
   AliasAnalysis *getBaselineAA();
@@ -46,7 +55,7 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   Function *AssertNoAliasHook;
   // Types.
   Type *VoidType;
-  IntegerType *CharType, *IntType;
+  IntegerType *CharType, *IntType, *LongType;
   PointerType *CharStarType;
 };
 }
@@ -64,6 +73,9 @@ static cl::opt<unsigned> MaxNumAliasChecks(
 static cl::opt<string> BaselineAAName(
     "assume-correct",
     cl::desc("Assume some AA is correct so that we can add fewer checks"));
+static cl::opt<bool> NoPHI("no-phi",
+                           cl::desc("Store pointer values into slots and "
+                                    "load them at the end of functions"));
 
 STATISTIC(NumAliasQueries, "Number of alias queries");
 STATISTIC(NumAliasChecks, "Number of alias checks");
@@ -75,7 +87,7 @@ char AliasCheckerInstrumenter::ID = 0;
 AliasCheckerInstrumenter::AliasCheckerInstrumenter(): FunctionPass(ID) {
   AssertNoAliasHook = NULL;
   VoidType = NULL;
-  CharType = IntType = NULL;
+  CharType = IntType = LongType = NULL;
   CharStarType = NULL;
 }
 
@@ -99,12 +111,13 @@ static bool SortBBByName(const BasicBlock *B1, const BasicBlock *B2) {
 #endif
 
 void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
+                                                  InstList &Pointers,
                                                   vector<InstPair> &Checks) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   AliasAnalysis *BaselineAA = getBaselineAA();
   IntraReach &IR = getAnalysis<IntraReach>();
 
-  DenseMap<BasicBlock *, InstList> PointerInsts;
+  DenseMap<BasicBlock *, InstList> PointersInBB;
   // TODO: consider arguments
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
@@ -112,7 +125,8 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
         continue;
       if (!DynAAUtils::PointerIsAccessed(Ins))
         continue;
-      PointerInsts[BB].push_back(Ins);
+      PointersInBB[BB].push_back(Ins);
+      Pointers.push_back(Ins);
     }
   }
 
@@ -120,23 +134,23 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
   // going to add in Checks, and add them to the program later.
   unsigned NumAliasQueriesInF = 0;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
-    if (!PointerInsts.count(B1))
+    if (!PointersInBB.count(B1))
       continue;
     ConstBBSet ReachableBBs;
     IR.floodfill(B1, ConstBBSet(), ReachableBBs);
     assert(ReachableBBs.count(B1));
-    InstList &PointerInstsInB1 = PointerInsts[B1];
-    for (size_t i1 = 0, e1 = PointerInstsInB1.size(); i1 < e1; ++i1) {
-      Instruction *I1 = PointerInstsInB1[i1];
+    InstList &PointersInB1 = PointersInBB[B1];
+    for (size_t i1 = 0, e1 = PointersInB1.size(); i1 < e1; ++i1) {
+      Instruction *I1 = PointersInB1[i1];
       for (ConstBBSet::iterator IB2 = ReachableBBs.begin();
            IB2 != ReachableBBs.end(); ++IB2) {
         BasicBlock *B2 = const_cast<BasicBlock *>(*IB2);
-        if (!PointerInsts.count(B2))
+        if (!PointersInBB.count(B2))
           continue;
-        InstList &PointerInstsInB2 = PointerInsts[B2];
-        for (size_t i2 = (B2 == B1 ? i1 + 1 : 0), e2 = PointerInstsInB2.size();
+        InstList &PointersInB2 = PointersInBB[B2];
+        for (size_t i2 = (B2 == B1 ? i1 + 1 : 0), e2 = PointersInB2.size();
              i2 < e2; ++i2) {
-          Instruction *I2 = PointerInstsInB2[i2];
+          Instruction *I2 = PointersInB2[i2];
           ++NumAliasQueriesInF;
           if (AA.alias(I1, I2) == AliasAnalysis::NoAlias &&
               (BaselineAA == NULL ||
@@ -156,20 +170,134 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
   assert(Checks.size() <= MaxNumAliasChecks);
 }
 
-void AliasCheckerInstrumenter::addAliasChecks(const vector<InstPair> &Checks) {
+void AliasCheckerInstrumenter::addAliasChecks(
+    BasicBlock *BB,
+    const InstList &Pointers,
+    const vector<InstPair> &Checks,
+    AllocaInst *Slots,
+    const DenseMap<Instruction *, unsigned> &SlotOfPointer) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  IntraReach &IR = getAnalysis<IntraReach>();
+
+  ConstBBSet ReachableBBs; // BBs that can reach BB
+  IR.floodfill_r(BB, ConstBBSet(), ReachableBBs);
+
+  InstList MergedPointers;
+  for (size_t i = 0; i < Pointers.size(); ++i) {
+    Instruction *P = Pointers[i];
+    // If P does not reach BB, the alias check does not make
+    // sense because P
+    // has an undefined value.
+    if (!ReachableBBs.count(P->getParent())) {
+      MergedPointers.push_back(NULL);
+      continue;
+    }
+
+    assert(SlotOfPointer.count(P));
+    unsigned SlotID = SlotOfPointer.lookup(P);
+    GetElementPtrInst *Slot = GetElementPtrInst::Create(
+        Slots,
+        ConstantInt::get(IntType, SlotID),
+        "slot",
+        BB->getTerminator());
+    LoadInst *MergedPointer = new LoadInst(Slot, "", BB->getTerminator());
+    MergedPointers.push_back(MergedPointer);
+  }
+
+  for (size_t i = 0; i < Checks.size(); ++i) {
+    Instruction *P = Checks[i].first, *Q = Checks[i].second;
+    assert(SlotOfPointer.count(P) && SlotOfPointer.count(Q));
+    Instruction *P2 = MergedPointers[SlotOfPointer.lookup(P)];
+    Instruction *Q2 = MergedPointers[SlotOfPointer.lookup(Q)];
+    if (!P2 || !Q2) {
+      // Skip the check if P or Q does not reach
+      // BB, because their values
+      // would be undefined.
+      continue;
+    }
+
+    unsigned VIDOfP = IDA.getValueID(P), VIDOfQ = IDA.getValueID(Q);
+    assert(VIDOfP != IDAssigner::InvalidID && VIDOfQ != IDAssigner::InvalidID);
+
+    vector<Value *> Args;
+    Args.push_back(P2);
+    Args.push_back(ConstantInt::get(IntType, VIDOfP));
+    Args.push_back(Q2);
+    Args.push_back(ConstantInt::get(IntType, VIDOfQ));
+    CallInst::Create(AssertNoAliasHook, Args, "", BB->getTerminator());
+  }
+}
+
+void AliasCheckerInstrumenter::addAliasChecks(Function &F,
+                                              const InstList &Pointers,
+                                              const vector<InstPair> &Checks) {
   errs() << "  Adding " << Checks.size() << " alias checks\n";
   NumAliasChecks += Checks.size();
-  // Checks are clustered on the first item in the pair.
-  for (size_t i = 0; i < Checks.size(); ) {
-    InstList Qs;
-    size_t j = i;
-    while (j < Checks.size() &&
-           Checks[j].first == Checks[i].first) {
-      Qs.push_back(Checks[j].second);
-      ++j;
+
+  if (NoPHI) {
+    BasicBlock::iterator InsertPos = F.begin()->getFirstNonPHI();
+    AllocaInst *Slots = new AllocaInst(
+        CharStarType,
+        ConstantInt::get(IntType, Pointers.size()),
+        "slots",
+        InsertPos);
+    Type *Types[] = {CharStarType, LongType};
+    Function *LLVMMemset = Intrinsic::getDeclaration(F.getParent(),
+                                                     Intrinsic::memset,
+                                                     Types);
+    vector<Value *> Args;
+    Args.push_back(new BitCastInst(Slots, CharStarType, "", InsertPos));
+    Args.push_back(ConstantInt::get(CharType, 0));
+    Args.push_back(ConstantInt::get(LongType,
+                                    sizeof(char *) * Pointers.size()));
+    Args.push_back(ConstantInt::get(IntType, Slots->getAlignment()));
+    Args.push_back(ConstantInt::getFalse(F.getContext()));
+    CallInst::Create(LLVMMemset, Args, "", InsertPos);
+
+    // Store each pointer to its corresponding slot.
+    DenseMap<Instruction *, unsigned> SlotOfPointer;
+    for (size_t i = 0; i < Pointers.size(); ++i) {
+      Instruction *Ins = Pointers[i];
+      SlotOfPointer[Ins] = i;
+
+      BasicBlock::iterator Loc;
+      if (InvokeInst *II = dyn_cast<InvokeInst>(Ins)) {
+        Loc = II->getNormalDest()->getTerminator();
+      } else {
+        Loc = Ins->getParent()->getTerminator();
+      }
+
+      GetElementPtrInst *Slot = GetElementPtrInst::Create(
+          Slots,
+          ConstantInt::get(IntType, i),
+          "slot",
+          Loc);
+      BitCastInst *CastSlot = new BitCastInst(
+          Slot,
+          PointerType::getUnqual(Ins->getType()),
+          "",
+          Loc);
+      new StoreInst(Ins, CastSlot, Loc);
     }
-    addAliasChecks(Checks[i].first, Qs);
-    i = j;
+
+    for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
+      if (isa<ReturnInst>(BB->getTerminator())) {
+        addAliasChecks(BB, Pointers, Checks, Slots, SlotOfPointer);
+      }
+    }
+  } else {
+    // Checks are clustered on the first item in the pair.
+    for (size_t i = 0; i < Checks.size(); ) {
+      InstList Qs;
+      size_t j = i;
+      while (j < Checks.size() &&
+             Checks[j].first == Checks[i].first) {
+        Qs.push_back(Checks[j].second);
+        ++j;
+      }
+      addAliasChecks(Checks[i].first, Qs);
+      i = j;
+    }
   }
 }
 
@@ -203,9 +331,10 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
   vector<InstPair> Checks;
-  computeAliasChecks(F, Checks);
+  InstList Pointers;
+  computeAliasChecks(F, Pointers, Checks);
 
-  addAliasChecks(Checks);
+  addAliasChecks(F, Pointers, Checks);
 
   // Remove deallocators.
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
@@ -225,6 +354,8 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
   VoidType = Type::getVoidTy(M.getContext());
   CharType = Type::getInt8Ty(M.getContext());
   IntType = Type::getInt32Ty(M.getContext());
+  // FIXME: Use TargetData
+  LongType = Type::getIntNTy(M.getContext(), __WORDSIZE);
   CharStarType = PointerType::getUnqual(CharType);
 
   // Initialize function types.

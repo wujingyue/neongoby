@@ -32,6 +32,9 @@ if __name__ == '__main__':
                         help = 'do not run standard compiler optimization',
                         action = 'store_true',
                         default = False)
+    parser.add_argument('--no-phi',
+                        action = 'store_true',
+                        default = False)
     args = parser.parse_args()
 
     # Initialize output file names after each stage.
@@ -57,6 +60,8 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
     if args.max_alias_checks is not None:
         cmd = ' '.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
+    if args.no_phi:
+        cmd = ' '.join((cmd, '-no-phi'))
     cmd = ' '.join((cmd, '-o', bc_ac, '<', bc_orig))
     rcs_utils.invoke(cmd)
 
