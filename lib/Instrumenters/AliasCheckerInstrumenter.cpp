@@ -37,7 +37,6 @@ struct AliasCheckerInstrumenter: public FunctionPass {
 
  private:
   void computeAliasChecks(Function &F,
-                          DenseMap<BasicBlock *, InstList> &PointerInsts,
                           vector<InstPair> &Checks);
   void addAliasChecks(const vector<InstPair> &Checks);
   void addAliasChecks(Instruction *P, const InstList &Qs);
@@ -99,14 +98,13 @@ static bool SortBBByName(const BasicBlock *B1, const BasicBlock *B2) {
 }
 #endif
 
-void AliasCheckerInstrumenter::computeAliasChecks(
-    Function &F,
-    DenseMap<BasicBlock *, InstList> &PointerInsts,
-    vector<InstPair> &Checks) {
+void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
+                                                  vector<InstPair> &Checks) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   AliasAnalysis *BaselineAA = getBaselineAA();
   IntraReach &IR = getAnalysis<IntraReach>();
 
+  DenseMap<BasicBlock *, InstList> PointerInsts;
   // TODO: consider arguments
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
@@ -204,9 +202,8 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
 
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
-  DenseMap<BasicBlock *, InstList> PointerInsts;
   vector<InstPair> Checks;
-  computeAliasChecks(F, PointerInsts, Checks);
+  computeAliasChecks(F, Checks);
 
   addAliasChecks(Checks);
 
