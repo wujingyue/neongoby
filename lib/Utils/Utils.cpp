@@ -12,8 +12,10 @@ using namespace llvm;
 using namespace dyn_aa;
 
 void DynAAUtils::PrintProgressBar(uint64_t Finished, uint64_t Total) {
-  assert(Finished <= Total);
   assert(Total > 0);
+  // Total is estimated, so it can sometimes be less than Finished.
+  if (Finished > Total)
+    return;
 
   if (Finished == 0) {
     errs().changeColor(raw_ostream::BLUE);
@@ -22,9 +24,10 @@ void DynAAUtils::PrintProgressBar(uint64_t Finished, uint64_t Total) {
   } else {
     unsigned CurrentPercentage = Finished * 10 / Total;
     unsigned OldPercentage = (Finished - 1) * 10 / Total;
-    if (CurrentPercentage != OldPercentage) {
+    for (unsigned Percentage = OldPercentage + 1;
+         Percentage <= CurrentPercentage; ++Percentage) {
       errs().changeColor(raw_ostream::BLUE);
-      errs() << " [" << CurrentPercentage * 10 << "%]";
+      errs() << " [" << Percentage * 10 << "%]";
       errs().resetColor();
     }
   }

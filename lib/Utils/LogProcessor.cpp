@@ -2,6 +2,10 @@
 
 #define DEBUG_TYPE "dyn-aa"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <string>
 #include <cstdio>
 
@@ -31,95 +35,64 @@ void LogProcessor::processLog(bool Reversed) {
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
   assert(LogFile && "The log file doesn't exist.");
 
-  // Count the records.
-  errs() << "[LogProcessor] Counting the number of records...\n";
-  LogRecordType RecordType;
-  NumRecords = 0;
-  while (fread(&RecordType, sizeof RecordType, 1, LogFile) == 1) {
-    ++NumRecords;
-    switch (RecordType) {
-      case AddrTakenDecl:
-        {
-          ++NumAddrTakenDecls;
-          int R = fseek(LogFile, sizeof(AddrTakenDeclLogRecord), SEEK_CUR);
-          assert(R == 0);
-        }
-        break;
-      case TopLevelPointTo:
-        {
-          ++NumTopLevelPointTos;
-          int R = fseek(LogFile, sizeof(TopLevelPointToLogRecord), SEEK_CUR);
-          assert(R == 0);
-        }
-        break;
-      case AddrTakenPointTo:
-        {
-          ++NumAddrTakenPointTos;
-          int R = fseek(LogFile, sizeof(AddrTakenPointToLogRecord), SEEK_CUR);
-          assert(R == 0);
-        }
-        break;
-      default:
-        errs() << "RecordType = " << RecordType << "\n";
-        errs() << "Current position: " << ftell(LogFile) << " Records read: " <<
-                NumRecords << "\n";
-        assert(false && "Unknown record type");
-    }
-    fread(&RecordType, sizeof RecordType, 1, LogFile);
-  }
-  assert(NumRecords > 0);
-  errs() << "[LogProcessor] Need process " << NumRecords << " records.\n";
+  // Estimate the number of records.
+  unsigned EstimatedNumRecords = EstimateNumRecords(LogFile);
 
-  if (!Reversed) {
-    // Set the file position to the beginning.
-    rewind(LogFile);
-  } else {
+  if (Reversed) {
     // Set the file position to the end.
     fseek(LogFile, 0, SEEK_END);
   }
 
   // Actually process these log records.
-  unsigned NumRecordsProcessed = 0;
-  DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
-  while (readData(&RecordType, sizeof RecordType, Reversed, LogFile)) {
+  NumRecords = 0;
+  DynAAUtils::PrintProgressBar(NumRecords, EstimatedNumRecords);
+  LogRecordType RecordType;
+  while (ReadData(&RecordType, sizeof RecordType, Reversed, LogFile)) {
     switch (RecordType) {
       case AddrTakenDecl:
         {
           AddrTakenDeclLogRecord Record;
-          bool R = readData(&Record, sizeof Record, Reversed, LogFile);
+          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
           assert(R == true);
           processAddrTakenDecl(Record);
+          ++NumAddrTakenDecls;
         }
         break;
       case TopLevelPointTo:
         {
           TopLevelPointToLogRecord Record;
-          bool R = readData(&Record, sizeof Record, Reversed, LogFile);
+          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
           assert(R == true);
           processTopLevelPointTo(Record);
+          ++NumTopLevelPointTos;
         }
         break;
       case AddrTakenPointTo:
         {
           AddrTakenPointToLogRecord Record;
-          bool R = readData(&Record, sizeof Record, Reversed, LogFile);
+          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
           assert(R == true);
           processAddrTakenPointTo(Record);
+          ++NumAddrTakenPointTos;
         }
         break;
       default:
         assert(false);
     }
-    readData(&RecordType, sizeof RecordType, Reversed, LogFile);
-    ++NumRecordsProcessed;
-    DynAAUtils::PrintProgressBar(NumRecordsProcessed, NumRecords);
+    ReadData(&RecordType, sizeof RecordType, Reversed, LogFile);
+    ++NumRecords;
+    DynAAUtils::PrintProgressBar(NumRecords, EstimatedNumRecords);
+  }
+  if (NumRecords < EstimatedNumRecords) {
+    EstimatedNumRecords = NumRecords;
+    DynAAUtils::PrintProgressBar(NumRecords, EstimatedNumRecords);
   }
   errs() << "\n";
 
   fclose(LogFile);
 }
 
-bool LogProcessor::readData(void *P, int Length, bool Reversed, FILE *LogFile) {
+bool LogProcessor::ReadData(void *P, int Length, bool Reversed, FILE *LogFile) {
   if (Reversed) {
     if (fseek(LogFile, -Length, SEEK_CUR) != 0) {
       return false;
@@ -132,4 +105,26 @@ bool LogProcessor::readData(void *P, int Length, bool Reversed, FILE *LogFile) {
     fseek(LogFile, -Length, SEEK_CUR);
   }
   return true;
+}
+
+off_t LogProcessor::GetFileSize(FILE *LogFile) {
+  int FD = fileno(LogFile);
+  assert(FD != -1);
+  struct stat StatBuf;
+  int R = fstat(FD, &StatBuf);
+  assert(R != -1);
+  return StatBuf.st_size;
+}
+
+unsigned LogProcessor::EstimateNumRecords(FILE *LogFile) {
+  size_t AverageItemSize = sizeof(LogRecordType) * 2 +
+      (sizeof(AddrTakenPointToLogRecord) +
+       sizeof(TopLevelPointToLogRecord) +
+       sizeof(AddrTakenDeclLogRecord)) / 3;
+  unsigned EstimatedNumRecords = GetFileSize(LogFile) / AverageItemSize;
+  if (EstimatedNumRecords < 1)
+    EstimatedNumRecords = 1;
+  errs() << "[LogProcessor] Estimated number of records = " <<
+      EstimatedNumRecords << "\n";
+  return EstimatedNumRecords;
 }
