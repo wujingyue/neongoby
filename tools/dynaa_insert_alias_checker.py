@@ -6,6 +6,7 @@ import argparse
 import dynaa_utils
 import rcs_utils
 import sys
+import time
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Insert alias checker')
@@ -29,7 +30,7 @@ if __name__ == '__main__':
                         default = False)
     parser.add_argument('--disable-opt',
                         help = 'do not run standard compiler optimization',
-                        action = 'stroe_true',
+                        action = 'store_true',
                         default = False)
     args = parser.parse_args()
 
@@ -39,6 +40,7 @@ if __name__ == '__main__':
     bc_ac_opt = args.prog + '.ac.opt.bc'
     bc_ac_opt_inline = args.prog + '.ac.opt.inline.bc'
 
+    time_start_inserting = time.time()
     # Insert alias checks.
     cmd = dynaa_utils.load_all_plugins('opt')
     if args.baseline is None:
@@ -61,6 +63,7 @@ if __name__ == '__main__':
     # Run standard optimizations.
     # Don't mix -O3 with the previous command line, because the previous command
     # line may not be using basicaa which can potentially make -O3 pretty slow.
+    time_start_o3 = time.time()
     if args.disable_opt:
         cmd = ' '.join(('cp', bc_ac, bc_ac_opt))
     else:
@@ -68,6 +71,7 @@ if __name__ == '__main__':
     rcs_utils.invoke(cmd)
 
     # Inline alias checks.
+    time_start_inlining = time.time()
     if args.disable_inline:
         cmd = ' '.join(('cp', bc_ac_opt, bc_ac_opt_inline))
     else:
@@ -77,6 +81,7 @@ if __name__ == '__main__':
     rcs_utils.invoke(cmd)
 
     # Codegen.
+    time_start_codegen = time.time()
     cmd = ' '.join(('clang++', bc_ac_opt_inline))
     if args.disable_inline:
         cmd = ' '.join((cmd,
@@ -85,3 +90,10 @@ if __name__ == '__main__':
     linking_flags = dynaa_utils.get_linking_flags(args.prog)
     cmd = ' '.join((cmd, ' '.join(linking_flags)))
     rcs_utils.invoke(cmd)
+
+    # Print runtime of each stage.
+    time_finish = time.time()
+    print 'Inserting alias checks:', time_start_o3 - time_start_inserting
+    print 'Running O3:', time_start_inlining - time_start_o3
+    print 'Inlining:', time_start_codegen - time_start_inlining
+    print 'Codegen:', time_finish - time_start_codegen
