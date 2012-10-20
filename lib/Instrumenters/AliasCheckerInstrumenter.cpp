@@ -69,10 +69,6 @@ static RegisterPass<AliasCheckerInstrumenter> X(
     false, // Is CFG Only?
     false); // Is Analysis?
 
-static cl::opt<unsigned> MaxNumAliasChecks(
-    "max-alias-checks",
-    cl::desc("Add at most this many alias checks. Used for debugging"),
-    cl::init((unsigned)-1));
 static cl::opt<string> BaselineAAName(
     "assume-correct",
     cl::desc("Assume some AA is correct so that we can add fewer checks"));
@@ -187,8 +183,6 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
             // Add a check when the baseline AA says "may" and the checked AA
             // says "no".
             Checks.push_back(make_pair(I1, I2));
-            if (Checks.size() == MaxNumAliasChecks)
-              return;
           }
         }
       }
@@ -196,7 +190,6 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
   }
   errs() << "  Issued " << NumAliasQueriesInF << " alias queries\n";
   NumAliasQueries += NumAliasQueriesInF;
-  assert(Checks.size() <= MaxNumAliasChecks);
 }
 
 void AliasCheckerInstrumenter::addAliasChecks(

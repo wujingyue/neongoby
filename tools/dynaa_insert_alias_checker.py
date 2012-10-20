@@ -16,9 +16,6 @@ if __name__ == '__main__':
                     str(dynaa_utils.get_aa_choices()),
             metavar = 'aa',
             choices = dynaa_utils.get_aa_choices())
-    parser.add_argument('--max-alias-checks',
-                       help = 'maximum number of alias checks to add',
-                       type = int)
     parser.add_argument('--baseline',
                         help = 'baseline AA which is assumed to be correct: ' + \
                                 str(dynaa_utils.get_aa_choices()),
@@ -58,8 +55,6 @@ if __name__ == '__main__':
         # baseline need be put before aa
         cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
-    if args.max_alias_checks is not None:
-        cmd = ' '.join((cmd, '-max-alias-checks', str(args.max_alias_checks)))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
     cmd = ' '.join((cmd, '-o', bc_ac, '<', bc_orig))
