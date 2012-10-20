@@ -55,6 +55,13 @@ bool AliasCheckerInliner::runOnFunction(Function &F) {
   CallInst::Create(LLVMTrap, "", TrapBB);
   new UnreachableInst(F.getContext(), TrapBB);
 
+  // We traverse BB lists and instruction lists backwards for performance
+  // reasons. BasicBlock::splitBasicBlock does not take a constant time,
+  // because it needs to update the parent BB of the instructions in the new
+  // BB. Therefore, spliting a BB at each AssertNoAlias while traversing the BB
+  // forwards would take O(n^2) time. However, doing so while traversing the BB
+  // backwards only takes O(n) time, because the new basic block won't be split
+  // again.
   for (Function::iterator BB = F.end(); BB != F.begin(); ) {
     --BB;
     for (BasicBlock::iterator Ins = BB->end(); Ins != BB->begin(); ) {
