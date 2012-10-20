@@ -47,17 +47,19 @@ if __name__ == '__main__':
     time_start_inserting = time.time()
     # Insert alias checks.
     cmd = dynaa_utils.load_all_plugins('opt')
-    if args.baseline is None:
-        cmd = dynaa_utils.load_aa(cmd, args.aa)
-    else:
-        if args.baseline == args.aa:
-            sys.stderr.write('\033[1;31m')
-            print >> sys.stderr, 'Error: Baseline and the checked AA',
-            print >> sys.stderr, 'must be different'
-            sys.stderr.write('\033[m')
-            sys.exit(1)
-        # baseline need be put before aa
-        cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
+    if args.input_alias_checks is None:
+        # If alias checks are inputed by users, we don't need to run any AA
+        if args.baseline is None:
+            cmd = dynaa_utils.load_aa(cmd, args.aa)
+        else:
+            if args.baseline == args.aa:
+                sys.stderr.write('\033[1;31m')
+                print >> sys.stderr, 'Error: Baseline and the checked AA',
+                print >> sys.stderr, 'must be different'
+                sys.stderr.write('\033[m')
+                sys.exit(1)
+            # baseline need be put before aa
+            cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
