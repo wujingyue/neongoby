@@ -30,6 +30,11 @@ if __name__ == '__main__':
                         action = 'store_true',
                         default = False)
     parser.add_argument('--no-phi',
+                        help = 'store pointers into slots and load them later',
+                        action = 'store_true',
+                        default = False)
+    parser.add_argument('--abort-if-missed',
+                        help = 'abort the program on detecting a missed alias',
                         action = 'store_true',
                         default = False)
     parser.add_argument('--input-alias-checks',
@@ -63,6 +68,8 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
+    if args.abort_if_missed:
+        cmd = ' '.join((cmd, '-abort-if-missed'))
     if args.input_alias_checks is not None:
         cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
     if args.output_alias_checks is not None:
@@ -93,9 +100,9 @@ if __name__ == '__main__':
     # Codegen.
     time_start_codegen = time.time()
     cmd = ' '.join(('clang++', bc_ac_opt_inline))
-    if args.disable_inline:
-        cmd = ' '.join((cmd,
-                        rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
+    # ReportMissingAlias won't be inlined anyway, so we have to link
+    # libDynAAAliasChecker.a
+    cmd = ' '.join((cmd, rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
     cmd = ' '.join((cmd, '-o', args.prog + '.ac'))
     linking_flags = dynaa_utils.get_linking_flags(args.prog)
     cmd = ' '.join((cmd, ' '.join(linking_flags)))

@@ -4,13 +4,23 @@
 // the C++ name mangling and make the instrumentation easier.
 
 #include <cstdio>
-#include <cassert>
+#include <cstdlib>
 
-extern "C" void AssertNoAlias(void *P, unsigned VIDOfP,
+extern "C" void ReportMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
+  fprintf(stderr, "value(%u) = value(%u) = %p\n", VIDOfP, VIDOfQ, V);
+}
+
+extern "C" void AbortIfMissed(void *P, unsigned VIDOfP,
                               void *Q, unsigned VIDOfQ) {
   if (P == Q && P) {
-    fprintf(stderr, "Value %u and value %u alias.\n", VIDOfP, VIDOfQ);
-    fprintf(stderr, "They point to the same location %p\n", P);
-    assert(false);
+    ReportMissingAlias(VIDOfP, VIDOfQ, P);
+    abort();
+  }
+}
+
+extern "C" void ReportIfMissed(void *P, unsigned VIDOfP,
+                               void *Q, unsigned VIDOfQ) {
+  if (P == Q && P) {
+    ReportMissingAlias(VIDOfP, VIDOfQ, P);
   }
 }

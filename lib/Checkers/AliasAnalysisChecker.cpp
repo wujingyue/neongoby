@@ -68,38 +68,6 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-#if 0
-  ValueSet Pointers;
-  // We don't want to include all pointers yet.
-  // For now, we include all pointers used as a pointer operand of
-  // a Load/Store instruction.
-  for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
-      for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
-        if (StoreInst *SI = dyn_cast<StoreInst>(Ins))
-          Pointers.insert(SI->getPointerOperand());
-        if (LoadInst *LI = dyn_cast<LoadInst>(Ins))
-          Pointers.insert(LI->getPointerOperand());
-      }
-    }
-  }
-  unsigned NumValues = IDA.getNumValues();
-  for (unsigned ValueID = 0; ValueID < NumValues; ++ValueID) {
-    Value *V = IDA.getValue(ValueID);
-    assert(V);
-    // Skip non-pointers.
-    if (!V->getType()->isPointerTy())
-      continue;
-    // DSAA hasn't supported this case.
-    if (Argument *Arg = dyn_cast<Argument>(V)) {
-      if (Arg->getParent()->isDeclaration())
-        continue;
-    }
-    Pointers.insert(IDA.getValue(ValueID));
-  }
-  errs() << "# of pointers to process = " << Pointers.size() << "\n";
-#endif
-
   DenseSet<ValuePair> DynamicAliases;
   if (InputDynamicAliases == "") {
     DynamicAliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();

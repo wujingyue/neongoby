@@ -28,8 +28,6 @@ using namespace dyn_aa;
 
 namespace dyn_aa {
 struct AliasCheckerInstrumenter: public FunctionPass {
-  static const string AssertNoAliasHookName;
-
   static char ID;
 
   AliasCheckerInstrumenter();
@@ -53,7 +51,7 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
   AliasAnalysis *getBaselineAA();
 
-  Function *AssertNoAliasHook;
+  Function *AliasCheck;
   // Types.
   Type *VoidType;
   IntegerType *CharType, *IntType, *LongType;
@@ -81,16 +79,17 @@ static cl::opt<string> OutputAliasChecksName(
 static cl::opt<string> InputAliasChecksName(
     "input-alias-checks",
     cl::desc("Read all alias checks"));
+static cl::opt<bool> AbortIfMissed(
+    "abort-if-missed",
+    cl::desc("Abort the program on the first missed alias"));
 
 STATISTIC(NumAliasQueries, "Number of alias queries");
 STATISTIC(NumAliasChecks, "Number of alias checks");
 
-const string AliasCheckerInstrumenter::AssertNoAliasHookName = "AssertNoAlias";
-
 char AliasCheckerInstrumenter::ID = 0;
 
 AliasCheckerInstrumenter::AliasCheckerInstrumenter(): FunctionPass(ID) {
-  AssertNoAliasHook = NULL;
+  AliasCheck = NULL;
   VoidType = NULL;
   CharType = IntType = LongType = NULL;
   CharStarType = NULL;
@@ -245,7 +244,7 @@ void AliasCheckerInstrumenter::addAliasChecks(
     Args.push_back(ConstantInt::get(IntType, VIDOfP));
     Args.push_back(Q2);
     Args.push_back(ConstantInt::get(IntType, VIDOfQ));
-    CallInst::Create(AssertNoAliasHook, Args, "", BB->getTerminator());
+    CallInst::Create(AliasCheck, Args, "", BB->getTerminator());
   }
 }
 
@@ -397,15 +396,14 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(IntType);
-  FunctionType *AssertNoAliasHookType = FunctionType::get(VoidType,
-                                                          ArgTypes,
-                                                          false);
+  FunctionType *AliasCheckType = FunctionType::get(VoidType, ArgTypes, false);
 
   // Initialize hooks.
-  AssertNoAliasHook = Function::Create(AssertNoAliasHookType,
-                                       GlobalValue::ExternalLinkage,
-                                       AssertNoAliasHookName,
-                                       &M);
+  string AliasCheckName = (AbortIfMissed ? "AbortIfMissed" : "ReportIfMissed");
+  AliasCheck = Function::Create(AliasCheckType,
+                                GlobalValue::ExternalLinkage,
+                                AliasCheckName,
+                                &M);
 
   assert(InputAliasChecksName == "" || OutputAliasChecksName == "");
   // Initialize the output file for alias checks if necessary.
@@ -471,7 +469,7 @@ void AliasCheckerInstrumenter::addAliasCheck(Instruction *P,
   Args.push_back(ConstantInt::get(IntType, VIDOfP));
   Args.push_back(Q2);
   Args.push_back(ConstantInt::get(IntType, VIDOfQ));
-  CallInst::Create(AssertNoAliasHook, Args, "", Loc);
+  CallInst::Create(AliasCheck, Args, "", Loc);
 
   // The function call just added may be broken, because <P> may not
   // dominate <Q>. Use SSAUpdater to fix it if necessary.
