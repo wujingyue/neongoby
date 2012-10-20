@@ -55,8 +55,10 @@ bool AliasCheckerInliner::runOnFunction(Function &F) {
   CallInst::Create(LLVMTrap, "", TrapBB);
   new UnreachableInst(F.getContext(), TrapBB);
 
-  for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
-    for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
+  for (Function::iterator BB = F.end(); BB != F.begin(); ) {
+    --BB;
+    for (BasicBlock::iterator Ins = BB->end(); Ins != BB->begin(); ) {
+      --Ins;
       if (CallInst *CI = dyn_cast<CallInst>(Ins)) {
         if (CI->getCalledFunction() == AssertNoAliasHook) {
           CallSite CS(CI);
