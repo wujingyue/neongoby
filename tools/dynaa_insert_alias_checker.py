@@ -32,6 +32,10 @@ if __name__ == '__main__':
     parser.add_argument('--no-phi',
                         action = 'store_true',
                         default = False)
+    parser.add_argument('--input-alias-checks',
+                        help = 'input file containing alias checks')
+    parser.add_argument('--output-alias-checks',
+                        help = 'output file containing alias checks')
     args = parser.parse_args()
 
     # Initialize output file names after each stage.
@@ -57,6 +61,10 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
+    if args.input_alias_checks is not None:
+        cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
+    if args.output_alias_checks is not None:
+        cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
     cmd = ' '.join((cmd, '-o', bc_ac, '<', bc_orig))
     rcs_utils.invoke(cmd)
 
