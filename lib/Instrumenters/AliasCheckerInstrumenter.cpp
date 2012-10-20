@@ -2,6 +2,7 @@
 
 #define DEBUG_TYPE "dyn-aa"
 
+#include <cstdio>
 #include <string>
 
 #include "llvm/Pass.h"
@@ -57,6 +58,8 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   Type *VoidType;
   IntegerType *CharType, *IntType, *LongType;
   PointerType *CharStarType;
+  // Input alias checks.
+  DenseMap<unsigned, vector<pair<unsigned, unsigned> > > InputAliasChecks;
 };
 }
 
@@ -76,6 +79,12 @@ static cl::opt<string> BaselineAAName(
 static cl::opt<bool> NoPHI("no-phi",
                            cl::desc("Store pointer values into slots and "
                                     "load them at the end of functions"));
+static cl::opt<string> OutputAliasChecksName(
+    "output-alias-checks",
+    cl::desc("Dump all alias checks"));
+static cl::opt<string> InputAliasChecksName(
+    "input-alias-checks",
+    cl::desc("Read all alias checks"));
 
 STATISTIC(NumAliasQueries, "Number of alias queries");
 STATISTIC(NumAliasChecks, "Number of alias checks");
@@ -92,15 +101,18 @@ AliasCheckerInstrumenter::AliasCheckerInstrumenter(): FunctionPass(ID) {
 }
 
 void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<AliasAnalysis>();
+  if (InputAliasChecksName == "") {
+    // We need not run any AA if the alias checks are inputed by the user.
+    AU.addRequired<AliasAnalysis>();
+    if (BaselineAAName != "") {
+      const PassInfo *PI = lookupPassInfo(BaselineAAName);
+      assert(PI && "The baseline AA is not registered");
+      AU.addRequiredID(PI->getTypeInfo());
+    }
+  }
   AU.addRequired<IntraReach>();
   AU.addRequired<DominatorTree>();
   AU.addRequired<IDAssigner>();
-  if (BaselineAAName != "") {
-    const PassInfo *PI = lookupPassInfo(BaselineAAName);
-    assert(PI && "The baseline AA is not registered");
-    AU.addRequiredID(PI->getTypeInfo());
-  }
 }
 
 #if 0
@@ -113,10 +125,7 @@ static bool SortBBByName(const BasicBlock *B1, const BasicBlock *B2) {
 void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
                                                   InstList &Pointers,
                                                   vector<InstPair> &Checks) {
-  AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  AliasAnalysis *BaselineAA = getBaselineAA();
   IntraReach &IR = getAnalysis<IntraReach>();
-
   DenseMap<BasicBlock *, InstList> PointersInBB;
   // TODO: consider arguments
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
@@ -130,8 +139,28 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
     }
   }
 
+  if (InputAliasChecksName != "") {
+    IDAssigner &IDA = getAnalysis<IDAssigner>();
+    DenseMap<unsigned, vector<pair<unsigned, unsigned> > >::iterator I =
+        InputAliasChecks.find(IDA.getFunctionID(&F));
+    if (I != InputAliasChecks.end()) {
+      for (size_t j = 0; j < I->second.size(); ++j) {
+        unsigned InsID1 = I->second[j].first;
+        unsigned InsID2 = I->second[j].second;
+        Instruction *I1 = IDA.getInstruction(InsID1);
+        Instruction *I2 = IDA.getInstruction(InsID2);
+        assert(I1->getParent()->getParent() == &F &&
+               I2->getParent()->getParent() == &F);
+        Checks.push_back(make_pair(I1, I2));
+      }
+    }
+    return;
+  }
+
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
+  AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
+  AliasAnalysis *BaselineAA = getBaselineAA();
   unsigned NumAliasQueriesInF = 0;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
     if (!PointersInBB.count(B1))
@@ -185,8 +214,7 @@ void AliasCheckerInstrumenter::addAliasChecks(
   InstList MergedPointers;
   for (size_t i = 0; i < Pointers.size(); ++i) {
     Instruction *P = Pointers[i];
-    // If P does not reach BB, the alias check does not make
-    // sense because P
+    // If P does not reach BB, the alias check does not make sense because P
     // has an undefined value.
     if (!ReachableBBs.count(P->getParent())) {
       MergedPointers.push_back(NULL);
@@ -334,6 +362,18 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   InstList Pointers;
   computeAliasChecks(F, Pointers, Checks);
 
+  if (OutputAliasChecksName != "") {
+    IDAssigner &IDA = getAnalysis<IDAssigner>();
+    FILE *OutputFile = fopen(OutputAliasChecksName.c_str(), "a");
+    for (size_t i = 0; i < Checks.size(); ++i) {
+      fprintf(OutputFile, "%u: %u %u\n",
+              IDA.getFunctionID(&F),
+              IDA.getInstructionID(Checks[i].first),
+              IDA.getInstructionID(Checks[i].second));
+    }
+    fclose(OutputFile);
+  }
+
   addAliasChecks(F, Pointers, Checks);
 
   // Remove deallocators.
@@ -374,6 +414,21 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
                                        AssertNoAliasHookName,
                                        &M);
 
+  assert(InputAliasChecksName == "" || OutputAliasChecksName == "");
+  // Initialize the output file for alias checks if necessary.
+  if (OutputAliasChecksName != "") {
+    FILE *OutputFile = fopen(OutputAliasChecksName.c_str(), "w");
+    fclose(OutputFile);
+  }
+  // Read input alias checks.
+  if (InputAliasChecksName != "") {
+    FILE *InputFile = fopen(InputAliasChecksName.c_str(), "r");
+    unsigned FuncID, InsID1, InsID2;
+    while (fscanf(InputFile, "%u: %u %u", &FuncID, &InsID1, &InsID2) == 3) {
+      InputAliasChecks[FuncID].push_back(make_pair(InsID1, InsID2));
+    }
+    fclose(InputFile);
+  }
   return true;
 }
 
