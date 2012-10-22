@@ -6,8 +6,12 @@
 #include <cstdio>
 #include <cstdlib>
 
+#define DISABLE_REPORT
+
 extern "C" void ReportMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
+#ifndef DISABLE_REPORT
   fprintf(stderr, "value(%u) = value(%u) = %p\n", VIDOfP, VIDOfQ, V);
+#endif
 }
 
 extern "C" void AbortIfMissed(void *P, unsigned VIDOfP,
