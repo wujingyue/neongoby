@@ -24,6 +24,7 @@
 #include <string>
 #include <sstream>
 #include <unistd.h>
+#include <sys/file.h>
 
 #include "dyn-aa/LogRecord.h"
 
@@ -33,7 +34,9 @@ using namespace dyn_aa;
 struct Environment {
   FILE *LogFile;
 
-  string GetLogFileName() {
+  string GetLogFileName(int pid = 0) {
+    if (pid == 0)
+      pid = getpid();
     const char *LogFileEnv = getenv("LOG_FILE");
     string LogFileName;
     if (!LogFileEnv) {
@@ -42,7 +45,7 @@ struct Environment {
       LogFileName = LogFileEnv;
     }
     ostringstream OS;
-    OS << LogFileName << "-" << getpid();
+    OS << LogFileName << "-" << pid;
     return OS.str();
   }
 
@@ -65,6 +68,18 @@ struct Environment {
       LogFile = fopen(GetLogFileName().c_str(), "ab");
     else
       LogFile = fopen(GetLogFileName().c_str(), "wb");
+  }
+
+  void FlushLogFile() {
+    fflush(LogFile);
+  }
+
+  void LockLogFile() {
+    flock(fileno(LogFile), LOCK_EX);
+  }
+
+  void UnlockLogFile() {
+    flock(fileno(LogFile), LOCK_UN);
   }
 
   pthread_mutex_t Lock;
@@ -90,16 +105,31 @@ void PrintLogRecord(LogRecordType RecordType, const T &Record) {
 }
 
 extern "C" void HookBeforeFork() {
-  Global->CloseLogFile();
+  Global->FlushLogFile();
+  Global->LockLogFile();
 }
 
 extern "C" void HookFork(int Result) {
   if (Result == 0) {
-    // child process: open a new log file
-    Global->OpenLogFile(false);
-  } else {
-    // parent process: open the old log file
+    // child process: wait for copy to finish, then open the log file
+    Global->CloseLogFile();
+
+    string ParentLogFileName = Global->GetLogFileName(getppid());
+    FILE *ParentLogFile = fopen(ParentLogFileName.c_str(), "rb");
+    if (ParentLogFile) {
+      flock(fileno(ParentLogFile), LOCK_EX);
+      flock(fileno(ParentLogFile), LOCK_UN);
+      fclose(ParentLogFile);
+    }
+
     Global->OpenLogFile(true);
+  } else {
+    // parent process: duplicate the log file, then unlock it
+    string ParentLogFileName = Global->GetLogFileName();
+    string ChildLogFileName = Global->GetLogFileName(Result);
+    string CmdLine = "cp " + ParentLogFileName + " " + ChildLogFileName;
+    system(CmdLine.c_str());
+    Global->UnlockLogFile();
   }
 }
 
