@@ -14,6 +14,7 @@
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
 #include "rcs/IntraReach.h"
@@ -82,6 +83,9 @@ static cl::opt<string> InputAliasChecksName(
 static cl::opt<bool> AbortIfMissed(
     "abort-if-missed",
     cl::desc("Abort the program on the first missed alias"));
+static cl::opt<bool> SkipHugeFunctions(
+    "skip-huge-functions",
+    cl::desc("Skip huge functions such as _Z10MYSQLparsePv"));
 
 STATISTIC(NumAliasQueries, "Number of alias queries");
 STATISTIC(NumAliasChecks, "Number of alias checks");
@@ -187,7 +191,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
       }
     }
   }
-  errs() << "  Issued " << NumAliasQueriesInF << " alias queries\n";
+  DEBUG(dbgs() << "  Issued " << NumAliasQueriesInF << " alias queries\n");
   NumAliasQueries += NumAliasQueriesInF;
 }
 
@@ -251,7 +255,7 @@ void AliasCheckerInstrumenter::addAliasChecks(
 void AliasCheckerInstrumenter::addAliasChecks(Function &F,
                                               const InstList &Pointers,
                                               const vector<InstPair> &Checks) {
-  errs() << "  Adding " << Checks.size() << " alias checks\n";
+  DEBUG(dbgs() << "  Adding " << Checks.size() << " alias checks\n");
   NumAliasChecks += Checks.size();
 
   if (NoPHI) {
@@ -346,7 +350,12 @@ AliasAnalysis *AliasCheckerInstrumenter::getBaselineAA() {
 }
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
-  errs() << "\nProcessing function " << F.getName() << "\n";
+  if (SkipHugeFunctions) {
+    if (F.getName() == "_Z10MYSQLparsePv")
+      return false;
+  }
+
+  DEBUG(dbgs() << "\nProcessing function " << F.getName() << "\n");
 
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
