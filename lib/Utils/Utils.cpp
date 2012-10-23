@@ -2,9 +2,12 @@
 
 #include <cassert>
 
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Type.h"
+#include "llvm/Argument.h"
+#include "llvm/Function.h"
 #include "llvm/Instructions.h"
+#include "llvm/Pass.h"
+#include "llvm/Type.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include "dyn-aa/Utils.h"
 
@@ -45,4 +48,17 @@ bool DynAAUtils::PointerIsAccessed(const Value *V) {
     }
   }
   return false;
+}
+
+void DynAAUtils::PrintValue(raw_ostream &O, const Value *V) {
+  if (isa<Function>(V)) {
+    O << V->getName();
+  } else if (const Argument *Arg = dyn_cast<Argument>(V)) {
+    O << Arg->getParent()->getName() << ":  " << *Arg;
+  } else if (const Instruction *Ins = dyn_cast<Instruction>(V)) {
+    O << Ins->getParent()->getParent()->getName() << ":";
+    O << *Ins;
+  } else {
+    O << *V;
+  }
 }

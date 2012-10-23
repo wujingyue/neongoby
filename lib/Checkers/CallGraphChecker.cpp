@@ -11,6 +11,7 @@
 
 #include "dyn-aa/DynamicPointerAnalysis.h"
 #include "dyn-aa/DynamicAliasAnalysis.h"
+#include "dyn-aa/Utils.h"
 
 using namespace llvm;
 using namespace rcs;
@@ -88,7 +89,8 @@ bool CallGraphChecker::runOnModule(Module &M) {
               errs().changeColor(raw_ostream::RED);
               errs() << "Call edge does not exist in the call graph:\n";
               errs().resetColor();
-              errs() << *Ins << "\n";
+
+              DynAAUtils::PrintValue(errs(), Ins); errs() << "\n";
               errs() << "  " << Callee->getName() << "\n";
             }
           }

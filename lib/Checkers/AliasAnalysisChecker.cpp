@@ -32,7 +32,6 @@ struct AliasAnalysisChecker: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  void printValue(raw_ostream &O, const Value *V);
   static bool IsIntraProcQuery(const Value *V1, const Value *V2);
   static const Function *GetContainingFunction(const Value *V);
 };
@@ -95,11 +94,18 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
     }
     if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
       ++NumMissingAliases;
+
       errs().changeColor(raw_ostream::RED);
       errs() << "Missing alias:\n";
       errs().resetColor();
-      printValue(errs(), V1); errs() << "\n";
-      printValue(errs(), V2); errs() << "\n";
+
+      errs() << "[" << IDA.getValueID(V1) << "] ";
+      DynAAUtils::PrintValue(errs(), V1);
+      errs() << "\n";
+
+      errs() << "[" << IDA.getValueID(V2) << "] ";
+      DynAAUtils::PrintValue(errs(), V2);
+      errs() << "\n";
     }
   }
 
@@ -114,21 +120,6 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   }
 
   return false;
-}
-
-void AliasAnalysisChecker::printValue(raw_ostream &O, const Value *V) {
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-  O << "[" << IDA.getValueID(V) << "] ";
-  if (isa<Function>(V)) {
-    O << V->getName();
-  } else if (const Argument *Arg = dyn_cast<Argument>(V)) {
-    O << Arg->getParent()->getName() << ":  " << *Arg;
-  } else if (const Instruction *Ins = dyn_cast<Instruction>(V)) {
-    O << Ins->getParent()->getParent()->getName() << ":";
-    O << *Ins;
-  } else {
-    O << *V;
-  }
 }
 
 bool AliasAnalysisChecker::IsIntraProcQuery(const Value *V1, const Value *V2) {
