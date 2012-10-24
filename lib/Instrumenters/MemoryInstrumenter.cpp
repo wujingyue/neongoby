@@ -802,7 +802,7 @@ void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
 
   if (!HookAllPointers) {
     // opt: skip unaccessed pointers
-    if (!DynAAUtils::PointerIsAccessed(ValueOperand))
+    if (!DynAAUtils::PointerIsDereferenced(ValueOperand))
       return;
   }
 

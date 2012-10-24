@@ -131,7 +131,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
       if (!Ins->getType()->isPointerTy())
         continue;
-      if (!DynAAUtils::PointerIsAccessed(Ins))
+      if (!DynAAUtils::PointerIsDereferenced(Ins))
         continue;
       PointersInBB[BB].push_back(Ins);
       Pointers.push_back(Ins);

@@ -7,6 +7,7 @@
 #include "llvm/Instructions.h"
 #include "llvm/Pass.h"
 #include "llvm/Type.h"
+#include "llvm/Support/CallSite.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "dyn-aa/Utils.h"
@@ -34,8 +35,12 @@ void DynAAUtils::PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total) {
   }
 }
 
-bool DynAAUtils::PointerIsAccessed(const Value *V) {
+bool DynAAUtils::PointerIsDereferenced(const Value *V) {
   assert(V->getType()->isPointerTy());
+  if (isa<Function>(V)) {
+    // We always consider missing call edges important.
+    return true;
+  }
   for (Value::const_use_iterator UI = V->use_begin();
        UI != V->use_end(); ++UI) {
     if (const LoadInst *LI = dyn_cast<LoadInst>(*UI)) {
@@ -45,6 +50,11 @@ bool DynAAUtils::PointerIsAccessed(const Value *V) {
     if (const StoreInst *SI = dyn_cast<StoreInst>(*UI)) {
       if (SI->getPointerOperand() == V)
         return true;
+    }
+    ImmutableCallSite CS(*UI);
+    if (CS && CS.getCalledValue() == V) {
+      // Return true if V is used as a callee.
+      return true;
     }
   }
   return false;

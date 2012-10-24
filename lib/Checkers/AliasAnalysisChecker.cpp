@@ -88,8 +88,8 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
     if (IntraProc && !IsIntraProcQuery(V1, V2)) {
       continue;
     }
-    if (!DynAAUtils::PointerIsAccessed(V1) ||
-        !DynAAUtils::PointerIsAccessed(V2)) {
+    if (!DynAAUtils::PointerIsDereferenced(V1) ||
+        !DynAAUtils::PointerIsDereferenced(V2)) {
       continue;
     }
     if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
