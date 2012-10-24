@@ -74,6 +74,8 @@ if __name__ == '__main__':
         cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
     if args.output_alias_checks is not None:
         cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
+    # Output stats by default.
+    cmd = ' '.join((cmd, '-stats'))
     cmd = ' '.join((cmd, '-o', bc_ac, '<', bc_orig))
     rcs_utils.invoke(cmd)
 
