@@ -1,3 +1,4 @@
+// vim: sw=2
 // Author: Jingyue
 
 #define DEBUG_TYPE "dyn-aa"
@@ -83,9 +84,9 @@ static cl::opt<string> InputAliasChecksName(
 static cl::opt<bool> AbortIfMissed(
     "abort-if-missed",
     cl::desc("Abort the program on the first missed alias"));
-static cl::opt<bool> SkipHugeFunctions(
-    "skip-huge-functions",
-    cl::desc("Skip huge functions such as _Z10MYSQLparsePv"));
+
+static cl::list<string> OnlineBlackList("online-black-list",
+    cl::desc("Don't add checks to these functions"));
 
 STATISTIC(NumAliasQueries, "Number of alias queries");
 STATISTIC(NumAliasChecks, "Number of alias checks");
@@ -350,9 +351,13 @@ AliasAnalysis *AliasCheckerInstrumenter::getBaselineAA() {
 }
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
-  if (SkipHugeFunctions) {
-    if (F.getName() == "_Z10MYSQLparsePv")
-      return false;
+  // TODO: now the blacklist is short. if it is long, we should use a hash set
+  if (OnlineBlackList.size() != 0) {
+    for (unsigned i = 0; i < OnlineBlackList.size(); i++) {
+      if (OnlineBlackList[i] == F.getName()) {
+        return false;
+      }
+    }
   }
 
   DEBUG(dbgs() << "\nProcessing function " << F.getName() << "\n");

@@ -1,3 +1,4 @@
+// vim: shiftwidth=2
 // Author: Jingyue
 
 // Three types of messages:

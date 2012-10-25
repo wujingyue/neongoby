@@ -1,3 +1,4 @@
+// vim: sw=2
 // Author: Jingyue
 
 #define DEBUG_TYPE "dyn-aa"
@@ -47,6 +48,7 @@ struct MemoryInstrumenter: public ModulePass {
   // Includes not only "malloc", but also similar memory allocation functions
   // such as "valloc" and "calloc".
   bool isMalloc(Function *F) const;
+  bool isWhiteListed(Function &F) const;
   void instrumentInstructionIfNecessary(Instruction *I);
   // Emit code to handle memory allocation.
   // If <Success>, range [<Start>, <Start> + <Size>) is allocated.
@@ -107,6 +109,9 @@ static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
 
 static cl::opt<bool> HookFork("hook-fork", cl::desc("Hook fork() and vfork()"));
+
+static cl::list<string> OfflineWhiteList(
+    "offline-white-list", cl::desc("Functions which should be hooked"));
 
 void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
@@ -536,6 +541,19 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   }
 }
 
+bool MemoryInstrumenter::isWhiteListed(Function &F) const {
+  // TODO: now the whitelist is short. if it is long, we should use a hash set
+  if (OfflineWhiteList.size() != 0) {
+    for (unsigned i = 0; i < OfflineWhiteList.size(); i++) {
+      if (OfflineWhiteList[i] == F.getName()) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
 bool MemoryInstrumenter::runOnModule(Module &M) {
   // Initialize the list of memory allocatores.
   MallocNames.push_back("malloc");
@@ -568,6 +586,8 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   // Hook memory allocations and memory accesses.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (F->isDeclaration())
+      continue;
+    if (!isWhiteListed(*F))
       continue;
     // The second argument of main(int argc, char *argv[]) needs special
     // handling, which is done in instrumentMainArgs.
