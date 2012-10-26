@@ -302,7 +302,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     Start = Ins;
     Size = CS.getArgument(1);
     Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
-  } else if (CalleeName == "strdup") {
+  } else if (CalleeName == "strdup" || CalleeName == "__strdup") {
     Start = Ins;
     // Use strlen to compute the length of the allocated memory.
     Value *StrLen = EmitStrLen(Ins, Builder, &TD);
@@ -564,6 +564,7 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   MallocNames.push_back("_Znaj");
   MallocNames.push_back("_Znam");
   MallocNames.push_back("strdup");
+  MallocNames.push_back("__strdup");
   MallocNames.push_back("getline");
 
   // Check whether there are unsupported language features.
