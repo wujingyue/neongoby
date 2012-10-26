@@ -80,8 +80,6 @@ void LogProcessor::processLog(bool Reversed) {
           NumBytesRead += sizeof Record;
         }
         break;
-      default:
-        assert(false);
     }
     ReadData(&RecordType, sizeof RecordType, Reversed, LogFile);
     NumBytesRead += sizeof RecordType;
