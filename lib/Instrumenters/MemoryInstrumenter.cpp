@@ -49,6 +49,8 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentMalloc(const CallSite &CS);
   void instrumentAlloca(AllocaInst *AI);
   void instrumentStoreInst(StoreInst *SI);
+  void instrumentReturnInst(ReturnInst *RI);
+  void instrumentCallSite(Instruction *I);
   void instrumentPointer(Value *ValueOperand,
                          Value *PointerOperand,
                          Instruction *Loc);
@@ -674,6 +676,39 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
   }
 }
 
+void MemoryInstrumenter::instrumentReturnInst(ReturnInst *RI) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  
+  Value *ValueReturned = RI->getReturnValue();
+  const Type *ValueType = ValueReturned->getType();
+  if (ValueType == LongType || ValueType->isPointerTy()) {
+    vector<Value *> Args;
+    
+    Args.push_back(ConstantPointerNull::get(CharStarType));
+    Args.push_back(ConstantPointerNull::get(CharStarType));
+    
+    unsigned InsID = IDA.getInstructionID(RI);
+    assert(InsID != IDAssigner::InvalidID);
+    Args.push_back(ConstantInt::get(IntType, InsID));
+    
+    CallInst::Create(AddrTakenHook, Args, "", RI);
+  }
+}
+
+void MemoryInstrumenter::instrumentCallSite(Instruction *I) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  vector<Value *> Args;
+  
+  Args.push_back(ConstantPointerNull::get(CharStarType));
+  Args.push_back(ConstantPointerNull::get(CharStarType));
+  
+  unsigned InsID = IDA.getInstructionID(I);
+  assert(InsID != IDAssigner::InvalidID);
+  Args.push_back(ConstantInt::get(IntType, InsID));
+  
+  CallInst::Create(AddrTakenHook, Args, "", I);
+}
+
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   DEBUG(dbgs() << "Processing" << *I << "\n";);
 
@@ -686,6 +721,12 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   // store long, long * is considered as a pointer store as well.
   if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
     instrumentStoreInst(SI);
+    return;
+  }
+  
+  // Instrument pointer returns, i.e. return X *.
+  if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
+    instrumentReturnInst(RI);
     return;
   }
 
@@ -703,13 +744,15 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
     if (Function *Callee = CS.getCalledFunction()) {
-      if (isMalloc(Callee))
+      if (isMalloc(Callee)) {
         instrumentMalloc(CS);
-      if (HookFork) {
+      } else if (HookFork) {
         StringRef CalleeName = Callee->getName();
         if (CalleeName == "fork" || CalleeName == "vfork") {
           instrumentFork(CS);
         }
+      } else if (I->getType()->isPointerTy()) {
+        instrumentCallSite(I);
       }
     }
   }
@@ -721,6 +764,7 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
 
 void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
   BasicBlock::iterator Loc;
+  //LJY if (CallSite) Loc = I
   if (isa<PHINode>(I)) {
     // Cannot insert hooks right after a PHI, because PHINodes have to be
     // grouped together.
