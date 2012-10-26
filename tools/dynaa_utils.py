@@ -1,4 +1,5 @@
 import os
+import sys
 import string
 import rcs_utils
 
@@ -23,6 +24,8 @@ def get_linking_flags(prog):
         linking_flags.extend(['-lcrypt'])
     if prog.startswith('mysqld'):
         linking_flags.extend(['-lcrypt', '-ldl', '-lz'])
+    if prog.startswith('wget'):
+        linking_flags.extend(['-lrt', '-lgnutls', '-lidn'])
     return linking_flags
 
 def load_aa(cmd, *aas):
@@ -30,7 +33,7 @@ def load_aa(cmd, *aas):
         # Some AAs require additional plugins.
         if aa == 'ds-aa':
             cmd = rcs_utils.load_plugin(cmd, 'LLVMDataStructure')
-        elif aa == 'anders-aa':
+        elif aa == 'anders-aa' or aa == 'su-aa':
             cmd = rcs_utils.load_plugin(cmd, 'RCSAndersens')
         elif aa == 'bc2bdd-aa':
             if not os.path.exists('bc2bdd.conf'):
@@ -45,4 +48,5 @@ def load_aa(cmd, *aas):
     return cmd
 
 def get_aa_choices():
-    return ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa']
+    return ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa',
+            'su-aa']
