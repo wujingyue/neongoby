@@ -40,9 +40,10 @@ struct AliasAnalysisChecker: public ModulePass {
 static cl::opt<bool> IntraProc(
     "intra",
     cl::desc("Whether the checked AA supports intra-procedural queries only"));
-static cl::opt<string> InputDynamicAliases(
-    "input-dyn-aliases",
-    cl::desc("Input dynamic aliases"));
+static cl::opt<string> InputDynamicAliases("input-dyn-aliases",
+                                           cl::desc("Input dynamic aliases"));
+static cl::opt<bool> CheckAllPointers("check-all-pointers",
+                                      cl::desc("Check all pointers"));
 
 static RegisterPass<AliasAnalysisChecker> X(
     "check-aa",
@@ -88,9 +89,17 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
     if (IntraProc && !IsIntraProcQuery(V1, V2)) {
       continue;
     }
-    if (!DynAAUtils::PointerIsDereferenced(V1) ||
-        !DynAAUtils::PointerIsDereferenced(V2)) {
-      continue;
+    if (!CheckAllPointers) {
+      if (!DynAAUtils::PointerIsDereferenced(V1) ||
+          !DynAAUtils::PointerIsDereferenced(V2)) {
+        continue;
+      }
+    }
+    if (CheckAllPointers) {
+      if (isa<BitCastInst>(V1) || isa<BitCastInst>(V2))
+        continue;
+      if (isa<PHINode>(V1) || isa<PHINode>(V2))
+        continue;
     }
     if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
       ++NumMissingAliases;
