@@ -123,7 +123,6 @@ uint64_t MemoryInstrumenter::BitLengthToByteLength(uint64_t Size) {
   assert(Size == 1 || Size % 8 == 0);
   // The type size shouldn't be a very large number; otherwise, how would
   // you allocate it?
-  assert((int64_t)Size > 0);
   if (Size != 1)
     Size /= 8;
   return Size;
