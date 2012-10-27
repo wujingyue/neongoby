@@ -3,7 +3,6 @@
 import argparse
 import os
 import sys
-import string
 import rcs_utils
 import dynaa_utils
 
@@ -24,18 +23,20 @@ if __name__ == '__main__':
     instrumented_exe = args.prog + '.inst'
 
     cmd = dynaa_utils.load_all_plugins('opt')
-    cmd = string.join((cmd, '-instrument-memory'))
+    # Preparer doesn't preserve IDAssigner, so we put it after
+    # -instrument-memory.
+    cmd = ' '.join((cmd, '-instrument-memory', '-prepare'))
     if args.hook_all:
-        cmd = string.join((cmd, '-hook-all-pointers'))
+        cmd = ' '.join((cmd, '-hook-all-pointers'))
     if args.hook_fork:
-        cmd = string.join((cmd, '-hook-fork'))
-    cmd = string.join((cmd, '-o', instrumented_bc))
-    cmd = string.join((cmd, '<', args.prog + '.bc'))
+        cmd = ' '.join((cmd, '-hook-fork'))
+    cmd = ' '.join((cmd, '-o', instrumented_bc))
+    cmd = ' '.join((cmd, '<', args.prog + '.bc'))
     rcs_utils.invoke(cmd)
 
-    cmd = string.join(('clang++', instrumented_bc,
-                       rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a',
-                       '-o', instrumented_exe))
+    cmd = ' '.join(('clang++', instrumented_bc,
+                    rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a',
+                    '-o', instrumented_exe))
     linking_flags = dynaa_utils.get_linking_flags(args.prog)
-    cmd = string.join((cmd, string.join(linking_flags)))
+    cmd = ' '.join((cmd, ' '.join(linking_flags)))
     rcs_utils.invoke(cmd)
