@@ -33,10 +33,15 @@ struct AliasAnalysisChecker: public ModulePass {
 
  private:
   static bool IsIntraProcQuery(const Value *V1, const Value *V2);
+  static bool CompareMissingAliases(const ValuePair &VP1, const ValuePair &VP2);
   static const Function *GetContainingFunction(const Value *V);
+  static pair<Function *, Function *> GetContainingFunctionPair(
+      const ValuePair &VP);
+
   void collectDynamicAliases(DenseSet<ValuePair> &DynamicAliases);
   void collectMissingAliases(const DenseSet<ValuePair> &DynamicAliases,
                              vector<ValuePair> &MissingAliases);
+  void sortMissingAliases(vector<ValuePair> &MissingAliases);
   void reportMissingAliases(const vector<ValuePair> &MissingAliases);
 };
 }
@@ -146,12 +151,26 @@ void AliasAnalysisChecker::reportMissingAliases(
   }
 }
 
+bool AliasAnalysisChecker::CompareMissingAliases(const ValuePair &VP1,
+                                                 const ValuePair &VP2) {
+  pair<Function *, Function *> FP1 = GetContainingFunctionPair(VP1);
+  pair<Function *, Function *> FP2 = GetContainingFunctionPair(VP2);
+  return FP1 < FP2;
+}
+
+void AliasAnalysisChecker::sortMissingAliases(
+    vector<ValuePair> &MissingAliases) {
+  sort(MissingAliases.begin(), MissingAliases.end(), CompareMissingAliases);
+}
+
 bool AliasAnalysisChecker::runOnModule(Module &M) {
   DenseSet<ValuePair> DynamicAliases;
   collectDynamicAliases(DynamicAliases);
 
   vector<ValuePair> MissingAliases;
   collectMissingAliases(DynamicAliases, MissingAliases);
+
+  sortMissingAliases(MissingAliases);
 
   reportMissingAliases(MissingAliases);
 
@@ -171,4 +190,10 @@ const Function *AliasAnalysisChecker::GetContainingFunction(const Value *V) {
   if (const Argument *Arg = dyn_cast<Argument>(V))
     return Arg->getParent();
   return NULL;
+}
+
+pair<Function *, Function *> AliasAnalysisChecker::GetContainingFunctionPair(
+    const ValuePair &VP) {
+  return make_pair(const_cast<Function *>(GetContainingFunction(VP.first)),
+                   const_cast<Function *>(GetContainingFunction(VP.first)));
 }
