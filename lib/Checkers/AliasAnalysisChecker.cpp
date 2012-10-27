@@ -34,6 +34,10 @@ struct AliasAnalysisChecker: public ModulePass {
  private:
   static bool IsIntraProcQuery(const Value *V1, const Value *V2);
   static const Function *GetContainingFunction(const Value *V);
+  void collectDynamicAliases(DenseSet<ValuePair> &DynamicAliases);
+  void collectMissingAliases(const DenseSet<ValuePair> &DynamicAliases,
+                             vector<ValuePair> &MissingAliases);
+  void reportMissingAliases(const vector<ValuePair> &MissingAliases);
 };
 }
 
@@ -64,16 +68,15 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IDAssigner>();
 }
 
-bool AliasAnalysisChecker::runOnModule(Module &M) {
-  AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-
-  DenseSet<ValuePair> DynamicAliases;
+void AliasAnalysisChecker::collectDynamicAliases(
+    DenseSet<ValuePair> &DynamicAliases) {
+  DynamicAliases.clear();
   if (InputDynamicAliases == "") {
     DynamicAliasAnalysis &DAA = getAnalysis<DynamicAliasAnalysis>();
     DynamicAliases.insert(DAA.getAllAliases().begin(),
                           DAA.getAllAliases().end());
   } else {
+    IDAssigner &IDA = getAnalysis<IDAssigner>();
     ifstream InputFile(InputDynamicAliases.c_str());
     unsigned VID1, VID2;
     while (InputFile >> VID1 >> VID2) {
@@ -81,9 +84,15 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
       DynamicAliases.insert(make_pair(V1, V2));
     }
   }
+}
 
-  unsigned NumMissingAliases = 0;
-  for (DenseSet<ValuePair>::iterator I = DynamicAliases.begin();
+void AliasAnalysisChecker::collectMissingAliases(
+    const DenseSet<ValuePair> &DynamicAliases,
+    vector<ValuePair> &MissingAliases) {
+  AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
+
+  MissingAliases.clear();
+  for (DenseSet<ValuePair>::const_iterator I = DynamicAliases.begin();
        I != DynamicAliases.end(); ++I) {
     Value *V1 = I->first, *V2 = I->second;
     if (IntraProc && !IsIntraProcQuery(V1, V2)) {
@@ -102,31 +111,49 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
         continue;
     }
     if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
-      ++NumMissingAliases;
-
-      errs().changeColor(raw_ostream::RED);
-      errs() << "Missing alias:\n";
-      errs().resetColor();
-
-      errs() << "[" << IDA.getValueID(V1) << "] ";
-      DynAAUtils::PrintValue(errs(), V1);
-      errs() << "\n";
-
-      errs() << "[" << IDA.getValueID(V2) << "] ";
-      DynAAUtils::PrintValue(errs(), V2);
-      errs() << "\n";
+      MissingAliases.push_back(make_pair(V1, V2));
     }
   }
+}
 
-  if (NumMissingAliases == 0) {
+void AliasAnalysisChecker::reportMissingAliases(
+    const vector<ValuePair> &MissingAliases) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+
+  for (size_t i = 0; i < MissingAliases.size(); ++i) {
+    Value *V1 = MissingAliases[i].first, *V2 = MissingAliases[i].second;
+    errs().changeColor(raw_ostream::RED);
+    errs() << "Missing alias:\n";
+    errs().resetColor();
+
+    errs() << "[" << IDA.getValueID(V1) << "] ";
+    DynAAUtils::PrintValue(errs(), V1);
+    errs() << "\n";
+
+    errs() << "[" << IDA.getValueID(V2) << "] ";
+    DynAAUtils::PrintValue(errs(), V2);
+    errs() << "\n";
+  }
+
+  if (MissingAliases.empty()) {
     errs().changeColor(raw_ostream::GREEN, true);
     errs() << "Congrats! You passed all the tests.\n";
     errs().resetColor();
   } else {
     errs().changeColor(raw_ostream::RED, true);
-    errs() << "Detected " << NumMissingAliases << " missing aliases.\n";
+    errs() << "Detected " << MissingAliases.size() << " missing aliases.\n";
     errs().resetColor();
   }
+}
+
+bool AliasAnalysisChecker::runOnModule(Module &M) {
+  DenseSet<ValuePair> DynamicAliases;
+  collectDynamicAliases(DynamicAliases);
+
+  vector<ValuePair> MissingAliases;
+  collectMissingAliases(DynamicAliases, MissingAliases);
+
+  reportMissingAliases(MissingAliases);
 
   return false;
 }
