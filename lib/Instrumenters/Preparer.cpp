@@ -127,7 +127,7 @@ void Preparer::expandAlloca(AllocaInst *AI) {
         ConstantInt::get(cast<IntegerType>(Size->getType()), 1),
         "expanded.size",
         AI);
-    AI->setOperand(1, ExpandedSize);
+    AI->setOperand(0, ExpandedSize);
     return;
   }
 
