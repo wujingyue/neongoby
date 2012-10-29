@@ -7,7 +7,9 @@ namespace dyn_aa {
 enum LogRecordType {
   AddrTakenDecl = 0,
   TopLevelPointTo,
-  AddrTakenPointTo
+  AddrTakenPointTo,
+  CallInstruction,
+  ReturnInstruction
 } __attribute__((packed));
 
 struct AddrTakenDeclLogRecord {
@@ -44,6 +46,20 @@ struct AddrTakenPointToLogRecord {
   void *PointerAddress;
   void *PointeeAddress;
   // <InstructionID> is not a must, but makes debugging a lot easier. 
+  unsigned InstructionID;
+} __attribute__((packed));
+
+struct CallInstructionLogRecord {
+  CallInstructionLogRecord() {}
+  CallInstructionLogRecord(unsigned InsID): InstructionID(InsID) {}
+
+  unsigned InstructionID;
+} __attribute__((packed));
+
+struct ReturnInstructionLogRecord {
+  ReturnInstructionLogRecord() {}
+  ReturnInstructionLogRecord(unsigned InsID): InstructionID(InsID) {}
+
   unsigned InstructionID;
 } __attribute__((packed));
 }

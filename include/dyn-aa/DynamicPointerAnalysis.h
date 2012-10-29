@@ -33,6 +33,8 @@ struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis, p
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
   void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
   void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
+  void processCallInstruction(const CallInstructionLogRecord &Record);
+  void processReturnInstruction(const ReturnInstructionLogRecord &Record);
 
  private:
   // Returns the value ID of <Addr>'s allocator.

@@ -69,6 +69,8 @@ struct MemoryInstrumenter: public ModulePass {
   Function *MainArgsAllocHook;
   Function *TopLevelHook;
   Function *AddrTakenHook;
+  Function *CallHook;
+  Function *ReturnHook;
   Function *GlobalsAllocHook;
   Function *MemHooksIniter;
   Function *AfterForkHook;
@@ -110,6 +112,8 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   MainArgsAllocHook = NULL;
   TopLevelHook = NULL;
   AddrTakenHook = NULL;
+  CallHook = NULL;
+  ReturnHook = NULL;
   GlobalsAllocHook = NULL;
   MemHooksIniter = NULL;
   Main = NULL;
@@ -298,10 +302,10 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
 void MemoryInstrumenter::checkFeatures(Module &M) {
   // Check whether any memory allocation function can
   // potentially be pointed by function pointers.
-  // Also, all intrinsic functions will be called directly, i.e. not via
-  // function pointers.
+  // Also, all intrinsic functions and external functions will be called
+  // directly, i.e. not via function pointers.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (isMalloc(F) || F->isIntrinsic()) {
+    if (isMalloc(F) || F->isIntrinsic() || F->isDeclaration()) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
         User *Usr = *UI;
         assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
@@ -356,6 +360,8 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(DynAAUtils::MainArgsAllocHookName) == NULL);
   assert(M.getFunction(DynAAUtils::TopLevelHookName) == NULL);
   assert(M.getFunction(DynAAUtils::AddrTakenHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::CallHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::ReturnHookName) == NULL);
   assert(M.getFunction(DynAAUtils::GlobalsAllocHookName) == NULL);
   assert(M.getFunction(DynAAUtils::MemHooksIniterName) == NULL);
   assert(M.getFunction(DynAAUtils::AfterForkHookName) == NULL);
@@ -419,6 +425,28 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                    GlobalValue::ExternalLinkage,
                                    DynAAUtils::AddrTakenHookName,
                                    &M);
+
+  // Setup CallHook.
+  ArgTypes.clear();
+  ArgTypes.push_back(IntType);
+  FunctionType *CallHookType = FunctionType::get(VoidType,
+                                                 ArgTypes,
+                                                 false);
+  CallHook = Function::Create(CallHookType,
+                              GlobalValue::ExternalLinkage,
+                              DynAAUtils::CallHookName,
+                              &M);
+
+  // Setup ReturnHook.
+  ArgTypes.clear();
+  ArgTypes.push_back(IntType);
+  FunctionType *ReturnHookType = FunctionType::get(VoidType,
+                                                   ArgTypes,
+                                                   false);
+  ReturnHook = Function::Create(ReturnHookType,
+                                GlobalValue::ExternalLinkage,
+                                DynAAUtils::ReturnHookName,
+                                &M);
 
   // Setup GlobalsAccessHook.
   FunctionType *GlobalsAllocHookType = FunctionType::get(VoidType, false);
@@ -486,8 +514,9 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     // These hooks added by us don't have a value ID.
     if (MemAllocHook == F || MainArgsAllocHook == F || TopLevelHook == F ||
-        AddrTakenHook == F || GlobalsAllocHook == F || MemHooksIniter == F ||
-        AfterForkHook == F || BeforeForkHook == F) {
+        AddrTakenHook == F || CallHook == F || ReturnHook == F ||
+        GlobalsAllocHook == F || MemHooksIniter == F || AfterForkHook == F ||
+        BeforeForkHook == F) {
       continue;
     }
     // Ignore intrinsic functions because we cannot take the address of
@@ -678,35 +707,29 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
 
 void MemoryInstrumenter::instrumentReturnInst(ReturnInst *RI) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  
+
   Value *ValueReturned = RI->getReturnValue();
   const Type *ValueType = ValueReturned->getType();
-  if (ValueType == LongType || ValueType->isPointerTy()) {
+  if (ValueType->isPointerTy()) {
     vector<Value *> Args;
-    
-    Args.push_back(ConstantPointerNull::get(CharStarType));
-    Args.push_back(ConstantPointerNull::get(CharStarType));
-    
+
     unsigned InsID = IDA.getInstructionID(RI);
     assert(InsID != IDAssigner::InvalidID);
     Args.push_back(ConstantInt::get(IntType, InsID));
-    
-    CallInst::Create(AddrTakenHook, Args, "", RI);
+
+    CallInst::Create(ReturnHook, Args, "", RI);
   }
 }
 
 void MemoryInstrumenter::instrumentCallSite(Instruction *I) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   vector<Value *> Args;
-  
-  Args.push_back(ConstantPointerNull::get(CharStarType));
-  Args.push_back(ConstantPointerNull::get(CharStarType));
-  
+
   unsigned InsID = IDA.getInstructionID(I);
   assert(InsID != IDAssigner::InvalidID);
   Args.push_back(ConstantInt::get(IntType, InsID));
-  
-  CallInst::Create(AddrTakenHook, Args, "", I);
+
+  CallInst::Create(CallHook, Args, "", I);
 }
 
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
@@ -723,11 +746,13 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     instrumentStoreInst(SI);
     return;
   }
-  
-  // Instrument pointer returns, i.e. return X *.
-  if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
-    instrumentReturnInst(RI);
-    return;
+
+  if (HookAllPointers) {
+    // Instrument pointer returns, i.e. return X *.
+    if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
+      instrumentReturnInst(RI);
+      return;
+    }
   }
 
   // Any instructions of a pointer type, including mallocs and AllocaInsts.
@@ -744,17 +769,16 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
     if (Function *Callee = CS.getCalledFunction()) {
-      if (isMalloc(Callee)) {
+      if (isMalloc(Callee))
         instrumentMalloc(CS);
-      } else if (HookFork) {
+      if (HookFork) {
         StringRef CalleeName = Callee->getName();
         if (CalleeName == "fork" || CalleeName == "vfork") {
           instrumentFork(CS);
         }
-      } else if (I->getType()->isPointerTy()) {
-        instrumentCallSite(I);
       }
     }
+    instrumentCallSite(I);
   }
 
   // Instrument AllocaInsts.
@@ -764,7 +788,6 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
 
 void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
   BasicBlock::iterator Loc;
-  //LJY if (CallSite) Loc = I
   if (isa<PHINode>(I)) {
     // Cannot insert hooks right after a PHI, because PHINodes have to be
     // grouped together.

@@ -22,6 +22,8 @@ struct LogDumper: public LogProcessor {
   virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &);
   virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &);
   virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &);
+  virtual void processCallInstruction(const CallInstructionLogRecord &);
+  virtual void processReturnInstruction(const ReturnInstructionLogRecord &);
 };
 }
 
@@ -44,6 +46,16 @@ void LogDumper::processAddrTakenPointTo(
     const AddrTakenPointToLogRecord &Record) {
   printf("%u: %p => %p\n",
          Record.InstructionID, Record.PointerAddress, Record.PointeeAddress);
+}
+
+void LogDumper::processCallInstruction(
+    const CallInstructionLogRecord &Record) {
+  printf("%u: call\n", Record.InstructionID);
+}
+
+void LogDumper::processReturnInstruction(
+    const ReturnInstructionLogRecord &Record) {
+  printf("%u: return\n", Record.InstructionID);
 }
 
 int main(int argc, char *argv[]) {

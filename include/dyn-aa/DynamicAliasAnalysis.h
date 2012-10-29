@@ -42,6 +42,8 @@ struct DynamicAliasAnalysis: public ModulePass,
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
   void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
   void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
+  void processCallInstruction(const CallInstructionLogRecord &Record);
+  void processReturnInstruction(const ReturnInstructionLogRecord &Record);
 
   const DenseSet<rcs::ValuePair> &getAllAliases() const {
     return Aliases;

@@ -139,7 +139,7 @@ extern "C" void HookMemAlloc(unsigned ValueID, void *StartAddr,
   // Bound is sometimes zero for array allocation.
   if (Bound > 0) {
     pthread_mutex_lock(&Global->Lock);
-    // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, Start, Bound);
+    // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, StartAddr, Bound);
     PrintLogRecord(AddrTakenDecl,
                    AddrTakenDeclLogRecord(StartAddr, Bound, ValueID));
     pthread_mutex_unlock(&Global->Lock);
@@ -163,7 +163,24 @@ extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
 
 extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
   pthread_mutex_lock(&Global->Lock);
+  // fprintf(stderr, "HookAddrTaken(%p, %p, %u)\n", Value, Pointer, InsID);
   PrintLogRecord(AddrTakenPointTo,
                  AddrTakenPointToLogRecord(Pointer, Value, InsID));
+  pthread_mutex_unlock(&Global->Lock);
+}
+
+extern "C" void HookCall(unsigned InsID) {
+  pthread_mutex_lock(&Global->Lock);
+  // fprintf(stderr, "HookCall(%u)\n", InsID);
+  PrintLogRecord(CallInstruction,
+                 CallInstructionLogRecord(InsID));
+  pthread_mutex_unlock(&Global->Lock);
+}
+
+extern "C" void HookReturn(unsigned InsID) {
+  pthread_mutex_lock(&Global->Lock);
+  // fprintf(stderr, "HookReturn(%u)\n", InsID);
+  PrintLogRecord(ReturnInstruction,
+                 ReturnInstructionLogRecord(InsID));
   pthread_mutex_unlock(&Global->Lock);
 }

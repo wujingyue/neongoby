@@ -8,6 +8,7 @@
 
 #include <string>
 #include <cstdio>
+#include <iostream>
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/CommandLine.h"
@@ -28,6 +29,8 @@ static cl::opt<string> LogFileName(
 STATISTIC(NumAddrTakenDecls, "Number of addr-taken declaration records");
 STATISTIC(NumAddrTakenPointTos, "Number of addr-taken point-to records");
 STATISTIC(NumTopLevelPointTos, "Number of top-level point-tos records");
+STATISTIC(NumCallInstructions, "Number of call instructions records");
+STATISTIC(NumReturnInstructions, "Number of return instructions records");
 STATISTIC(NumRecords, "Number of all records");
 
 void LogProcessor::processLog(bool Reversed) {
@@ -80,6 +83,25 @@ void LogProcessor::processLog(bool Reversed) {
           NumBytesRead += sizeof Record;
         }
         break;
+      case CallInstruction:
+        {
+          CallInstructionLogRecord Record;
+          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
+          assert(R);
+          processCallInstruction(Record);
+          ++NumCallInstructions;
+          NumBytesRead += sizeof Record;
+        }
+        break;
+      case ReturnInstruction:
+        {
+          ReturnInstructionLogRecord Record;
+          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
+          assert(R);
+          processReturnInstruction(Record);
+          ++NumReturnInstructions;
+          NumBytesRead += sizeof Record;
+        }
     }
     ReadData(&RecordType, sizeof RecordType, Reversed, LogFile);
     NumBytesRead += sizeof RecordType;

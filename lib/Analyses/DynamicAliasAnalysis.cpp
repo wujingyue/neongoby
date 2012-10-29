@@ -134,6 +134,16 @@ void DynamicAliasAnalysis::processAddrTakenPointTo(
   // Do nothing.
 }
 
+void DynamicAliasAnalysis::processCallInstruction(
+    const CallInstructionLogRecord &Record) {
+  // Do nothing.
+}
+
+void DynamicAliasAnalysis::processReturnInstruction(
+    const ReturnInstructionLogRecord &Record) {
+  // Do nothing.
+}
+
 void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
   ++NumRemoveOps;
   if (ValueID < PointingTo.size() && PointingTo[ValueID].first != NULL) {

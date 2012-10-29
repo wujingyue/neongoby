@@ -11,6 +11,8 @@ struct LogProcessor {
   virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &) = 0;
   virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &) = 0;
   virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &) = 0;
+  virtual void processCallInstruction(const CallInstructionLogRecord &) = 0;
+  virtual void processReturnInstruction(const ReturnInstructionLogRecord &) = 0;
 
 private:
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);
