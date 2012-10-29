@@ -264,7 +264,7 @@ void AliasCheckerInstrumenter::addAliasChecks(Function &F,
     AllocaInst *Slots = new AllocaInst(
         CharStarType,
         ConstantInt::get(IntType, Pointers.size()),
-        "dynaa.slots",
+        DynAAUtils::SlotsName,
         InsertPos);
     Type *Types[] = {CharStarType, LongType};
     Function *LLVMMemset = Intrinsic::getDeclaration(F.getParent(),

@@ -1,6 +1,7 @@
 // Author: Jingyue
 
 #include <cassert>
+#include <string>
 
 #include "llvm/Argument.h"
 #include "llvm/Function.h"
@@ -12,8 +13,19 @@
 
 #include "dyn-aa/Utils.h"
 
+using namespace std;
 using namespace llvm;
 using namespace dyn_aa;
+
+const string DynAAUtils::MemAllocHookName = "HookMemAlloc";
+const string DynAAUtils::MainArgsAllocHookName = "HookMainArgsAlloc";
+const string DynAAUtils::TopLevelHookName = "HookTopLevel";
+const string DynAAUtils::AddrTakenHookName = "HookAddrTaken";
+const string DynAAUtils::GlobalsAllocHookName = "HookGlobalsAlloc";
+const string DynAAUtils::MemHooksIniterName = "InitMemHooks";
+const string DynAAUtils::AfterForkHookName = "HookFork";
+const string DynAAUtils::BeforeForkHookName = "HookBeforeFork";
+const string DynAAUtils::SlotsName = "dynaa.slots";
 
 void DynAAUtils::PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total) {
   assert(Total > 0);

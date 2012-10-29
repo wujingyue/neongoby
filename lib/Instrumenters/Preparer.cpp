@@ -6,8 +6,6 @@
 
 #include <string>
 
-#include "rcs/Version.h"
-
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/DerivedTypes.h"
@@ -46,6 +44,8 @@ struct Preparer: public ModulePass {
   void allocateExtraBytes(Module &M);
   void expandAllocas(Function *F);
   void expandAlloca(AllocaInst *AI);
+  void fillInAllocationSize(Module &M);
+  void fillInAllocationSize(CallSite CS);
 };
 }
 
@@ -67,6 +67,7 @@ Preparer::Preparer(): ModulePass(ID) {}
 bool Preparer::runOnModule(Module &M) {
   replaceUndefsWithNull(M);
   allocateExtraBytes(M);
+  fillInAllocationSize(M);
   return true;
 }
 
@@ -121,6 +122,10 @@ void Preparer::expandAllocas(Function *F) {
 }
 
 void Preparer::expandAlloca(AllocaInst *AI) {
+  // Skip dynaa.slots which is added by AliasCheckerInstrumenter.
+  if (AI->getName().startswith(DynAAUtils::SlotsName))
+    return;
+
   if (AI->isArrayAllocation()) {
     // e.g. %32 = alloca i8, i64 %conv164
     Value *Size = AI->getArraySize();
@@ -161,4 +166,53 @@ unsigned Preparer::RoundUpToPowerOfTwo(unsigned Value) {
   unsigned Result;
   for (Result = 1; Result < Value; Result *= 2);
   return Result;
+}
+
+void Preparer::fillInAllocationSize(Module &M) {
+  Function *MemAllocHook = M.getFunction(DynAAUtils::MemAllocHookName);
+  // Skip this process if there's no HookMemAlloc.
+  if (!MemAllocHook)
+    return;
+
+  for (Module::iterator F = M.begin(); F != M.end(); ++F) {
+    for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
+      for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
+        CallSite CS(I);
+        if (CS && CS.getCalledFunction() == MemAllocHook) {
+          fillInAllocationSize(CS);
+        }
+      }
+    }
+  }
+}
+
+// CallSite is light-weight, and passed by value.
+void Preparer::fillInAllocationSize(CallSite CS) {
+  // HookMemAlloc(ValueID, Base, Size = undef)
+  assert(CS.arg_size() == 3);
+  if (isa<UndefValue>(CS.getArgument(2))) {
+    Value *Base = CS.getArgument(1);
+    while (BitCastInst *BCI = dyn_cast<BitCastInst>(Base)) {
+      Base = BCI->getOperand(0);
+    }
+    // For now, MemoryInstrumenter will only use undef for the allocation size
+    // for AllocaInsts.
+    if (AllocaInst *AI = dyn_cast<AllocaInst>(Base)) {
+      TargetData &TD = getAnalysis<TargetData>();
+      Value *Size = ConstantInt::get(
+          TD.getIntPtrType(AI->getContext()),
+          TD.getTypeStoreSize(AI->getAllocatedType()));
+      if (AI->isArrayAllocation()) {
+        // e.g. %32 = alloca i8, i64 %conv164
+        Size = BinaryOperator::Create(Instruction::Mul,
+                                      Size,
+                                      AI->getArraySize(),
+                                      "",
+                                      AI);
+      }
+      CS.setArgument(2, Size);
+    } else {
+      assert(false);
+    }
+  }
 }

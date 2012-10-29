@@ -29,15 +29,6 @@ using namespace rcs;
 
 namespace dyn_aa {
 struct MemoryInstrumenter: public ModulePass {
-  static const string MemAllocHookName;
-  static const string MainArgsAllocHookName;
-  static const string TopLevelHookName;
-  static const string AddrTakenHookName;
-  static const string GlobalsAllocHookName;
-  static const string MemHooksIniterName;
-  static const string AfterForkHookName;
-  static const string BeforeForkHookName;
-
   static char ID;
 
   MemoryInstrumenter();
@@ -45,7 +36,6 @@ struct MemoryInstrumenter: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  static uint64_t BitLengthToByteLength(uint64_t Size);
   // Includes not only "malloc", but also similar memory allocation functions
   // such as "valloc" and "calloc".
   bool isMalloc(Function *F) const;
@@ -95,14 +85,6 @@ struct MemoryInstrumenter: public ModulePass {
 using namespace dyn_aa;
 
 char MemoryInstrumenter::ID = 0;
-const string MemoryInstrumenter::MemAllocHookName = "HookMemAlloc";
-const string MemoryInstrumenter::MainArgsAllocHookName = "HookMainArgsAlloc";
-const string MemoryInstrumenter::TopLevelHookName = "HookTopLevel";
-const string MemoryInstrumenter::AddrTakenHookName = "HookAddrTaken";
-const string MemoryInstrumenter::GlobalsAllocHookName = "HookGlobalsAlloc";
-const string MemoryInstrumenter::MemHooksIniterName = "InitMemHooks";
-const string MemoryInstrumenter::AfterForkHookName = "HookFork";
-const string MemoryInstrumenter::BeforeForkHookName = "HookBeforeFork";
 
 static RegisterPass<MemoryInstrumenter> X("instrument-memory",
                                           "Instrument memory operations",
@@ -119,16 +101,6 @@ static cl::list<string> OfflineWhiteList(
 void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
   AU.addRequired<IDAssigner>();
-}
-
-uint64_t MemoryInstrumenter::BitLengthToByteLength(uint64_t Size) {
-  // Except bool, every type size must be a multipler of 8.
-  assert(Size == 1 || Size % 8 == 0);
-  // The type size shouldn't be a very large number; otherwise, how would
-  // you allocate it?
-  if (Size != 1)
-    Size /= 8;
-  return Size;
 }
 
 MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
@@ -174,12 +146,6 @@ void MemoryInstrumenter::instrumentMainArgs(Module &M) {
 }
 
 void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
-  TargetData &TD = getAnalysis<TargetData>();
-
-  // Calculate the type size.
-  uint64_t TypeSize = TD.getTypeSizeInBits(AI->getAllocatedType());
-  TypeSize = BitLengthToByteLength(TypeSize);
-
   // Calculate where to insert.
   assert(!AI->isTerminator());
   BasicBlock::iterator Loc = AI; ++Loc;
@@ -187,17 +153,10 @@ void MemoryInstrumenter::instrumentAlloca(AllocaInst *AI) {
   // start = alloca type
   // =>
   // start = alloca type
-  // HookMemAlloc
-  Value *Size = ConstantInt::get(LongType, TypeSize);
-  if (AI->isArrayAllocation()) {
-    // e.g. %32 = alloca i8, i64 %conv164
-    Size = BinaryOperator::Create(Instruction::Mul,
-                                  Size,
-                                  AI->getArraySize(),
-                                  "",
-                                  Loc);
-  }
-  instrumentMemoryAllocation(AI, Size, NULL, Loc);
+  // HookMemAlloc(ValueID, AI, undef)
+  // The allocation size is undef temporarily, because Preparer will later
+  // change it, and decide the actual allocation size.
+  instrumentMemoryAllocation(AI, UndefValue::get(LongType), NULL, Loc);
 }
 
 void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
@@ -391,14 +350,14 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
 
 void MemoryInstrumenter::setupHooks(Module &M) {
   // No existing functions have the same name.
-  assert(M.getFunction(MemAllocHookName) == NULL);
-  assert(M.getFunction(MainArgsAllocHookName) == NULL);
-  assert(M.getFunction(TopLevelHookName) == NULL);
-  assert(M.getFunction(AddrTakenHookName) == NULL);
-  assert(M.getFunction(GlobalsAllocHookName) == NULL);
-  assert(M.getFunction(MemHooksIniterName) == NULL);
-  assert(M.getFunction(AfterForkHookName) == NULL);
-  assert(M.getFunction(BeforeForkHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::MemAllocHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::MainArgsAllocHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::TopLevelHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::AddrTakenHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::GlobalsAllocHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::MemHooksIniterName) == NULL);
+  assert(M.getFunction(DynAAUtils::AfterForkHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::BeforeForkHookName) == NULL);
 
   // Setup MemAllocHook.
   vector<Type *> ArgTypes;
@@ -410,7 +369,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                                      false);
   MemAllocHook = Function::Create(MemAllocHookType,
                                   GlobalValue::ExternalLinkage,
-                                  MemAllocHookName,
+                                  DynAAUtils::MemAllocHookName,
                                   &M);
 
   // Setup MainArgsAllocHook.
@@ -423,14 +382,14 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                                           false);
   MainArgsAllocHook = Function::Create(MainArgsAllocHookType,
                                        GlobalValue::ExternalLinkage,
-                                       MainArgsAllocHookName,
+                                       DynAAUtils::MainArgsAllocHookName,
                                        &M);
 
   // Setup MemHooksIniter.
   FunctionType *MemHooksIniterType = FunctionType::get(VoidType, false);
   MemHooksIniter = Function::Create(MemHooksIniterType,
                                     GlobalValue::ExternalLinkage,
-                                    MemHooksIniterName,
+                                    DynAAUtils::MemHooksIniterName,
                                     &M);
 
   // Setup TopLevelHook.
@@ -443,7 +402,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                                      false);
   TopLevelHook = Function::Create(TopLevelHookType,
                                   GlobalValue::ExternalLinkage,
-                                  TopLevelHookName,
+                                  DynAAUtils::TopLevelHookName,
                                   &M);
 
   // Setup AddrTakenHook.
@@ -456,14 +415,14 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                                       false);
   AddrTakenHook = Function::Create(AddrTakenHookType,
                                    GlobalValue::ExternalLinkage,
-                                   AddrTakenHookName,
+                                   DynAAUtils::AddrTakenHookName,
                                    &M);
 
   // Setup GlobalsAccessHook.
   FunctionType *GlobalsAllocHookType = FunctionType::get(VoidType, false);
   GlobalsAllocHook = Function::Create(GlobalsAllocHookType,
                                       GlobalValue::ExternalLinkage,
-                                      GlobalsAllocHookName,
+                                      DynAAUtils::GlobalsAllocHookName,
                                       &M);
 
   // Setup AfterForkHook
@@ -472,7 +431,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   FunctionType *AfterForkHookType = FunctionType::get(VoidType, ArgTypes, false);
   AfterForkHook = Function::Create(AfterForkHookType,
                               GlobalValue::ExternalLinkage,
-                              AfterForkHookName,
+                              DynAAUtils::AfterForkHookName,
                               &M);
 
   // Setup BeforeForkHook
@@ -480,7 +439,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   FunctionType *BeforeForkHookType = FunctionType::get(VoidType, false);
   BeforeForkHook = Function::Create(BeforeForkHookType,
                                     GlobalValue::ExternalLinkage,
-                                    BeforeForkHookName,
+                                    DynAAUtils::BeforeForkHookName,
                                     &M);
 }
 
@@ -514,9 +473,10 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     if (GI->hasUnnamedAddr()) {
       GI->setUnnamedAddr(false);
     }
-    uint64_t TypeSize = TD.getTypeSizeInBits(GI->getType()->getElementType());
-    TypeSize = BitLengthToByteLength(TypeSize);
-    instrumentMemoryAllocation(GI, ConstantInt::get(LongType, TypeSize), NULL,
+    uint64_t TypeSize = TD.getTypeStoreSize(GI->getType()->getElementType());
+    instrumentMemoryAllocation(GI,
+                               ConstantInt::get(LongType, TypeSize),
+                               NULL,
                                Ret);
     instrumentPointer(GI, NULL, Ret);
   }
@@ -537,10 +497,11 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
     if (F->hasUnnamedAddr()) {
       F->setUnnamedAddr(false);
     }
-    uint64_t TypeSize = TD.getTypeSizeInBits(F->getType());
-    TypeSize = BitLengthToByteLength(TypeSize);
+    uint64_t TypeSize = TD.getTypeStoreSize(F->getType());
     assert(TypeSize == TD.getPointerSize());
-    instrumentMemoryAllocation(F, ConstantInt::get(LongType, TypeSize), NULL,
+    instrumentMemoryAllocation(F,
+                               ConstantInt::get(LongType, TypeSize),
+                               NULL,
                                Ret);
     instrumentPointer(F, NULL, Ret);
   }
