@@ -1,9 +1,10 @@
 Building the system
 ====================
 
-Need to build repo rcs first
+Need to build LLVM 3.0/3.1 and clang 3.0/3.1
+Need to build repo rcs
 
-./configure --with-llvmsrc=`llvm-config --src-root` --with-llvmobj=`llvm-config --obj-root` --with-rcssrc=<rcs srouce directory> --with-rcsobj=<rcs object directory> --prefix=`llvm-config --prefix`
+./configure --with-rcssrc=<rcs srouce directory> --with-rcsobj=<rcs object directory> --prefix=`llvm-config --prefix`
 make
 make install
 
