@@ -72,18 +72,22 @@ struct MemoryInstrumenter: public ModulePass {
   void lowerGlobalCtors(Module &M);
   void addNewGlobalCtor(Module &M);
 
+  // hooks
   Function *MemAllocHook;
   Function *MainArgsAllocHook;
   Function *TopLevelHook;
   Function *AddrTakenHook;
   Function *GlobalsAllocHook;
   Function *MemHooksIniter;
-  Function *Main;
   Function *AfterForkHook;
   Function *BeforeForkHook;
+  // the main function
+  Function *Main;
+  // types
   IntegerType *CharType, *LongType, *IntType;
   PointerType *CharStarType;
   Type *VoidType;
+  // names of memory allocation functions
   vector<string> MallocNames;
 };
 }
@@ -220,6 +224,9 @@ void MemoryInstrumenter::instrumentMemoryAllocation(Value *Start,
   // Arg 3: bound
   Args.push_back(Size);
 
+  // If the allocation is always successful, such as new, we create the
+  // memory allocation hook directly; otherwise, we need to check the condition
+  // and add the memory allocation hook.
   if (Success == NULL) {
     CallInst::Create(MemAllocHook, Args, "", Loc);
   } else {

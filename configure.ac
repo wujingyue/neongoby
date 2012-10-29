@@ -5,8 +5,8 @@ AC_INIT([[[dyn-aa]]],[[[0.10]]],[jingyue@cs.columbia.edu])
 
 dnl Tell autoconf that this is an LLVM project being configured
 dnl This provides the --with-llvmsrc and --with-llvmobj options
-LLVM_SRC_ROOT="."
-LLVM_OBJ_ROOT="."
+LLVM_SRC_ROOT=`llvm-config --src-root`
+LLVM_OBJ_ROOT=`llvm-config --obj-root`
 LLVM_CONFIG_PROJECT($LLVM_SRC_ROOT,$LLVM_OBJ_ROOT)
 
 dnl Tell autoconf that this project uses the RCS common project

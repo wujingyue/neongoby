@@ -1664,8 +1664,8 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-LLVM_SRC_ROOT="."
-LLVM_OBJ_ROOT="."
+LLVM_SRC_ROOT=`llvm-config --src-root`
+LLVM_OBJ_ROOT=`llvm-config --obj-root`
 
 # Check whether --with-llvmsrc was given.
 if test "${with_llvmsrc+set}" = set; then :

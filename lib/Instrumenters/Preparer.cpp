@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "rcs/Version.h"
+
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/DerivedTypes.h"
@@ -36,6 +38,7 @@ struct Preparer: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
+  static unsigned RoundUpToPowerOfTwo(unsigned Value);
   void replaceUndefsWithNull(Module &M);
   // use-def chains sometimes form a cycle.
   // Do not visit a User twice by using Replaced.
@@ -131,7 +134,8 @@ void Preparer::expandAlloca(AllocaInst *AI) {
     return;
   }
 
-  if (ArrayType *ArrType = dyn_cast<ArrayType>(AI->getAllocatedType())) {
+  Type *AllocatedType = AI->getAllocatedType();
+  if (ArrayType *ArrType = dyn_cast<ArrayType>(AllocatedType)) {
     ArrayType *NewArrType = ArrayType::get(ArrType->getElementType(),
                                            ArrType->getNumElements() + 1);
     AllocaInst *NewAI = new AllocaInst(NewArrType, AI->getName(), AI);
@@ -141,5 +145,20 @@ void Preparer::expandAlloca(AllocaInst *AI) {
                                              AI);
     AI->replaceAllUsesWith(CastNewAI);
     AI->eraseFromParent();
+    return;
   }
+
+  assert(AllocatedType->isSized());
+  TargetData &TD = getAnalysis<TargetData>();
+  unsigned Align = RoundUpToPowerOfTwo(TD.getTypeStoreSize(AllocatedType) + 1);
+  assert(AI->getAlignment() > 0);
+  Align = max(Align, AI->getAlignment());
+  AI->setAlignment(Align);
+}
+
+unsigned Preparer::RoundUpToPowerOfTwo(unsigned Value) {
+  // TODO: should be able to be optimized using bitwise operations
+  unsigned Result;
+  for (Result = 1; Result < Value; Result *= 2);
+  return Result;
 }
