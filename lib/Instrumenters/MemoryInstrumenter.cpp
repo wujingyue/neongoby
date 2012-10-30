@@ -768,17 +768,26 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // TODO: A function pointer can possibly point to memory allocation
     // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
-    if (Function *Callee = CS.getCalledFunction()) {
-      if (isMalloc(Callee))
-        instrumentMalloc(CS);
-      if (HookFork) {
-        StringRef CalleeName = Callee->getName();
-        if (CalleeName == "fork" || CalleeName == "vfork") {
-          instrumentFork(CS);
-        }
+    Function *Callee = CS.getCalledFunction();
+    if (Callee && isMalloc(Callee))
+      instrumentMalloc(CS);
+    if (HookFork && Callee) {
+      StringRef CalleeName = Callee->getName();
+      if (CalleeName == "fork" || CalleeName == "vfork") {
+        instrumentFork(CS);
       }
     }
-    instrumentCallSite(I);
+    if (HookAllPointers) {
+      if (Callee == NULL || !Callee->isDeclaration()) {
+        // If it's calling an external function, we don't instrument the call
+        // site because the callee doesn't have a function body.
+        // If the callee is a function pointer, we assume it's an internal
+        // function. We put this assumption in checkFeatures, and it will
+        // throw an assertion failure if an external function is potentially
+        // pointed by a function pointer.
+        instrumentCallSite(I);
+      }
+    }
   }
 
   // Instrument AllocaInsts.
