@@ -48,7 +48,7 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentMalloc(const CallSite &CS);
   void instrumentAlloca(AllocaInst *AI);
   void instrumentStoreInst(StoreInst *SI);
-  void instrumentReturnInst(ReturnInst *RI);
+  void instrumentReturnInst(Instruction *I);
   void instrumentCallSite(Instruction *I);
   void instrumentPointer(Value *ValueOperand,
                          Value *PointerOperand,
@@ -292,11 +292,10 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
 void MemoryInstrumenter::checkFeatures(Module &M) {
   // Check whether any memory allocation function can
   // potentially be pointed by function pointers.
-  // Also, all intrinsic functions and external functions will be called
-  // directly, i.e. not via function pointers.
+  // Also, all intrinsic functions will be called directly,
+  // i.e. not via function pointers.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (DynAAUtils::IsMalloc(F) || F->isIntrinsic() ||
-        (F->isDeclaration() && F->getType()->isVoidTy())) {
+    if (DynAAUtils::IsMalloc(F) || F->isIntrinsic()) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
         User *Usr = *UI;
         assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
@@ -683,23 +682,20 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
   }
 }
 
-void MemoryInstrumenter::instrumentReturnInst(ReturnInst *RI) {
+void MemoryInstrumenter::instrumentReturnInst(Instruction *I) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  unsigned InsID = IDA.getInstructionID(RI);
+  unsigned InsID = IDA.getInstructionID(I);
   assert(InsID != IDAssigner::InvalidID);
 
-  CallInst::Create(ReturnHook, ConstantInt::get(IntType, InsID), "", RI);
+  CallInst::Create(ReturnHook, ConstantInt::get(IntType, InsID), "", I);
 }
 
 void MemoryInstrumenter::instrumentCallSite(Instruction *I) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  vector<Value *> Args;
-
   unsigned InsID = IDA.getInstructionID(I);
   assert(InsID != IDAssigner::InvalidID);
-  Args.push_back(ConstantInt::get(IntType, InsID));
 
-  CallInst::Create(CallHook, Args, "", I);
+  CallInst::Create(CallHook, ConstantInt::get(IntType, InsID), "", I);
 }
 
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
@@ -718,9 +714,9 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   }
 
   if (HookAllPointers) {
-    // Instrument pointer returns, i.e. return X *.
-    if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
-      instrumentReturnInst(RI);
+    // Instrument returns and resume.
+    if (isa<ReturnInst>(I) || isa<ResumeInst>(I)) {
+      instrumentReturnInst(I);
       return;
     }
   }
