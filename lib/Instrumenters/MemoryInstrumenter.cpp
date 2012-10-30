@@ -36,9 +36,6 @@ struct MemoryInstrumenter: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  // Includes not only "malloc", but also similar memory allocation functions
-  // such as "valloc" and "calloc".
-  bool isMalloc(Function *F) const;
   bool isWhiteListed(Function &F) const;
   void instrumentInstructionIfNecessary(Instruction *I);
   // Emit code to handle memory allocation.
@@ -81,8 +78,6 @@ struct MemoryInstrumenter: public ModulePass {
   IntegerType *CharType, *LongType, *IntType;
   PointerType *CharStarType;
   Type *VoidType;
-  // names of memory allocation functions
-  vector<string> MallocNames;
 };
 }
 
@@ -120,13 +115,6 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   CharType = LongType = IntType = NULL;
   CharStarType = NULL;
   VoidType = NULL;
-}
-
-bool MemoryInstrumenter::isMalloc(Function *F) const {
-  vector<string>::const_iterator Pos = find(MallocNames.begin(),
-                                            MallocNames.end(),
-                                            F->getName());
-  return Pos != MallocNames.end();
 }
 
 void MemoryInstrumenter::instrumentMainArgs(Module &M) {
@@ -228,7 +216,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   TargetData &TD = getAnalysis<TargetData>();
 
   Function *Callee = CS.getCalledFunction();
-  assert(isMalloc(Callee));
+  assert(DynAAUtils::IsMalloc(Callee));
 
   Instruction *Ins = CS.getInstruction();
 
@@ -251,7 +239,7 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
   StringRef CalleeName = Callee->getName();
   if (CalleeName == "malloc" || CalleeName == "valloc") {
     Start = Ins;
-    Size = CS.getArgument(0);
+    Size = UndefValue::get(LongType);
     Success = Builder.CreateICmpNE(Ins, ConstantPointerNull::get(CharStarType));
   } else if (CalleeName.startswith("_Zn")) {
     Start = Ins;
@@ -305,7 +293,7 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   // Also, all intrinsic functions and external functions will be called
   // directly, i.e. not via function pointers.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (isMalloc(F) || F->isIntrinsic() || F->isDeclaration()) {
+    if (DynAAUtils::IsMalloc(F) || F->isIntrinsic() || F->isDeclaration()) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
         User *Usr = *UI;
         assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
@@ -319,7 +307,7 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   // Check whether memory allocation functions are captured.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     // 0 is the return, 1 is the first parameter.
-    if (F->isDeclaration() && F->doesNotAlias(0) && !isMalloc(F)) {
+    if (F->isDeclaration() && F->doesNotAlias(0) && !DynAAUtils::IsMalloc(F)) {
       errs().changeColor(raw_ostream::RED);
       errs() << F->getName() << "'s return value is marked noalias, ";
       errs() << "but the function is not treated as malloc.\n";
@@ -552,19 +540,6 @@ bool MemoryInstrumenter::isWhiteListed(Function &F) const {
 }
 
 bool MemoryInstrumenter::runOnModule(Module &M) {
-  // Initialize the list of memory allocatores.
-  MallocNames.push_back("malloc");
-  MallocNames.push_back("calloc");
-  MallocNames.push_back("valloc");
-  MallocNames.push_back("realloc");
-  MallocNames.push_back("memalign");
-  MallocNames.push_back("_Znwm");
-  MallocNames.push_back("_Znaj");
-  MallocNames.push_back("_Znam");
-  MallocNames.push_back("strdup");
-  MallocNames.push_back("__strdup");
-  MallocNames.push_back("getline");
-
   // Check whether there are unsupported language features.
   checkFeatures(M);
 
@@ -769,7 +744,7 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
     Function *Callee = CS.getCalledFunction();
-    if (Callee && isMalloc(Callee))
+    if (Callee && DynAAUtils::IsMalloc(Callee))
       instrumentMalloc(CS);
     if (HookFork && Callee) {
       StringRef CalleeName = Callee->getName();

@@ -37,13 +37,15 @@ struct Preparer: public ModulePass {
 
  private:
   static unsigned RoundUpToPowerOfTwo(unsigned Value);
+
   void replaceUndefsWithNull(Module &M);
   // use-def chains sometimes form a cycle.
   // Do not visit a User twice by using Replaced.
   void replaceUndefsWithNull(User *I, ValueSet &Replaced);
   void allocateExtraBytes(Module &M);
-  void expandAllocas(Function *F);
+  void expandMemoryAllocation(Function *F);
   void expandAlloca(AllocaInst *AI);
+  void expandMalloc(CallSite CS);
   void fillInAllocationSize(Module &M);
   void fillInAllocationSize(CallSite CS);
 };
@@ -105,19 +107,45 @@ void Preparer::replaceUndefsWithNull(User *I, ValueSet &Replaced) {
 
 void Preparer::allocateExtraBytes(Module &M) {
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    expandAllocas(F);
+    expandMemoryAllocation(F);
   }
 }
 
-void Preparer::expandAllocas(Function *F) {
+void Preparer::expandMemoryAllocation(Function *F) {
   for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ) {
       // <Ins> may be removed in the body. Save its next instruction.
       BasicBlock::iterator NextIns = Ins; ++NextIns;
-      if (AllocaInst *AI = dyn_cast<AllocaInst>(Ins))
+      if (AllocaInst *AI = dyn_cast<AllocaInst>(Ins)) {
         expandAlloca(AI);
+      } else {
+        CallSite CS(Ins);
+        if (CS) {
+          if (Function *Callee = CS.getCalledFunction()) {
+            if (Callee && DynAAUtils::IsMalloc(Callee)) {
+              expandMalloc(CS);
+            }
+          }
+        }
+      }
       Ins = NextIns;
     }
+  }
+}
+
+void Preparer::expandMalloc(CallSite CS) {
+  Function *Callee = CS.getCalledFunction();
+  assert(Callee);
+  StringRef CalleeName = Callee->getName();
+  if (CalleeName == "malloc" || CalleeName == "valloc") {
+    Value *Size = CS.getArgument(0);
+    Value *ExpandedSize = BinaryOperator::Create(
+        Instruction::Add,
+        Size,
+        ConstantInt::get(cast<IntegerType>(Size->getType()), 1),
+        "expanded.size",
+        CS.getInstruction());
+    CS.setArgument(0, ExpandedSize);
   }
 }
 
@@ -179,7 +207,10 @@ void Preparer::fillInAllocationSize(Module &M) {
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
         CallSite CS(I);
         if (CS && CS.getCalledFunction() == MemAllocHook) {
-          fillInAllocationSize(CS);
+          // HookMemAlloc(ValueID, Base, Size = undef)
+          assert(CS.arg_size() == 3);
+          if (isa<UndefValue>(CS.getArgument(2)))
+            fillInAllocationSize(CS);
         }
       }
     }
@@ -189,30 +220,36 @@ void Preparer::fillInAllocationSize(Module &M) {
 // CallSite is light-weight, and passed by value.
 void Preparer::fillInAllocationSize(CallSite CS) {
   // HookMemAlloc(ValueID, Base, Size = undef)
-  assert(CS.arg_size() == 3);
-  if (isa<UndefValue>(CS.getArgument(2))) {
-    Value *Base = CS.getArgument(1);
-    while (BitCastInst *BCI = dyn_cast<BitCastInst>(Base)) {
-      Base = BCI->getOperand(0);
+  Value *Base = CS.getArgument(1);
+  while (BitCastInst *BCI = dyn_cast<BitCastInst>(Base)) {
+    Base = BCI->getOperand(0);
+  }
+
+  if (AllocaInst *AI = dyn_cast<AllocaInst>(Base)) {
+    TargetData &TD = getAnalysis<TargetData>();
+    Value *Size = ConstantInt::get(
+        TD.getIntPtrType(AI->getContext()),
+        TD.getTypeStoreSize(AI->getAllocatedType()));
+    if (AI->isArrayAllocation()) {
+      // e.g. %32 = alloca i8, i64 %conv164
+      Size = BinaryOperator::Create(Instruction::Mul,
+                                    Size,
+                                    AI->getArraySize(),
+                                    "",
+                                    AI);
     }
+    CS.setArgument(2, Size);
+  } else if (DynAAUtils::IsMallocCall(Base)) {
+    CallSite MallocCS(Base);
+    assert(MallocCS);
+    Function *Malloc = MallocCS.getCalledFunction();
+    assert(Malloc);
+    StringRef MallocName = Malloc->getName();
+    assert(MallocName == "malloc" || MallocName == "valloc");
+    CS.setArgument(2, MallocCS.getArgument(0));
+  } else {
     // For now, MemoryInstrumenter will only use undef for the allocation size
-    // for AllocaInsts.
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(Base)) {
-      TargetData &TD = getAnalysis<TargetData>();
-      Value *Size = ConstantInt::get(
-          TD.getIntPtrType(AI->getContext()),
-          TD.getTypeStoreSize(AI->getAllocatedType()));
-      if (AI->isArrayAllocation()) {
-        // e.g. %32 = alloca i8, i64 %conv164
-        Size = BinaryOperator::Create(Instruction::Mul,
-                                      Size,
-                                      AI->getArraySize(),
-                                      "",
-                                      AI);
-      }
-      CS.setArgument(2, Size);
-    } else {
-      assert(false);
-    }
+    // for AllocaInsts, malloc, and valloc.
+    assert(false);
   }
 }

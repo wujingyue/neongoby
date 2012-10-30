@@ -86,3 +86,28 @@ void DynAAUtils::PrintValue(raw_ostream &O, const Value *V) {
     O << *V;
   }
 }
+
+bool DynAAUtils::IsMalloc(const Function *F) {
+  StringRef Name = F->getName();
+  return (Name == "malloc" ||
+          Name == "calloc" ||
+          Name == "valloc" ||
+          Name == "realloc" ||
+          Name == "memalign" ||
+          Name == "_Znwm" ||
+          Name == "_Znaj" ||
+          Name == "_Znam" ||
+          Name == "strdup" ||
+          Name == "__strdup");
+}
+
+bool DynAAUtils::IsMallocCall(const Value *V) {
+  ImmutableCallSite CS(V);
+  if (!CS)
+    return false;
+
+  const Function *Callee = CS.getCalledFunction();
+  if (!Callee)
+    return false;
+  return IsMalloc(Callee);
+}

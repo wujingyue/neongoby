@@ -26,6 +26,8 @@ struct DynAAUtils {
   static void PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total);
   static bool PointerIsDereferenced(const llvm::Value *V);
   static void PrintValue(llvm::raw_ostream &O, const llvm::Value *V);
+  static bool IsMalloc(const llvm::Function *F);
+  static bool IsMallocCall(const llvm::Value *V);
 };
 }
 
