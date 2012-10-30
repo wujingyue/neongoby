@@ -40,7 +40,9 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentInstructionIfNecessary(Instruction *I);
   // Emit code to handle memory allocation.
   // If <Success>, range [<Start>, <Start> + <Size>) is allocated.
-  void instrumentMemoryAllocation(Value *Start, Value *Size, Value *Success,
+  void instrumentMemoryAllocation(Value *Start,
+                                  Value *Size,
+                                  Value *Success,
                                   Instruction *Loc);
   void instrumentFork(const CallSite &CS);
   void instrumentMalloc(const CallSite &CS);

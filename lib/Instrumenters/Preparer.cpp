@@ -42,10 +42,14 @@ struct Preparer: public ModulePass {
   // use-def chains sometimes form a cycle.
   // Do not visit a User twice by using Replaced.
   void replaceUndefsWithNull(User *I, ValueSet &Replaced);
+
   void allocateExtraBytes(Module &M);
+
   void expandMemoryAllocation(Function *F);
+  void expandGlobal(GlobalVariable *GV);
   void expandAlloca(AllocaInst *AI);
   void expandMalloc(CallSite CS);
+
   void fillInAllocationSize(Module &M);
   void fillInAllocationSize(CallSite CS);
 };
@@ -106,9 +110,19 @@ void Preparer::replaceUndefsWithNull(User *I, ValueSet &Replaced) {
 }
 
 void Preparer::allocateExtraBytes(Module &M) {
+  for (Module::global_iterator GI = M.global_begin();
+       GI != M.global_end(); ++GI) {
+    expandGlobal(GI);
+  }
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     expandMemoryAllocation(F);
   }
+}
+
+void Preparer::expandGlobal(GlobalVariable *GV) {
+  TargetData &TD = getAnalysis<TargetData>();
+  uint64_t TypeSize = TD.getTypeStoreSize(GV->getType()->getElementType());
+  GV->setAlignment(RoundUpToPowerOfTwo(TypeSize + 1));
 }
 
 void Preparer::expandMemoryAllocation(Function *F) {
