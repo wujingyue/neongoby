@@ -293,7 +293,8 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
   // Also, all intrinsic functions and external functions will be called
   // directly, i.e. not via function pointers.
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    if (DynAAUtils::IsMalloc(F) || F->isIntrinsic() || F->isDeclaration()) {
+    if (DynAAUtils::IsMalloc(F) || F->isIntrinsic() ||
+        (F->isDeclaration() && F->getType()->isVoidTy())) {
       for (Value::use_iterator UI = F->use_begin(); UI != F->use_end(); ++UI) {
         User *Usr = *UI;
         assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
