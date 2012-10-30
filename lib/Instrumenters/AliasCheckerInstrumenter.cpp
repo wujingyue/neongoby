@@ -6,9 +6,9 @@
 #include <cstdio>
 #include <string>
 
-#include "llvm/Pass.h"
-#include "llvm/Module.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/Module.h"
+#include "llvm/Pass.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Dominators.h"
@@ -16,12 +16,14 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Target/TargetData.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
-#include "rcs/IntraReach.h"
 #include "rcs/IDAssigner.h"
+#include "rcs/IntraReach.h"
 
 #include "dyn-aa/Utils.h"
+#include "dyn-aa/BaselineAliasAnalysis.h"
 
 using namespace std;
 using namespace llvm;
@@ -51,7 +53,6 @@ struct AliasCheckerInstrumenter: public FunctionPass {
                       const DenseMap<Instruction *, unsigned> &SlotOfPointer);
   void addAliasChecks(Instruction *P, const InstList &Qs);
   void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
-  AliasAnalysis *getBaselineAA();
 
   Function *AliasCheck;
   // Types.
@@ -69,9 +70,6 @@ static RegisterPass<AliasCheckerInstrumenter> X(
     false, // Is CFG Only?
     false); // Is Analysis?
 
-static cl::opt<string> BaselineAAName(
-    "assume-correct",
-    cl::desc("Assume some AA is correct so that we can add fewer checks"));
 static cl::opt<bool> NoPHI("no-phi",
                            cl::desc("Store pointer values into slots and "
                                     "load them at the end of functions"));
@@ -104,11 +102,7 @@ void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   if (InputAliasChecksName == "") {
     // We need not run any AA if the alias checks are inputed by the user.
     AU.addRequired<AliasAnalysis>();
-    if (BaselineAAName != "") {
-      const PassInfo *PI = lookupPassInfo(BaselineAAName);
-      assert(PI && "The baseline AA is not registered");
-      AU.addRequiredID(PI->getTypeInfo());
-    }
+    AU.addRequired<BaselineAliasAnalysis>();
   }
   AU.addRequired<IntraReach>();
   AU.addRequired<DominatorTree>();
@@ -160,7 +154,9 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
   // Do not query AA on modified bc. Therefore, we store the checks we are
   // going to add in Checks, and add them to the program later.
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  AliasAnalysis *BaselineAA = getBaselineAA();
+  AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();
+  assert(&AA != &BaselineAA &&
+         "the current AA and the baseline AA should be different");
   unsigned NumAliasQueriesInF = 0;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
     if (!PointersInBB.count(B1))
@@ -182,8 +178,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
           Instruction *I2 = PointersInB2[i2];
           ++NumAliasQueriesInF;
           if (AA.alias(I1, I2) == AliasAnalysis::NoAlias &&
-              (BaselineAA == NULL ||
-               BaselineAA->alias(I1, I2) != AliasAnalysis::NoAlias)) {
+              BaselineAA.alias(I1, I2) != AliasAnalysis::NoAlias) {
             // Add a check when the baseline AA says "may" and the checked AA
             // says "no".
             Checks.push_back(make_pair(I1, I2));
@@ -324,30 +319,6 @@ void AliasCheckerInstrumenter::addAliasChecks(Function &F,
       i = j;
     }
   }
-}
-
-AliasAnalysis *AliasCheckerInstrumenter::getBaselineAA() {
-  if (BaselineAAName == "")
-    return NULL;
-
-  // Get the baseline AA.
-  // Don't use getAnalysisID directly. The getAdjustedAnalysisPointer won't
-  // work with <BaselineAA>::ID.
-  // The following code repeats the logic in getAnalysisID except that it
-  // passes AliasAnalysis::ID to getAdjustedAnalysisPointer.
-  const PassInfo *PI = lookupPassInfo(BaselineAAName);
-  assert(PI && "The baseline AA is not registered");
-  Pass *P = getResolver()->findImplPass(PI->getTypeInfo());
-  assert(P);
-  AliasAnalysis *BaselineAA =
-      (AliasAnalysis *)P->getAdjustedAnalysisPointer(&AliasAnalysis::ID);
-
-  // Get the current AA.
-  AliasAnalysis *CurrentAA = &getAnalysis<AliasAnalysis>();
-  assert(BaselineAA != CurrentAA &&
-         "The baseline AA and the current AA should be different");
-
-  return BaselineAA;
 }
 
 bool AliasCheckerInstrumenter::runOnFunction(Function &F) {

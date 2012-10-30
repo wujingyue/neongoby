@@ -65,6 +65,7 @@ if __name__ == '__main__':
                 sys.exit(1)
             # baseline need be put before aa
             cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
+            cmd = ' '.join((cmd, '-baseline-aa-name', args.baseline))
     cmd = ' '.join((cmd, '-instrument-alias-checker', '-prepare'))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
