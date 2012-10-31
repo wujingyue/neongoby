@@ -685,17 +685,10 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
 
 void MemoryInstrumenter::instrumentReturnInst(ReturnInst *RI) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
+  unsigned InsID = IDA.getInstructionID(RI);
+  assert(InsID != IDAssigner::InvalidID);
 
-  Function *F = RI->getParent()->getParent();
-  if (F->getFunctionType()->getReturnType()->isPointerTy()) {
-    vector<Value *> Args;
-
-    unsigned InsID = IDA.getInstructionID(RI);
-    assert(InsID != IDAssigner::InvalidID);
-    Args.push_back(ConstantInt::get(IntType, InsID));
-
-    CallInst::Create(ReturnHook, Args, "", RI);
-  }
+  CallInst::Create(ReturnHook, ConstantInt::get(IntType, InsID), "", RI);
 }
 
 void MemoryInstrumenter::instrumentCallSite(Instruction *I) {
@@ -739,30 +732,27 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   if (I->getType()->isPointerTy())
     instrumentPointerInstruction(I);
 
-  // Instrument memory allocation function calls.
   CallSite CS(I);
   if (CS) {
+    // Instrument memory allocation function calls.
     // TODO: A function pointer can possibly point to memory allocation
     // or memory free functions. We don't handle this case for now.
     // We added a feature check. The pass will assertion fail upon such cases.
     Function *Callee = CS.getCalledFunction();
     if (Callee && DynAAUtils::IsMalloc(Callee))
       instrumentMalloc(CS);
+    if (HookAllPointers) {
+      // Instrument all call sites for debugging.
+      // By default, when HookAllPointers is off, we don't instrument any
+      // call site for performance reasons.
+      instrumentCallSite(I);
+    }
+    // Instrument fork() to support multiprocess programs.
+    // Instrument fork() at last, because it flushes the logs.
     if (HookFork && Callee) {
       StringRef CalleeName = Callee->getName();
       if (CalleeName == "fork" || CalleeName == "vfork") {
         instrumentFork(CS);
-      }
-    }
-    if (HookAllPointers) {
-      if (Callee == NULL || !Callee->isDeclaration()) {
-        // If it's calling an external function, we don't instrument the call
-        // site because the callee doesn't have a function body.
-        // If the callee is a function pointer, we assume it's an internal
-        // function. We put this assumption in checkFeatures, and it will
-        // throw an assertion failure if an external function is potentially
-        // pointed by a function pointer.
-        instrumentCallSite(I);
       }
     }
   }
