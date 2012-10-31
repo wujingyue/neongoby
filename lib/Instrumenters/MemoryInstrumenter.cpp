@@ -686,9 +686,8 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
 void MemoryInstrumenter::instrumentReturnInst(ReturnInst *RI) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-  Value *ValueReturned = RI->getReturnValue();
-  const Type *ValueType = ValueReturned->getType();
-  if (ValueType->isPointerTy()) {
+  Function *F = RI->getParent()->getParent();
+  if (F->getFunctionType()->getReturnType()->isPointerTy()) {
     vector<Value *> Args;
 
     unsigned InsID = IDA.getInstructionID(RI);
