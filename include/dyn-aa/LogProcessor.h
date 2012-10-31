@@ -3,6 +3,8 @@
 #ifndef __DYN_AA_LOG_PROCESSOR_H
 #define __DYN_AA_LOG_PROCESSOR_H
 
+#include <cstdio>
+
 #include "dyn-aa/LogRecord.h"
 
 namespace dyn_aa {

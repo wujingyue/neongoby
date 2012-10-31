@@ -11,6 +11,7 @@
 #include "rcs/typedefs.h"
 
 #include "dyn-aa/LogProcessor.h"
+#include "dyn-aa/LogCounter.h"
 
 using namespace std;
 using namespace llvm;

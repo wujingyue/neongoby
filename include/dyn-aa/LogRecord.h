@@ -3,6 +3,8 @@
 #ifndef __DYN_AA_LOG_RECORD_H
 #define __DYN_AA_LOG_RECORD_H
 
+#include <cstdlib>
+
 namespace dyn_aa {
 enum LogRecordType {
   AddrTakenDecl = 0,
