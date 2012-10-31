@@ -1,7 +1,4 @@
 // Author: Jingyue
-//
-// Checks whether a specified call graph is sound by comparing it with another
-// call graph generated on DynamicAliasAnalysis
 
 #include <string>
 #include <fstream>
@@ -15,6 +12,7 @@
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
 
+#include "dyn-aa/BaselineAliasAnalysis.h"
 #include "dyn-aa/DynamicAliasAnalysis.h"
 #include "dyn-aa/Utils.h"
 
@@ -32,9 +30,7 @@ struct AliasAnalysisChecker: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  static bool IsIntraProcQuery(const Value *V1, const Value *V2);
   static bool CompareMissingAliases(const ValuePair &VP1, const ValuePair &VP2);
-  static const Function *GetContainingFunction(const Value *V);
   static pair<Function *, Function *> GetContainingFunctionPair(
       const ValuePair &VP);
 
@@ -70,6 +66,7 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<DynamicAliasAnalysis>();
   }
   AU.addRequired<AliasAnalysis>();
+  AU.addRequired<BaselineAliasAnalysis>();
   AU.addRequired<IDAssigner>();
 }
 
@@ -95,27 +92,32 @@ void AliasAnalysisChecker::collectMissingAliases(
     const DenseSet<ValuePair> &DynamicAliases,
     vector<ValuePair> &MissingAliases) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
+  AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();
 
   MissingAliases.clear();
   for (DenseSet<ValuePair>::const_iterator I = DynamicAliases.begin();
        I != DynamicAliases.end(); ++I) {
     Value *V1 = I->first, *V2 = I->second;
-    if (IntraProc && !IsIntraProcQuery(V1, V2)) {
+    if (IntraProc && !DynAAUtils::IsIntraProcQuery(V1, V2)) {
       continue;
     }
+
     if (!CheckAllPointers) {
       if (!DynAAUtils::PointerIsDereferenced(V1) ||
           !DynAAUtils::PointerIsDereferenced(V2)) {
         continue;
       }
     }
+
     if (CheckAllPointers) {
       if (isa<BitCastInst>(V1) || isa<BitCastInst>(V2))
         continue;
       if (isa<PHINode>(V1) || isa<PHINode>(V2))
         continue;
     }
-    if (AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
+
+    if (BaselineAA.alias(V1, V2) != AliasAnalysis::NoAlias &&
+        AA.alias(V1, V2) == AliasAnalysis::NoAlias) {
       MissingAliases.push_back(make_pair(V1, V2));
     }
   }
@@ -177,23 +179,9 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   return false;
 }
 
-bool AliasAnalysisChecker::IsIntraProcQuery(const Value *V1, const Value *V2) {
-  assert(V1->getType()->isPointerTy() && V2->getType()->isPointerTy());
-  const Function *F1 = GetContainingFunction(V1);
-  const Function *F2 = GetContainingFunction(V2);
-  return F1 == NULL || F2 == NULL || F1 == F2;
-}
-
-const Function *AliasAnalysisChecker::GetContainingFunction(const Value *V) {
-  if (const Instruction *Ins = dyn_cast<Instruction>(V))
-    return Ins->getParent()->getParent();
-  if (const Argument *Arg = dyn_cast<Argument>(V))
-    return Arg->getParent();
-  return NULL;
-}
-
 pair<Function *, Function *> AliasAnalysisChecker::GetContainingFunctionPair(
     const ValuePair &VP) {
-  return make_pair(const_cast<Function *>(GetContainingFunction(VP.first)),
-                   const_cast<Function *>(GetContainingFunction(VP.first)));
+  const Function *F1 = DynAAUtils::GetContainingFunction(VP.first);
+  const Function *F2 = DynAAUtils::GetContainingFunction(VP.second);
+  return make_pair(const_cast<Function *>(F1), const_cast<Function *>(F2));
 }

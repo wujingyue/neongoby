@@ -16,11 +16,14 @@ if __name__ == '__main__':
                     str(dynaa_utils.get_aa_choices()),
             metavar = 'aa',
             choices = dynaa_utils.get_aa_choices())
+    # Due to the behavior of LLVM's alias analysis chaining, the baseline AA
+    # must be an ImmutablePass.
     parser.add_argument('--baseline',
-                        help = 'baseline AA which is assumed to be correct: ' + \
-                                str(dynaa_utils.get_aa_choices()),
+                        help = 'baseline AA which is assumed to be ' + \
+                                'correct: ' + str(dynaa_utils.get_aa_choices()),
                         metavar = 'baseline_aa',
-                        choices = dynaa_utils.get_aa_choices())
+                        default = 'no-aa',
+                        choices = ['no-aa', 'basicaa', 'tbaa'])
     parser.add_argument('--disable-inline',
                         help = 'do not inline the alias checks',
                         action = 'store_true',
@@ -49,32 +52,31 @@ if __name__ == '__main__':
     bc_ac_opt = args.prog + '.ac.opt.bc'
     bc_ac_opt_inline = args.prog + '.ac.opt.inline.bc'
 
-    time_start_inserting = time.time()
     # Insert alias checks.
+    time_start_inserting = time.time()
     cmd = dynaa_utils.load_all_plugins('opt')
-    if args.input_alias_checks is None:
+
+    if args.input_alias_checks is not None:
         # If alias checks are inputed by users, we don't need to run any AA
-        if args.baseline is None:
-            cmd = dynaa_utils.load_aa(cmd, args.aa)
-        else:
-            if args.baseline == args.aa:
-                sys.stderr.write('\033[1;31m')
-                print >> sys.stderr, 'Error: Baseline and the checked AA',
-                print >> sys.stderr, 'must be different'
-                sys.stderr.write('\033[m')
-                sys.exit(1)
-            # baseline need be put before aa
-            cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
-            cmd = ' '.join((cmd, '-baseline-aa-name', args.baseline))
-    cmd = ' '.join((cmd, '-instrument-alias-checker', '-prepare'))
+        cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
+    else:
+        if args.baseline == args.aa:
+            sys.stderr.write('\033[1;31m')
+            print >> sys.stderr, 'Error: Baseline and the checked AA',
+            print >> sys.stderr, 'must be different'
+            sys.stderr.write('\033[m')
+            sys.exit(1)
+        cmd = dynaa_utils.load_aa(cmd, args.baseline)
+        cmd = ' '.join((cmd, '-baseline-aa'))
+        cmd = dynaa_utils.load_aa(cmd, args.aa)
+    if args.output_alias_checks is not None:
+        cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
     if args.abort_if_missed:
         cmd = ' '.join((cmd, '-abort-if-missed'))
-    if args.input_alias_checks is not None:
-        cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
-    if args.output_alias_checks is not None:
-        cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
+
+    cmd = ' '.join((cmd, '-instrument-alias-checker', '-prepare'))
     # Output stats by default.
     cmd = ' '.join((cmd, '-stats'))
     cmd = ' '.join((cmd, '-o', bc_ac, '<', bc_orig))

@@ -10,11 +10,13 @@
 using namespace llvm;
 
 namespace dyn_aa {
-struct BaselineAliasAnalysis: public ModulePass, public AliasAnalysis {
+// Make it an ImmutablePass so that it can be inserted before and after
+// basicaa or other ImmutablePasses.
+struct BaselineAliasAnalysis: public ImmutablePass, public AliasAnalysis {
   static char ID;
 
   BaselineAliasAnalysis();
-  virtual bool runOnModule(Module &M);
+  virtual void initializePass();
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);

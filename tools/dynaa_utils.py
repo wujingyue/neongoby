@@ -47,6 +47,9 @@ def load_aa(cmd, *aas):
         cmd = string.join((cmd, '-' + aa))
     return cmd
 
+def supports_intra_proc_queries_only(aa):
+    return aa == 'basicaa' or aa == 'ds-aa'
+
 def get_aa_choices():
     return ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa',
             'su-aa']

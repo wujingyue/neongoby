@@ -155,8 +155,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
   // going to add in Checks, and add them to the program later.
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();
-  assert(&AA != &BaselineAA &&
-         "the current AA and the baseline AA should be different");
+
   unsigned NumAliasQueriesInF = 0;
   for (Function::iterator B1 = F.begin(); B1 != F.end(); ++B1) {
     if (!PointersInBB.count(B1))
@@ -177,8 +176,8 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
              i2 < e2; ++i2) {
           Instruction *I2 = PointersInB2[i2];
           ++NumAliasQueriesInF;
-          if (AA.alias(I1, I2) == AliasAnalysis::NoAlias &&
-              BaselineAA.alias(I1, I2) != AliasAnalysis::NoAlias) {
+          if (BaselineAA.alias(I1, I2) != AliasAnalysis::NoAlias &&
+              AA.alias(I1, I2) == AliasAnalysis::NoAlias) {
             // Add a check when the baseline AA says "may" and the checked AA
             // says "no".
             Checks.push_back(make_pair(I1, I2));

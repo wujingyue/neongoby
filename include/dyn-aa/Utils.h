@@ -28,6 +28,8 @@ struct DynAAUtils {
   static void PrintValue(llvm::raw_ostream &O, const llvm::Value *V);
   static bool IsMalloc(const llvm::Function *F);
   static bool IsMallocCall(const llvm::Value *V);
+  static bool IsIntraProcQuery(const llvm::Value *V1, const llvm::Value *V2);
+  static const llvm::Function *GetContainingFunction(const llvm::Value *V);
 };
 }
 
