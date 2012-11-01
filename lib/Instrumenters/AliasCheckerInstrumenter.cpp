@@ -70,6 +70,12 @@ static RegisterPass<AliasCheckerInstrumenter> X(
     false, // Is CFG Only?
     false); // Is Analysis?
 
+enum ActionOnMissingAlias {
+  Abort,
+  Report,
+  Silence
+};
+
 static cl::opt<bool> NoPHI("no-phi",
                            cl::desc("Store pointer values into slots and "
                                     "load them at the end of functions"));
@@ -77,9 +83,15 @@ static cl::opt<string> OutputAliasChecksName("output-alias-checks",
                                              cl::desc("Dump all alias checks"));
 static cl::opt<string> InputAliasChecksName("input-alias-checks",
                                             cl::desc("Read all alias checks"));
-static cl::opt<bool> AbortIfMissed(
-    "abort-if-missed",
-    cl::desc("Abort the program on the first missed alias"));
+static cl::opt<ActionOnMissingAlias> ActionIfMissed(
+    "action",
+    cl::desc("Choose the action on missing aliases"),
+    cl::values(
+        clEnumValN(Abort, "abort", "abort the program"),
+        clEnumValN(Report, "report", "print out the missing alias"),
+        clEnumValN(Silence, "silence", "do nothing"),
+        clEnumValEnd),
+    cl::init(Silence));
 static cl::opt<bool> CheckAllPointers("check-all-pointers-online",
                                       cl::desc("Check all pointers"));
 
@@ -383,7 +395,12 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
   FunctionType *AliasCheckType = FunctionType::get(VoidType, ArgTypes, false);
 
   // Initialize hooks.
-  string AliasCheckName = (AbortIfMissed ? "AbortIfMissed" : "ReportIfMissed");
+  string AliasCheckName;
+  switch (ActionIfMissed) {
+    case Abort: AliasCheckName = "AbortIfMissed"; break;
+    case Report: AliasCheckName = "ReportIfMissed"; break;
+    case Silence: AliasCheckName = "SilenceIfMissed"; break;
+  }
   AliasCheck = Function::Create(AliasCheckType,
                                 GlobalValue::ExternalLinkage,
                                 AliasCheckName,

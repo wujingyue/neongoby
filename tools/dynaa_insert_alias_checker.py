@@ -36,10 +36,11 @@ if __name__ == '__main__':
                         help = 'store pointers into slots and load them later',
                         action = 'store_true',
                         default = False)
-    parser.add_argument('--abort-if-missed',
-                        help = 'abort the program on detecting a missed alias',
-                        action = 'store_true',
-                        default = False)
+    parser.add_argument('--action-if-missed',
+                        help = 'action on detecting a missed alias ' + \
+                                '(default: silence)',
+                        default = 'silence',
+                        choices = ['abort', 'report', 'silence'])
     parser.add_argument('--check-all',
                         help = 'check all pointers',
                         action = 'store_true',
@@ -79,8 +80,7 @@ if __name__ == '__main__':
         cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
-    if args.abort_if_missed:
-        cmd = ' '.join((cmd, '-abort-if-missed'))
+    cmd = ' '.join((cmd, '-action=' + args.action_if_missed))
     if args.check_all:
         cmd = ' '.join((cmd, '-check-all-pointers-online'))
 

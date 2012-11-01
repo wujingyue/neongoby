@@ -25,11 +25,12 @@ struct AliasCheckerInliner: public FunctionPass {
 
  private:
   void inlineAbortIfMissed(CallInst *CI, BasicBlock *TrapBB);
-  void inlineReportIfMissed(CallInst *CI);
+  void inlineReportOrSilenceIfMissed(CallInst *CI);
   void insertBranchTo(BasicBlock *BB, BasicBlock *ErrorBB, BasicBlock *NextBB,
                       Value *P, Value *Q);
 
-  Function *AbortIfMissed, *ReportIfMissed, *ReportMissingAlias;
+  Function *AbortIfMissed, *ReportIfMissed, *SilenceIfMissed;
+  Function *ReportMissingAlias, *SilenceMissingAlias;
 };
 }
 
@@ -46,23 +47,33 @@ char AliasCheckerInliner::ID = 0;
 bool AliasCheckerInliner::doInitialization(Module &M) {
   AbortIfMissed = M.getFunction("AbortIfMissed");
   ReportIfMissed = M.getFunction("ReportIfMissed");
+  SilenceIfMissed = M.getFunction("SilenceIfMissed");
 
   Type *VoidType = Type::getVoidTy(M.getContext());
   Type *IntType = Type::getInt32Ty(M.getContext());
   Type *CharStarType = PointerType::getUnqual(Type::getInt8Ty(M.getContext()));
 
   assert(M.getFunction("ReportMissingAlias") == NULL);
+  assert(M.getFunction("SilenceMissingAlias") == NULL);
   vector<Type *> ArgTypes;
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(CharStarType);
-  FunctionType *ReportMissingAliasType = FunctionType::get(VoidType,
-                                                           ArgTypes,
-                                                           false);
-  ReportMissingAlias = Function::Create(ReportMissingAliasType,
-                                        GlobalValue::ExternalLinkage,
-                                        "ReportMissingAlias",
-                                        &M);
+  FunctionType *ReportOrSilenceMissingAliasType = FunctionType::get(VoidType,
+                                                                    ArgTypes,
+                                                                    false);
+  if (ReportIfMissed != NULL) {
+    ReportMissingAlias = Function::Create(ReportOrSilenceMissingAliasType,
+                                          GlobalValue::ExternalLinkage,
+                                          "ReportMissingAlias",
+                                          &M);
+  }
+  if (SilenceIfMissed != NULL) {
+    SilenceMissingAlias = Function::Create(ReportOrSilenceMissingAliasType,
+                                           GlobalValue::ExternalLinkage,
+                                           "SilenceMissingAlias",
+                                           &M);
+  }
   return true;
 }
 
@@ -93,8 +104,8 @@ bool AliasCheckerInliner::runOnFunction(Function &F) {
           if (Callee == AbortIfMissed) {
             inlineAbortIfMissed(CI, TrapBB);
             Ins = BB->getTerminator();
-          } else if (Callee == ReportIfMissed) {
-            inlineReportIfMissed(CI);
+          } else if (Callee == ReportIfMissed || Callee == SilenceIfMissed) {
+            inlineReportOrSilenceIfMissed(CI);
             Ins = BB->getTerminator();
           }
         }
@@ -111,6 +122,8 @@ bool AliasCheckerInliner::doFinalization(Module &M) {
     AbortIfMissed->eraseFromParent();
   if (ReportIfMissed != NULL)
     ReportIfMissed->eraseFromParent();
+  if (SilenceIfMissed != NULL)
+    SilenceIfMissed->eraseFromParent();
 
   return true;
 }
@@ -149,7 +162,7 @@ void AliasCheckerInliner::inlineAbortIfMissed(CallInst *CI,
   CI->eraseFromParent();
 }
 
-void AliasCheckerInliner::inlineReportIfMissed(CallInst *CI) {
+void AliasCheckerInliner::inlineReportOrSilenceIfMissed(CallInst *CI) {
   BasicBlock *BB = CI->getParent();
   CallSite CS(CI);
   Value *P = CS.getArgument(0), *Q = CS.getArgument(2);
@@ -192,7 +205,12 @@ void AliasCheckerInliner::inlineReportIfMissed(CallInst *CI) {
   Args.push_back(VIDOfP);
   Args.push_back(VIDOfQ);
   Args.push_back(P);
-  CallInst::Create(ReportMissingAlias, Args, "", ReportBB);
+  if (CI->getCalledFunction() == ReportIfMissed)
+    CallInst::Create(ReportMissingAlias, Args, "", ReportBB);
+  else if (CI->getCalledFunction() == SilenceIfMissed)
+    CallInst::Create(SilenceMissingAlias, Args, "", ReportBB);
+  else
+    assert(false);
   BranchInst::Create(NewBB, ReportBB);
   // Update BB.
   insertBranchTo(BB, ReportBB, NewBB, P, Q);

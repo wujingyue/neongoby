@@ -6,12 +6,11 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define DISABLE_REPORT
-
 extern "C" void ReportMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
-#ifndef DISABLE_REPORT
   fprintf(stderr, "value(%u) = value(%u) = %p\n", VIDOfP, VIDOfQ, V);
-#endif
+}
+
+extern "C" void SilenceMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
 }
 
 extern "C" void AbortIfMissed(void *P, unsigned VIDOfP,
@@ -26,5 +25,12 @@ extern "C" void ReportIfMissed(void *P, unsigned VIDOfP,
                                void *Q, unsigned VIDOfQ) {
   if (P == Q && P) {
     ReportMissingAlias(VIDOfP, VIDOfQ, P);
+  }
+}
+
+extern "C" void SilenceIfMissed(void *P, unsigned VIDOfP,
+                                void *Q, unsigned VIDOfQ) {
+  if (P == Q && P) {
+    SilenceMissingAlias(VIDOfP, VIDOfQ, P);
   }
 }
