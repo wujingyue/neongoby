@@ -40,10 +40,16 @@ if __name__ == '__main__':
                         help = 'abort the program on detecting a missed alias',
                         action = 'store_true',
                         default = False)
+    parser.add_argument('--check-all',
+                        help = 'check all pointers',
+                        action = 'store_true',
+                        default = False)
     parser.add_argument('--input-alias-checks',
-                        help = 'input file containing alias checks')
+                        # help = 'input file containing alias checks')
+                        help = argparse.SUPPRESS)
     parser.add_argument('--output-alias-checks',
-                        help = 'output file containing alias checks')
+                        # help = 'output file containing alias checks')
+                        help = argparse.SUPPRESS)
     args = parser.parse_args()
 
     # Initialize output file names after each stage.
@@ -75,6 +81,8 @@ if __name__ == '__main__':
         cmd = ' '.join((cmd, '-no-phi'))
     if args.abort_if_missed:
         cmd = ' '.join((cmd, '-abort-if-missed'))
+    if args.check_all:
+        cmd = ' '.join((cmd, '-check-all-pointers-online'))
 
     cmd = ' '.join((cmd, '-instrument-alias-checker', '-prepare'))
     # Output stats by default.

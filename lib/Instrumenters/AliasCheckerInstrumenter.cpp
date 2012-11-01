@@ -73,15 +73,15 @@ static RegisterPass<AliasCheckerInstrumenter> X(
 static cl::opt<bool> NoPHI("no-phi",
                            cl::desc("Store pointer values into slots and "
                                     "load them at the end of functions"));
-static cl::opt<string> OutputAliasChecksName(
-    "output-alias-checks",
-    cl::desc("Dump all alias checks"));
-static cl::opt<string> InputAliasChecksName(
-    "input-alias-checks",
-    cl::desc("Read all alias checks"));
+static cl::opt<string> OutputAliasChecksName("output-alias-checks",
+                                             cl::desc("Dump all alias checks"));
+static cl::opt<string> InputAliasChecksName("input-alias-checks",
+                                            cl::desc("Read all alias checks"));
 static cl::opt<bool> AbortIfMissed(
     "abort-if-missed",
     cl::desc("Abort the program on the first missed alias"));
+static cl::opt<bool> CheckAllPointers("check-all-pointers-online",
+                                      cl::desc("Check all pointers"));
 
 static cl::list<string> OnlineBlackList("online-black-list",
     cl::desc("Don't add checks to these functions"));
@@ -126,7 +126,7 @@ void AliasCheckerInstrumenter::computeAliasChecks(Function &F,
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
       if (!Ins->getType()->isPointerTy())
         continue;
-      if (!DynAAUtils::PointerIsDereferenced(Ins))
+      if (!CheckAllPointers && !DynAAUtils::PointerIsDereferenced(Ins))
         continue;
       PointersInBB[BB].push_back(Ins);
       Pointers.push_back(Ins);
