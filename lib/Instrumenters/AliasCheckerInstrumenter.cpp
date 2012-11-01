@@ -405,6 +405,7 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
                                 GlobalValue::ExternalLinkage,
                                 AliasCheckName,
                                 &M);
+  AliasCheck->setDoesNotThrow(true);
 
   assert(InputAliasChecksName == "" || OutputAliasChecksName == "");
   // Initialize the output file for alias checks if necessary.
