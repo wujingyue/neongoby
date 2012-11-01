@@ -173,7 +173,7 @@ void TraceSlicer::trackSourcePointer(TraceState &TS,
                                     const TopLevelPointToLogRecord &Record) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *V = IDA.getValue(TS.ValueID);
-  if (LoadInst *LI = dyn_cast<LoadInst>(V)) {
+  if (isa<LoadInst>(V)) {
     TS.Address = Record.LoadedFrom;
     TS.Action = AddrTakenPointTo;
   } else if (GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(V)) {
@@ -194,13 +194,9 @@ void TraceSlicer::trackSourcePointer(TraceState &TS,
     TS.Action = CallInstruction;
     TS.ArgNo = A->getArgNo();
     // errs() << "(argument of @" << A->getParent()->getName() << ")\n";
-  } else if (CallInst *CI = dyn_cast<CallInst>(V)) {
+  } else if (isa<CallInst>(V) || isa<InvokeInst>(V)) {
     TS.Action = ReturnInstruction;
-    // errs() << "(call @" << CI->getCalledFunction()->getName() << ")\n";
-  } else if (InvokeInst *II = dyn_cast<InvokeInst>(V)) {
-    TS.Action = ReturnInstruction;
-    // errs() << "(call @" << II->getCalledFunction()->getName() << ")\n";
-  } else if (AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
+  } else if (isa<AllocaInst>(V)) {
     TS.End = true;
   } else if (isa<GlobalValue>(V)) {
     TS.End = true;
@@ -301,10 +297,10 @@ void TraceSlicer::processReturnInstruction(
         CurrentRecordID, IDA.getValueID(I)));
       CurrentState[PointerLabel].Action = TopLevelPointTo;
       if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
-        CurrentState[PointerLabel].ValueID = IDA.getValueID(RI->getReturnValue());
-      } else if (ResumeInst *RI = dyn_cast<ResumeInst>(I)) {
+        CurrentState[PointerLabel].ValueID =
+          IDA.getValueID(RI->getReturnValue());
+      } else if (isa<ResumeInst>(I)) {
         assert(false);
-        // CurrentState[PointerLabel].ValueID = IDA.getValueID(RI->getValue());
       } else {
         assert(false);
       }
