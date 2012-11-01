@@ -198,7 +198,7 @@ void Preparer::expandAlloca(AllocaInst *AI) {
   assert(AllocatedType->isSized());
   TargetData &TD = getAnalysis<TargetData>();
   unsigned Align = RoundUpToPowerOfTwo(TD.getTypeStoreSize(AllocatedType) + 1);
-  assert(AI->getAlignment() > 0);
+  // AI->getAlignment() returns 0 if the alignment is unspecified.
   Align = max(Align, AI->getAlignment());
   AI->setAlignment(Align);
 }
