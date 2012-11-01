@@ -364,6 +364,7 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
 
   addAliasChecks(F, Pointers, Checks);
 
+#if 0
   // Remove deallocators.
   for (Function::iterator BB = F.begin(); BB != F.end(); ++BB) {
     for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ) {
@@ -373,6 +374,7 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
       Ins = NextIns;
     }
   }
+#endif
 
   return true;
 }
@@ -422,6 +424,23 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
     }
     fclose(InputFile);
   }
+
+  // replace free() and delete with our implementation
+  vector<pair<string, string> > ReplacePairs;
+  ReplacePairs.push_back(make_pair<string, string>("free", "dynaa_free"));
+  ReplacePairs.push_back(make_pair<string, string>("_ZdlPv", "dynaa_delete"));
+  ReplacePairs.push_back(make_pair<string, string>("_ZdaPv",
+                                                   "dynaa_delete_array"));
+  for (vector<pair<string, string> >::iterator it = ReplacePairs.begin();
+      it != ReplacePairs.end(); it++) {
+    Function *Func = M.getFunction(it->first);
+    if (Func != NULL) {
+      assert(M.getFunction(it->second) == NULL && "runtime function's name is \
+          in conflict with original functions' names");
+      Func->setName(it->second);
+    }
+  }
+
   return true;
 }
 
