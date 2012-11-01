@@ -27,7 +27,7 @@ struct TraceState{
   }
 
   // Indicates where the trace starts
-  unsigned StartRecordID;
+  unsigned StartingRecordID;
 
   // Indicates whether go on following the trace
   bool End;
@@ -35,12 +35,13 @@ struct TraceState{
   // Stores the trace, key is RecordID, value is ValueID
   vector<pair<unsigned, unsigned> > Trace;
 
-  // Indicates type of log record to deal with
+  // Indicates type of log record to deal with:
   // If Action is AddrTakenPointTo, TraceSlicer will only track Address;
   // If Action is TopLevelPointTo, if previous instruction is Select/PHI,
   // TraceSlicer will track ValueIDCandidates and Address first, and then
   // track ValueID; otherwise, TraceSlicer will only track ValueID;
-  // If Action is CallInstruction, TraceSlicer will only track ArgNo.
+  // If Action is CallInstruction, ArgNo is used;
+  // If Action is ReturnInstruction, StartingFunction is used.
   LogRecordType Action;
 
   // All possible source pointers of PHI and Select for TopLevelPointTo record.
@@ -55,6 +56,9 @@ struct TraceState{
 
   // Index of argument for CallInstruction record
   unsigned ArgNo;
+
+  // The containing function of start pointer for printing ReturnInst
+  Function *StartingFunction;
 };
 
 struct TraceSlicer: public ModulePass,

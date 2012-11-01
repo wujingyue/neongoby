@@ -40,8 +40,8 @@ bool TraceSlicer::runOnModule(Module &M) {
   LC.processLog();
   CurrentRecordID = LC.getNumLogRecords();
 
-  CurrentState[0].StartRecordID = FirstPointerRecordID;
-  CurrentState[1].StartRecordID = SecondPointerRecordID;
+  CurrentState[0].StartingRecordID = FirstPointerRecordID;
+  CurrentState[1].StartingRecordID = SecondPointerRecordID;
 
   processLog(true);
 
@@ -105,7 +105,7 @@ void TraceSlicer::print(raw_ostream &O, const Module *M) const {
 }
 
 bool TraceSlicer::isLive(int PointerLabel) {
-  if (CurrentState[PointerLabel].StartRecordID < CurrentRecordID ||
+  if (CurrentState[PointerLabel].StartingRecordID < CurrentRecordID ||
       CurrentState[PointerLabel].End) {
     return false;
   }
@@ -116,7 +116,7 @@ void TraceSlicer::processAddrTakenDecl(const AddrTakenDeclLogRecord &Record) {
   CurrentRecordID--;
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartRecordID != CurrentRecordID);
+    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
   }
 }
 
@@ -126,9 +126,16 @@ void TraceSlicer::processTopLevelPointTo(
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    if (CurrentState[PointerLabel].StartRecordID == CurrentRecordID) {
+    if (CurrentState[PointerLabel].StartingRecordID == CurrentRecordID) {
       Value *V = IDA.getValue(Record.PointerValueID);
       assert(V->getType()->isPointerTy());
+      if (Argument *A = dyn_cast<Argument>(V))
+        CurrentState[PointerLabel].StartingFunction = A->getParent();
+      else if (Instruction *I = dyn_cast<Instruction>(V))
+        CurrentState[PointerLabel].StartingFunction =
+          I->getParent()->getParent();
+      else
+        CurrentState[PointerLabel].StartingFunction = NULL;
       CurrentState[PointerLabel].ValueID = Record.PointerValueID;
     }
     if (isLive(PointerLabel)) {
@@ -216,7 +223,7 @@ void TraceSlicer::processAddrTakenPointTo(
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartRecordID != CurrentRecordID);
+    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
     if (isLive(PointerLabel)) {
       if (CurrentState[PointerLabel].Action != AddrTakenPointTo) {
         continue;
@@ -250,7 +257,7 @@ void TraceSlicer::processCallInstruction(
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartRecordID != CurrentRecordID);
+    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
     if (isLive(PointerLabel)) {
       if (CurrentState[PointerLabel].Action == ReturnInstruction) {
         // this callee is an external function, the trace ends
@@ -286,9 +293,15 @@ void TraceSlicer::processReturnInstruction(
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartRecordID != CurrentRecordID);
+    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
     if (isLive(PointerLabel)) {
       if (CurrentState[PointerLabel].Action != ReturnInstruction) {
+        // print return instruction of the starting function
+        if (I->getParent()->getParent() ==
+            CurrentState[PointerLabel].StartingFunction) {
+          CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
+            CurrentRecordID, IDA.getValueID(I)));
+        }
         continue;
       }
 
