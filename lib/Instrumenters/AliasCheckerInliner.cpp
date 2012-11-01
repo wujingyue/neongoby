@@ -74,7 +74,7 @@ bool AliasCheckerInliner::doInitialization(Module &M) {
                                            GlobalValue::ExternalLinkage,
                                            "SilenceMissingAlias",
                                            &M);
-    ReportMissingAlias->setDoesNotThrow(true);
+    SilenceMissingAlias->setDoesNotThrow(true);
   }
   return true;
 }
