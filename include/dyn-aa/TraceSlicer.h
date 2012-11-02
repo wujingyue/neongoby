@@ -28,11 +28,13 @@ struct TraceState{
 
   // Indicates where the trace starts
   unsigned StartingRecordID;
+  // The containing function of start pointer for printing ReturnInst
+  Function *StartingFunction;
 
   // Indicates whether go on following the trace
   bool End;
 
-  // Stores the trace, key is RecordID, value is ValueID
+  // Stores the sliced trace, key is RecordID, value is ValueID
   vector<pair<unsigned, unsigned> > Trace;
 
   // Indicates type of log record to deal with:
@@ -56,31 +58,15 @@ struct TraceState{
 
   // Index of argument for CallInstruction record
   unsigned ArgNo;
-
-  // The containing function of start pointer for printing ReturnInst
-  Function *StartingFunction;
 };
 
-struct TraceSlicer: public ModulePass,
-                    public LogProcessor {
-
+struct TraceSlicer: public ModulePass, public LogProcessor {
   static char ID;
 
-  TraceSlicer(): ModulePass(ID) {
-  }
-
+  TraceSlicer(): ModulePass(ID) {}
   virtual bool runOnModule(Module &M);
-
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual void print(raw_ostream &O, const Module *M) const;
-
-  // Interfaces of TraceSlicer.
-  void trackSourcePointer(TraceState &TS,
-                         const TopLevelPointToLogRecord &Record);
-  void printTrace(raw_ostream &O,
-                  pair<unsigned, unsigned> TraceRecord,
-                  int PointerLabel) const;
-  bool isLive(int PointerLabel);
 
   // Interfaces of LogProcessor.
   void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
@@ -89,7 +75,16 @@ struct TraceSlicer: public ModulePass,
   void processCallInstruction(const CallInstructionLogRecord &Record);
   void processReturnInstruction(const ReturnInstructionLogRecord &Record);
 
-private:
+  Value *getLatestCommonAncestor();
+
+ private:
+  void trackSourcePointer(TraceState &TS,
+                         const TopLevelPointToLogRecord &Record);
+  void printTrace(raw_ostream &O,
+                  pair<unsigned, unsigned> TraceRecord,
+                  int PointerLabel) const;
+  bool isLive(int PointerLabel);
+
   TraceState CurrentState[2];
   unsigned CurrentRecordID;
 };

@@ -60,7 +60,7 @@ void TraceSlicer::printTrace(raw_ostream &O,
   unsigned ValueID = TraceRecord.second;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *V = IDA.getValue(ValueID);
-  O.changeColor(PointerLabel == 0 ? raw_ostream::MAGENTA : raw_ostream::CYAN);
+  O.changeColor(PointerLabel == 0 ? raw_ostream::GREEN : raw_ostream::RED);
   O << RecordID << "\t";
   O << "ptr" << PointerLabel + 1 << "\t";
   O << ValueID << "\t";
@@ -145,15 +145,17 @@ void TraceSlicer::processTopLevelPointTo(
           CurrentState[PointerLabel].ValueID = Record.PointerValueID;
 
           NumContainingSlices++;
-          CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
-            CurrentRecordID, CurrentState[PointerLabel].ValueID));
+          CurrentState[PointerLabel].Trace.push_back(
+              make_pair(CurrentRecordID,
+                        CurrentState[PointerLabel].ValueID));
           trackSourcePointer(CurrentState[PointerLabel], Record);
         }
       } else {
         if (Record.PointerValueID == CurrentState[PointerLabel].ValueID) {
           NumContainingSlices++;
-          CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
-            CurrentRecordID, CurrentState[PointerLabel].ValueID));
+          CurrentState[PointerLabel].Trace.push_back(
+              make_pair(CurrentRecordID,
+                        CurrentState[PointerLabel].ValueID));
           trackSourcePointer(CurrentState[PointerLabel], Record);
         }
       }
@@ -220,8 +222,9 @@ void TraceSlicer::processAddrTakenPointTo(
       }
       if (Record.PointerAddress == CurrentState[PointerLabel].Address) {
         NumContainingSlices++;
-        CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
-          CurrentRecordID, IDA.getValueID(I)));
+        CurrentState[PointerLabel].Trace.push_back(
+            make_pair(CurrentRecordID,
+                      IDA.getValueID(I)));
         CurrentState[PointerLabel].Action = TopLevelPointTo;
         StoreInst *SI = dyn_cast<StoreInst>(I);
         CurrentState[PointerLabel].ValueID =
@@ -259,8 +262,9 @@ void TraceSlicer::processCallInstruction(
       }
 
       NumContainingSlices++;
-      CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
-        CurrentRecordID, IDA.getValueID(I)));
+      CurrentState[PointerLabel].Trace.push_back(
+          make_pair(CurrentRecordID,
+                    IDA.getValueID(I)));
       CurrentState[PointerLabel].Action = TopLevelPointTo;
       CurrentState[PointerLabel].ValueID =
         IDA.getValueID(CS.getArgument(CurrentState[PointerLabel].ArgNo));
@@ -289,15 +293,17 @@ void TraceSlicer::processReturnInstruction(
         // print return instruction of the starting function
         if (I->getParent()->getParent() ==
             CurrentState[PointerLabel].StartingFunction) {
-          CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
-            CurrentRecordID, IDA.getValueID(I)));
+          CurrentState[PointerLabel].Trace.push_back(
+              make_pair(CurrentRecordID,
+                        IDA.getValueID(I)));
         }
         continue;
       }
 
       NumContainingSlices++;
-      CurrentState[PointerLabel].Trace.push_back(pair<unsigned, unsigned>(
-        CurrentRecordID, IDA.getValueID(I)));
+      CurrentState[PointerLabel].Trace.push_back(
+          make_pair(CurrentRecordID,
+                    IDA.getValueID(I)));
       CurrentState[PointerLabel].Action = TopLevelPointTo;
       if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
         CurrentState[PointerLabel].ValueID =
@@ -314,4 +320,16 @@ void TraceSlicer::processReturnInstruction(
     CurrentState[0].End = true;
     CurrentState[1].End = true;
   }
+}
+
+// Get the latest common ancestor of the two slices.
+// Returns NULL if the two slices don't meet.
+Value *TraceSlicer::getLatestCommonAncestor() {
+  if (CurrentState[0].Trace.empty() || CurrentState[1].Trace.empty())
+    return NULL;
+  if (CurrentState[0].Trace.back() == CurrentState[1].Trace.back()) {
+    IDAssigner &IDA = getAnalysis<IDAssigner>();
+    return IDA.getValue(CurrentState[0].Trace.back().second);
+  }
+  return NULL;
 }
