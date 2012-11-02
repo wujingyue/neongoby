@@ -60,27 +60,17 @@ void TraceSlicer::printTrace(raw_ostream &O,
   unsigned ValueID = TraceRecord.second;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *V = IDA.getValue(ValueID);
+  O.changeColor(PointerLabel == 0 ? raw_ostream::MAGENTA : raw_ostream::CYAN);
   O << RecordID << "\t";
   O << "ptr" << PointerLabel + 1 << "\t";
   O << ValueID << "\t";
   DynAAUtils::PrintValue(O, V);
-//  if (Argument *A = dyn_cast<Argument>(V)) {
-//    O << " (argNo " << A->getArgNo() << ")";
-//  }
   O << "\n";
+  O.resetColor();
 }
 
 void TraceSlicer::print(raw_ostream &O, const Module *M) const {
-  O << "RecID\tPtr\tValueID\tFunc:  Inst/Arg\n\n";
-  for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    O << "ptr" << PointerLabel + 1 << ": \n";
-    for (int i = CurrentState[PointerLabel].Trace.size() - 1; i >= 0; --i) {
-      printTrace(O, CurrentState[PointerLabel].Trace[i], PointerLabel);
-    }
-    O << "\n";
-  }
-
-  O << "Merged: \n";
+  O << "RecID\tPtr\tValueID\tFunc:  Inst/Arg\n";
   int Index[2];
   Index[0] = CurrentState[0].Trace.size() - 1;
   Index[1] = CurrentState[1].Trace.size() - 1;
