@@ -9,16 +9,24 @@
 
 namespace dyn_aa {
 struct LogProcessor {
+  LogProcessor(): CurrentRecordID(0) {}
+
   void processLog(bool Reversed = false);
-  virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &) = 0;
-  virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &) = 0;
-  virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &) = 0;
-  virtual void processCallInstruction(const CallInstructionLogRecord &) = 0;
-  virtual void processReturnInstruction(const ReturnInstructionLogRecord &) = 0;
+  unsigned getCurrentRecordID() const { return CurrentRecordID; }
+
+  // TODO: We should have a common ancestor of all these records, and provide
+  // a common processRecord interface.
+  virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &);
+  virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &);
+  virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &);
+  virtual void processCallInstruction(const CallInstructionLogRecord &);
+  virtual void processReturnInstruction(const ReturnInstructionLogRecord &);
 
 private:
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);
   static off_t GetFileSize(FILE *LogFile);
+
+  unsigned CurrentRecordID;
 };
 }
 

@@ -46,6 +46,7 @@ void LogProcessor::processLog(bool Reversed) {
   uint64_t FileSize = GetFileSize(LogFile);
   uint64_t NumBytesRead = 0;
   NumRecords = 0;
+  CurrentRecordID = 0;
   DynAAUtils::PrintProgressBar(0, NumBytesRead, FileSize);
   LogRecordType RecordType;
   while (ReadData(&RecordType, sizeof RecordType, Reversed, LogFile)) {
@@ -102,7 +103,9 @@ void LogProcessor::processLog(bool Reversed) {
           ++NumReturnInstructions;
           NumBytesRead += sizeof Record;
         }
+        break;
     }
+    ++CurrentRecordID;
     ReadData(&RecordType, sizeof RecordType, Reversed, LogFile);
     NumBytesRead += sizeof RecordType;
     DynAAUtils::PrintProgressBar(OldNumBytesRead, NumBytesRead, FileSize);
