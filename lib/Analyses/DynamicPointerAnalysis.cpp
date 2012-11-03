@@ -66,22 +66,6 @@ void DynamicPointerAnalysis::processTopLevelPointTo(
   }
 }
 
-void DynamicPointerAnalysis::processAddrTakenPointTo(
-    const AddrTakenPointToLogRecord &Record) {
-  // We needn't do anything on AddrTakenPointToLogRecords, because currently
-  // pointers are all virtual registers (top-level variables).
-}
-
-void DynamicPointerAnalysis::processCallInstruction(
-    const CallInstructionLogRecord &Record) {
-  // Do nothing.
-}
-
-void DynamicPointerAnalysis::processReturnInstruction(
-    const ReturnInstructionLogRecord &Record) {
-  // Do nothing.
-}
-
 Value *DynamicPointerAnalysis::lookupAddress(void *Addr) const {
   Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
   IntervalTree<Value *>::const_iterator Pos = AddrTakenDecls.find(I);

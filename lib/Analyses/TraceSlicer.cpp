@@ -20,26 +20,77 @@ using namespace llvm;
 using namespace rcs;
 using namespace dyn_aa;
 
+// Users specify either StartingRecordIDs or StartingValueIDs.
 static cl::list<unsigned> StartingRecordIDs(
-    "record",
-    cl::desc("RecordIDs of the two pointers"));
+    "starting-record",
+    cl::desc("Record IDs of the two pointers"));
+// When users specify StartingValueIDs, we look for the first two records of the
+// given values that share the same address. Note that sharing the same address
+// does not always mean they alias because of versioning issues and such. But
+// most of the time it just works. Therefore, be careful about this option.
+static cl::list<unsigned> StartingValueIDs(
+    "starting-value",
+    cl::desc("Value IDs of the two pointers"));
 
 static RegisterPass<TraceSlicer> X("slice-trace",
                                    "Slice trace of two input pointers",
                                    false, // Is CFG Only?
                                    true); // Is Analysis?
 
+struct RecordFinder: public LogProcessor {
+  RecordFinder(): RecordID1(-1), RecordID2(-1) {}
+
+  void processTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
+    if (StartingRecordIDs.size() == 2) {
+      // Do nothing if already filled in.
+      return;
+    }
+    if (Record.PointerValueID == StartingValueIDs[0]) {
+      RecordID1 = getCurrentRecordID();
+      Address1 = Record.PointeeAddress;
+    }
+    if (Record.PointerValueID == StartingValueIDs[1]) {
+      RecordID2 = getCurrentRecordID();
+      Address2 = Record.PointeeAddress;
+    }
+    if (Address1 == Address2) {
+      StartingRecordIDs.push_back(RecordID1);
+      StartingRecordIDs.push_back(RecordID2);
+      assert(StartingRecordIDs.size() == 2);
+    }
+  }
+
+ private:
+  unsigned RecordID1, RecordID2;
+  void *Address1, *Address2;
+};
+
 char TraceSlicer::ID = 0;
 
 bool TraceSlicer::runOnModule(Module &M) {
+  errs() << "Counting log records...\n";
   LogCounter LC;
   LC.processLog();
   CurrentRecordID = LC.getNumLogRecords();
 
+  assert((StartingRecordIDs.empty() ^ StartingValueIDs.empty()) &&
+         "specify either starting-record or starting-value");
+  assert((StartingRecordIDs.empty() || StartingRecordIDs.size() == 2) &&
+         "we need two starting-record");
+  assert((StartingValueIDs.empty() || StartingValueIDs.size() == 2) &&
+         "we need two starting-value");
+  if (StartingRecordIDs.empty()) {
+    // The user specifies staring-value instead of starting-record. Need look
+    // for starting-record in the trace.
+    errs() << "Finding records of the two input values...\n";
+    RecordFinder RF;
+    RF.processLog();
+  }
   assert(StartingRecordIDs.size() == 2);
   for (unsigned i = 0; i < StartingRecordIDs.size(); ++i)
     CurrentState[i].StartingRecordID = StartingRecordIDs[i];
 
+  errs() << "Backward slicing...\n";
   processLog(true);
 
   return false;

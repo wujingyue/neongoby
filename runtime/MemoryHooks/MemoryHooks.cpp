@@ -129,7 +129,8 @@ extern "C" void HookFork(int Result) {
     string ParentLogFileName = Global->GetLogFileName();
     string ChildLogFileName = Global->GetLogFileName(Result);
     string CmdLine = "cp " + ParentLogFileName + " " + ChildLogFileName;
-    system(CmdLine.c_str());
+    int Ret = system(CmdLine.c_str());
+    assert(Ret == 0);
     Global->UnlockLogFile();
   }
 }

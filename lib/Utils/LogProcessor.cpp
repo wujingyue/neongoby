@@ -33,6 +33,19 @@ STATISTIC(NumCallInstructions, "Number of call instructions records");
 STATISTIC(NumReturnInstructions, "Number of return instructions records");
 STATISTIC(NumRecords, "Number of all records");
 
+// By default, these call-back functions do nothing.
+void LogProcessor::processAddrTakenDecl(const AddrTakenDeclLogRecord &) {
+}
+void LogProcessor::processTopLevelPointTo(const TopLevelPointToLogRecord &) {
+}
+void LogProcessor::processAddrTakenPointTo(const AddrTakenPointToLogRecord &) {
+}
+void LogProcessor::processCallInstruction(const CallInstructionLogRecord &) {
+}
+void LogProcessor::processReturnInstruction(
+    const ReturnInstructionLogRecord &) {
+}
+
 void LogProcessor::processLog(bool Reversed) {
   assert(LogFileName != "" && "Didn't specify the log file.");
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
