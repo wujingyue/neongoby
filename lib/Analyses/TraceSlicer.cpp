@@ -20,13 +20,9 @@ using namespace llvm;
 using namespace rcs;
 using namespace dyn_aa;
 
-static cl::opt<unsigned> FirstPointerRecordID(
-    "pt1",
-    cl::desc("RecordID of the first pointer"));
-
-static cl::opt<unsigned> SecondPointerRecordID(
-    "pt2",
-    cl::desc("RecordID of the second pointer"));
+static cl::list<unsigned> StartingRecordIDs(
+    "record",
+    cl::desc("RecordIDs of the two pointers"));
 
 static RegisterPass<TraceSlicer> X("slice-trace",
                                    "Slice trace of two input pointers",
@@ -40,8 +36,9 @@ bool TraceSlicer::runOnModule(Module &M) {
   LC.processLog();
   CurrentRecordID = LC.getNumLogRecords();
 
-  CurrentState[0].StartingRecordID = FirstPointerRecordID;
-  CurrentState[1].StartingRecordID = SecondPointerRecordID;
+  assert(StartingRecordIDs.size() == 2);
+  for (unsigned i = 0; i < StartingRecordIDs.size(); ++i)
+    CurrentState[i].StartingRecordID = StartingRecordIDs[i];
 
   processLog(true);
 
