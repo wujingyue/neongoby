@@ -42,7 +42,7 @@ extern "C" void _ZdlPv(void *MemBlock);
 extern "C" void _ZdaPv(void *Array);
 
 extern "C" void ReportMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
-  fprintf(stderr, "value(%u) = value(%u) = %p\n", VIDOfP, VIDOfQ, V);
+  fprintf(stderr, "Missing alias:\n[%u]\n[%u]\n", VIDOfP, VIDOfQ);
 }
 
 extern "C" void SilenceMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
