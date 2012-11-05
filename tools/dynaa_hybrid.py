@@ -7,7 +7,6 @@ import dynaa_utils
 import rcs_utils
 import sys
 import time
-import os
 import string
 
 if __name__ == '__main__':
@@ -37,8 +36,13 @@ if __name__ == '__main__':
                         help = 'store pointers into slots and load them later',
                         action = 'store_true',
                         default = False)
-    parser.add_argument('--abort-if-missed',
-                        help = 'abort the program on detecting a missed alias',
+    parser.add_argument('--action-if-missed',
+                        help = 'action on detecting a missed alias ' + \
+                                '(default: silence)',
+                        default = 'silence',
+                        choices = ['abort', 'report', 'silence'])
+    parser.add_argument('--check-all',
+                        help = 'check all pointers',
                         action = 'store_true',
                         default = False)
     parser.add_argument('--input-alias-checks',
@@ -66,16 +70,17 @@ if __name__ == '__main__':
 
     # Initialize output file names after each stage.
     bc_orig = args.prog + '.bc'
-    bc_ac = args.prog + '.ac.bc'
-    bc_ac_opt = args.prog + '.ac.opt.bc'
-    bc_ac_opt_inline = args.prog + '.ac.opt.inline.bc'
-    hybrid_bc = args.prog + '.hybrid.bc'
-    hybrid_exe = args.prog + '.hybrid'
+    bc_hybrid = args.prog + '.hybrid.bc'
+    bc_hybrid_opt = args.prog + '.hybrid.opt.bc'
+    bc_hybrid_opt_inline = args.prog + '.hybrid.opt.inline.bc'
+    exe_hybrid = args.prog + '.hybrid'
 
-    time_start_inserting = time.time()
+    time_start_hybrid = time.time()
     # Insert alias checks.
     cmd = dynaa_utils.load_all_plugins('opt')
-    if args.input_alias_checks is None:
+    if args.input_alias_checks is not None:
+        cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
+    else:
         # If alias checks are inputed by users, we don't need to run any AA
         if args.baseline is None:
             cmd = dynaa_utils.load_aa(cmd, args.aa)
@@ -88,46 +93,20 @@ if __name__ == '__main__':
                 sys.exit(1)
             # baseline need be put before aa
             cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
+    if args.output_alias_checks is not None:
+        cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
     if args.no_phi:
         cmd = ' '.join((cmd, '-no-phi'))
-    if args.abort_if_missed:
-        cmd = ' '.join((cmd, '-abort-if-missed'))
-    if args.input_alias_checks is not None:
-        cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
-    if args.output_alias_checks is not None:
-        cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
+    cmd = ' '.join((cmd, '-action=' + args.action_if_missed))
+    if args.check_all:
+        cmd = ' '.join((cmd, '-check-all-pointers-online'))
     # ignore offline functions
     if args.offline_funcs is not None:
         for funcs in args.offline_funcs:
             for func in funcs:
                 cmd = ' '.join((cmd, '-online-black-list', func))
-    cmd = ' '.join((cmd, '-o', bc_ac, '<', bc_orig))
-    rcs_utils.invoke(cmd)
 
-    # Run standard optimizations.
-    # Don't mix -O3 with the previous command line, because the previous command
-    # line may not be using basicaa which can potentially make -O3 pretty slow.
-    time_start_o3 = time.time()
-    if args.disable_opt:
-        cmd = ' '.join(('cp', bc_ac, bc_ac_opt))
-    else:
-        cmd = ' '.join(('opt', '-O3', '-o', bc_ac_opt, '<', bc_ac))
-    rcs_utils.invoke(cmd)
-
-    # Inline alias checks.
-    time_start_inlining = time.time()
-    if args.disable_inline:
-        cmd = ' '.join(('cp', bc_ac_opt, bc_ac_opt_inline))
-    else:
-        cmd = dynaa_utils.load_all_plugins('opt')
-        cmd = ' '.join((cmd, '-inline-alias-checker'))
-        cmd = ' '.join((cmd, '-o', bc_ac_opt_inline, '<', bc_ac_opt))
-    rcs_utils.invoke(cmd)
-
-    # offline stage
-    time_start_hook = time.time()
-    cmd = dynaa_utils.load_all_plugins('opt')
     cmd = string.join((cmd, '-instrument-memory'))
     if args.hook_all:
         cmd = string.join((cmd, '-hook-all-pointers'))
@@ -138,28 +117,48 @@ if __name__ == '__main__':
     if args.offline_funcs is not None:
         for funcs in args.offline_funcs:
             for func in funcs:
-                cmd = ' '.join((cmd, '-hook-white-list', func))
+                cmd = ' '.join((cmd, '-offline-white-list', func))
 
-    cmd = string.join((cmd, '-o', hybrid_bc))
-    cmd = string.join((cmd, '<', bc_ac_opt_inline))
+    cmd = string.join((cmd, '-o', bc_hybrid))
+    cmd = string.join((cmd, '<', bc_orig))
+    rcs_utils.invoke(cmd)
+
+    # Run standard optimizations.
+    # Don't mix -O3 with the previous command line, because the previous command
+    # line may not be using basicaa which can potentially make -O3 pretty slow.
+    time_start_o3 = time.time()
+    if args.disable_opt:
+        cmd = ' '.join(('cp', bc_hybrid, bc_hybrid_opt))
+    else:
+        cmd = ' '.join(('opt', '-O3', '-o', bc_hybrid_opt, '<', bc_hybrid))
+    rcs_utils.invoke(cmd)
+
+    # Inline alias checks.
+    time_start_inlining = time.time()
+    if args.disable_inline:
+        cmd = ' '.join(('cp', bc_hybrid_opt, bc_hybrid_opt_inline))
+    else:
+        cmd = dynaa_utils.load_all_plugins('opt')
+        cmd = ' '.join((cmd, '-inline-alias-checker'))
+        cmd = ' '.join((cmd, '-o', bc_hybrid_opt_inline, '<', bc_hybrid_opt))
     rcs_utils.invoke(cmd)
 
     # Codegen.
     time_start_codegen = time.time()
-    cmd = ' '.join(('clang++', hybrid_bc))
+    cmd = ' '.join(('clang++', bc_hybrid_opt_inline))
     # ReportMissingAlias won't be inlined anyway, so we have to link
     # libDynAAAliasChecker.a
     cmd = ' '.join((cmd, rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
     cmd = ' '.join((cmd, rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a'))
-    cmd = ' '.join((cmd, '-o', hybrid_exe))
+    cmd = ' '.join((cmd, '-o', exe_hybrid))
     linking_flags = dynaa_utils.get_linking_flags(args.prog)
     cmd = ' '.join((cmd, ' '.join(linking_flags)))
     rcs_utils.invoke(cmd)
 
     # Print runtime of each stage.
     time_finish = time.time()
-    print 'Inserting alias checks:', time_start_o3 - time_start_inserting
+    print 'Inserting alias checks and hooking memory access:', \
+        time_start_o3 - time_start_hybrid
     print 'Running O3:', time_start_inlining - time_start_o3
-    print 'Inlining:', time_start_hook - time_start_inlining
-    print 'Hooking:', time_start_codegen - time_start_hook
+    print 'Inlining:', time_start_codegen - time_start_inlining
     print 'Codegen:', time_finish - time_start_codegen

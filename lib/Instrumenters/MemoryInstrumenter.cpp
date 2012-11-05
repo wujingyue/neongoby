@@ -473,6 +473,7 @@ void MemoryInstrumenter::setupScalarTypes(Module &M) {
 
 void MemoryInstrumenter::instrumentGlobals(Module &M) {
   TargetData &TD = getAnalysis<TargetData>();
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   // Function HookGlobalsAlloc contains only one basic block.
   // The BB iterates through all global variables, and calls HookMemAlloc
@@ -509,6 +510,9 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
         BeforeForkHook == F) {
       continue;
     }
+    // InvalidID: maybe this is inserted by alias checker in hybrid mode.
+    if (IDA.getValueID(F) == IDAssigner::InvalidID)
+      continue;
     // Ignore intrinsic functions because we cannot take the address of
     // an intrinsic. Also, no function pointers will point to instrinsic
     // functions.
@@ -699,8 +703,6 @@ void MemoryInstrumenter::instrumentCallSite(Instruction *I) {
 }
 
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
-  DEBUG(dbgs() << "Processing" << *I << "\n";);
-
   // Skip those instructions added by us.
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   if (IDA.getValueID(I) == IDAssigner::InvalidID)
@@ -787,9 +789,10 @@ void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
   assert(ValueOperand->getType()->isPointerTy());
 
   unsigned ValueID = IDA.getValueID(ValueOperand);
-  if (ValueID == IDAssigner::InvalidID)
-    errs() << *ValueOperand << "\n";
-  assert(ValueID != IDAssigner::InvalidID);
+  if (ValueID == IDAssigner::InvalidID) {
+//    errs() << *ValueOperand << "\n";
+    return;
+  }
 
   if (!HookAllPointers) {
     // opt: skip unaccessed pointers

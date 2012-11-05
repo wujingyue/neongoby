@@ -119,6 +119,10 @@ void AliasCheckerInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IntraReach>();
   AU.addRequired<DominatorTree>();
   AU.addRequired<IDAssigner>();
+
+  // Preserve IDAssigner, so value IDs would be the same for the
+  // MemoryInstruenter. Used in hybrid mode.
+  AU.addPreserved<IDAssigner>();
 }
 
 #if 0
