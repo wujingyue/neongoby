@@ -46,9 +46,12 @@ static cl::opt<bool> IntraProc(
     "intra",
     cl::desc("Whether the checked AA supports intra-procedural queries only"));
 static cl::opt<string> InputDynamicAliases("input-dyn-aliases",
-                                           cl::desc("Input dynamic aliases"));
+                                           cl::desc("input dynamic aliases"));
 static cl::opt<bool> CheckAllPointers("check-all-pointers",
-                                      cl::desc("Check all pointers"));
+                                      cl::desc("check all pointers"));
+static cl::opt<bool> PrintValueInReport("print-value-in-report",
+                                        cl::desc("print values in the report"),
+                                        cl::init(true));
 
 static RegisterPass<AliasAnalysisChecker> X(
     "check-aa",
@@ -134,11 +137,13 @@ void AliasAnalysisChecker::reportMissingAliases(
     errs().resetColor();
 
     errs() << "[" << IDA.getValueID(V1) << "] ";
-    DynAAUtils::PrintValue(errs(), V1);
+    if (PrintValueInReport)
+      DynAAUtils::PrintValue(errs(), V1);
     errs() << "\n";
 
     errs() << "[" << IDA.getValueID(V2) << "] ";
-    DynAAUtils::PrintValue(errs(), V2);
+    if (PrintValueInReport)
+      DynAAUtils::PrintValue(errs(), V2);
     errs() << "\n";
   }
 

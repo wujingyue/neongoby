@@ -23,6 +23,10 @@ if __name__ == '__main__':
                         help = 'check all pointers',
                         action = 'store_true',
                         default = False)
+    parser.add_argument('--disable-print-value',
+                        help = 'disable printing values. only print value IDs',
+                        action = 'store_true',
+                        default = False)
     # Due to the behavior of LLVM's alias analysis chaining, the baseline AA
     # must be an ImmutablePass.
     parser.add_argument('--baseline',
@@ -60,6 +64,8 @@ if __name__ == '__main__':
     # cmd = ' '.join((cmd, '-output-dyn-aliases', '/tmp/dyn-aliases'))
     if args.check_all:
         cmd = ' '.join((cmd, '-check-all-pointers'))
+    if args.disable_print_value:
+        cmd = ' '.join((cmd, '-print-value-in-report=false'))
     cmd = ' '.join((cmd, '-stats'))
     cmd = ' '.join((cmd, '-disable-output', '<', args.bc))
 

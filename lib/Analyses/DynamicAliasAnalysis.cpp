@@ -57,7 +57,7 @@ bool DynamicAliasAnalysis::runOnModule(Module &M) {
     }
   }
 
-#if 1
+#if 0
   errs() << PointersVersionUnknown.size()
       << " pointers whose version is unknown:\n";
   for (ValueSet::iterator I = PointersVersionUnknown.begin();
