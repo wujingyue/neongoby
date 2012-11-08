@@ -68,11 +68,6 @@ struct RecordFinder: public LogProcessor {
 char TraceSlicer::ID = 0;
 
 bool TraceSlicer::runOnModule(Module &M) {
-  errs() << "Counting log records...\n";
-  LogCounter LC;
-  LC.processLog();
-  CurrentRecordID = LC.getNumLogRecords();
-
   assert((StartingRecordIDs.empty() ^ StartingValueIDs.empty()) &&
          "specify either starting-record or starting-value");
   assert((StartingRecordIDs.empty() || StartingRecordIDs.size() == 2) &&
@@ -85,7 +80,14 @@ bool TraceSlicer::runOnModule(Module &M) {
     errs() << "Finding records of the two input values...\n";
     RecordFinder RF;
     RF.processLog();
+    CurrentRecordID = RF.getCurrentRecordID();
+  } else {
+    errs() << "Counting log records...\n";
+    LogCounter LC;
+    LC.processLog();
+    CurrentRecordID = LC.getNumLogRecords();
   }
+
   assert(StartingRecordIDs.size() == 2);
   for (unsigned i = 0; i < StartingRecordIDs.size(); ++i)
     CurrentState[i].StartingRecordID = StartingRecordIDs[i];
