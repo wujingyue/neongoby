@@ -17,6 +17,7 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
+#include "llvm/IntrinsicInst.h"
 
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
@@ -49,10 +50,13 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentAlloca(AllocaInst *AI);
   void instrumentStoreInst(StoreInst *SI);
   void instrumentReturnInst(Instruction *I);
-  void instrumentCallSite(Instruction *I);
+  void instrumentCallSite(CallSite CS);
+  void instrumentIntrinsic(IntrinsicInst *II);
   void instrumentPointer(Value *ValueOperand,
                          Value *PointerOperand,
                          Instruction *Loc);
+  void instrumentVarArgFunction(Function *F);
+  void instrumentVarArgFunctionReturn(Instruction *I);
   void instrumentPointerInstruction(Instruction *I);
   void instrumentPointerParameters(Function *F);
   void instrumentGlobals(Module &M);
@@ -74,6 +78,9 @@ struct MemoryInstrumenter: public ModulePass {
   Function *MemHooksIniter;
   Function *AfterForkHook;
   Function *BeforeForkHook;
+  Function *VAStartHook;
+  Function *VAFuncBeginHook;
+  Function *VAFuncReturnHook;
   // the main function
   Function *Main;
   // types
@@ -117,6 +124,9 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   CharType = LongType = IntType = NULL;
   CharStarType = NULL;
   VoidType = NULL;
+  VAStartHook = NULL;
+  VAFuncBeginHook = NULL;
+  VAFuncReturnHook = NULL;
 }
 
 void MemoryInstrumenter::instrumentMainArgs(Module &M) {
@@ -419,6 +429,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   // Setup CallHook.
   ArgTypes.clear();
   ArgTypes.push_back(IntType);
+  ArgTypes.push_back(IntType);
   FunctionType *CallHookType = FunctionType::get(VoidType,
                                                  ArgTypes,
                                                  false);
@@ -461,6 +472,28 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                     GlobalValue::ExternalLinkage,
                                     DynAAUtils::BeforeForkHookName,
                                     &M);
+
+  ArgTypes.clear();
+  ArgTypes.push_back(CharStarType);
+  FunctionType *VAStartHookType = FunctionType::get(VoidType, ArgTypes, false);
+  VAStartHook = Function::Create(VAStartHookType, GlobalValue::ExternalLinkage,
+                                 DynAAUtils::VAStartHookName, &M);
+  ArgTypes.clear();
+  FunctionType *VAFuncBeginHookType = FunctionType::get(VoidType,
+                                                        ArgTypes,
+                                                        false);
+  VAFuncBeginHook = Function::Create(VAFuncBeginHookType,
+                                 GlobalValue::ExternalLinkage,
+                                 DynAAUtils::VAFuncBeginHookName,
+                                 &M);
+  ArgTypes.clear();
+  FunctionType *VAFuncReturnHookType = FunctionType::get(VoidType,
+                                                         ArgTypes,
+                                                         false);
+  VAFuncReturnHook = Function::Create(VAFuncReturnHookType,
+                                      GlobalValue::ExternalLinkage,
+                                      DynAAUtils::VAFuncReturnHookName,
+                                      &M);
 }
 
 void MemoryInstrumenter::setupScalarTypes(Module &M) {
@@ -574,6 +607,8 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
     // pointer.
     if (Main != F)
       instrumentPointerParameters(F);
+    if (F->isVarArg())
+      instrumentVarArgFunction(F);
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
         instrumentInstructionIfNecessary(I);
@@ -694,12 +729,33 @@ void MemoryInstrumenter::instrumentReturnInst(Instruction *I) {
   CallInst::Create(ReturnHook, ConstantInt::get(IntType, InsID), "", I);
 }
 
-void MemoryInstrumenter::instrumentCallSite(Instruction *I) {
+void MemoryInstrumenter::instrumentCallSite(CallSite CS) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  unsigned InsID = IDA.getInstructionID(I);
+  unsigned InsID = IDA.getInstructionID(CS.getInstruction());
   assert(InsID != IDAssigner::InvalidID);
 
-  CallInst::Create(CallHook, ConstantInt::get(IntType, InsID), "", I);
+  int NumCallingArgs = CS.arg_size();
+  vector<Value *> Args;
+  Args.push_back(ConstantInt::get(IntType, InsID));
+  Args.push_back(ConstantInt::get(IntType, NumCallingArgs));
+  CallInst::Create(CallHook, Args, "", CS.getInstruction());
+}
+
+void MemoryInstrumenter::instrumentIntrinsic(IntrinsicInst *II) {
+  if (II->getIntrinsicID() == Intrinsic::vastart) {
+    Value *VAList = II->getArgOperand(0);
+    Instruction *CI = CallInst::Create(VAStartHook, VAList, "");
+    CI->insertAfter(II);
+  }
+}
+
+void MemoryInstrumenter::instrumentVarArgFunction(Function *F) {
+  Instruction *I = &F->front().front();
+  CallInst::Create(VAFuncBeginHook, vector<Value *>(), "", I);
+}
+
+void MemoryInstrumenter::instrumentVarArgFunctionReturn(Instruction *I) {
+  CallInst::Create(VAFuncReturnHook, vector<Value *>(), "", I);
 }
 
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
@@ -723,6 +779,12 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     }
   }
 
+  if (I->getParent()->getParent()->isVarArg()) {
+    if (isa<ReturnInst>(I) || isa<ResumeInst>(I)) {
+      instrumentVarArgFunctionReturn(I);
+    }
+  }
+
   // Any instructions of a pointer type, including mallocs and AllocaInsts.
   // Call instrumentPointerInstruction before instrumentMalloc so that
   // HookMemAlloc will be added before HookTopLevel which prevents us from
@@ -739,11 +801,11 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     Function *Callee = CS.getCalledFunction();
     if (Callee && DynAAUtils::IsMalloc(Callee))
       instrumentMalloc(CS);
-    if (HookAllPointers) {
+    if (HookAllPointers || Callee == NULL || Callee->isVarArg()) {
       // Instrument all call sites for debugging.
       // By default, when HookAllPointers is off, we don't instrument any
       // call site for performance reasons.
-      instrumentCallSite(I);
+      instrumentCallSite(CS);
     }
     // Instrument fork() to support multiprocess programs.
     // Instrument fork() at last, because it flushes the logs.
@@ -752,6 +814,9 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
       if (CalleeName == "fork" || CalleeName == "vfork") {
         instrumentFork(CS);
       }
+    }
+    if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
+      instrumentIntrinsic(II);
     }
   }
 

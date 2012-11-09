@@ -84,6 +84,7 @@ void DynamicAliasAnalysis::updateVersion(void *Start,
       AddressVersion.equal_range(I);
   AddressVersion.erase(ER.first, ER.second);
   AddressVersion.insert(make_pair(I, Version));
+  assert(lookupAddress(Start) == Version);
 }
 
 void DynamicAliasAnalysis::processAddrTakenDecl(

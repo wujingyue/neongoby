@@ -27,6 +27,9 @@ const string DynAAUtils::GlobalsAllocHookName = "HookGlobalsAlloc";
 const string DynAAUtils::MemHooksIniterName = "InitMemHooks";
 const string DynAAUtils::AfterForkHookName = "HookFork";
 const string DynAAUtils::BeforeForkHookName = "HookBeforeFork";
+const string DynAAUtils::VAStartHookName = "HookVAStart";
+const string DynAAUtils::VAFuncBeginHookName = "HookVAFuncBegin";
+const string DynAAUtils::VAFuncReturnHookName = "HookVAFuncReturn";
 const string DynAAUtils::SlotsName = "dynaa.slots";
 
 void DynAAUtils::PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total) {

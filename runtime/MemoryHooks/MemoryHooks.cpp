@@ -25,7 +25,10 @@
 #include <string>
 #include <sstream>
 #include <unistd.h>
+#include <stack>
 #include <sys/file.h>
+
+#include "rcs/IDAssigner.h"
 
 #include "dyn-aa/LogRecord.h"
 
@@ -87,6 +90,9 @@ struct Environment {
 };
 
 Environment *Global;
+__thread int NumCallingArgsSave;
+stack<int> NumCallingArgsStack;
+stack<bool> VAStartCalled;
 
 extern "C" void FinalizeMemHooks() {
   delete Global;
@@ -170,12 +176,13 @@ extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
   pthread_mutex_unlock(&Global->Lock);
 }
 
-extern "C" void HookCall(unsigned InsID) {
+extern "C" void HookCall(unsigned InsID, int NumCallingArgs) {
   pthread_mutex_lock(&Global->Lock);
-  // fprintf(stderr, "HookCall(%u)\n", InsID);
+  // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumCallingArgs);
   PrintLogRecord(CallInstruction,
                  CallInstructionLogRecord(InsID));
   pthread_mutex_unlock(&Global->Lock);
+  NumCallingArgsSave = NumCallingArgs;
 }
 
 extern "C" void HookReturn(unsigned InsID) {
@@ -184,4 +191,37 @@ extern "C" void HookReturn(unsigned InsID) {
   PrintLogRecord(ReturnInstruction,
                  ReturnInstructionLogRecord(InsID));
   pthread_mutex_unlock(&Global->Lock);
+}
+
+extern "C" void HookVAStart(void *VAList) {
+  struct TPVAList {
+    int32_t gp_offset;
+    int32_t fp_offset;
+    int8_t *overflow_arg_area;
+    int8_t *reg_save_area;
+  } *PVAList;
+  PVAList = (TPVAList *)VAList;
+
+  // FIXME: we don't know if this is correct.
+  const int NumIntRegs = 6;
+  const int NumXMMRegs = 8;
+  // FIXME: use a correct ID.
+  if (!VAStartCalled.top()) {
+    VAStartCalled.top() = true;
+    HookMemAlloc(rcs::IDAssigner::InvalidID, PVAList->reg_save_area,
+                 NumIntRegs * 8 + NumXMMRegs * 16);
+    if (NumCallingArgsStack.top() > 6)
+      HookMemAlloc(rcs::IDAssigner::InvalidID, PVAList->overflow_arg_area,
+                   (NumCallingArgsStack.top() - 6) * 8);
+  }
+}
+
+extern "C" void HookVAFuncBegin() {
+  NumCallingArgsStack.push(NumCallingArgsSave);
+  VAStartCalled.push(false);
+}
+
+extern "C" void HookVAFuncReturn() {
+  NumCallingArgsStack.pop();
+  VAStartCalled.pop();
 }
