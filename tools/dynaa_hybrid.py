@@ -119,6 +119,11 @@ if __name__ == '__main__':
             for func in funcs:
                 cmd = ' '.join((cmd, '-offline-white-list', func))
 
+    # run the preparer
+    cmd = ' '.join((cmd, '-prepare'))
+    # output stats by default
+    cmd = ' '.join((cmd, '-stats'))
+
     cmd = string.join((cmd, '-o', bc_hybrid))
     cmd = string.join((cmd, '<', bc_orig))
     rcs_utils.invoke(cmd)
