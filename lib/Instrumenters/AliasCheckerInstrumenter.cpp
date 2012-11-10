@@ -471,6 +471,21 @@ void AliasCheckerInstrumenter::addAliasCheck(Instruction *P,
   DominatorTree &DT = getAnalysis<DominatorTree>();
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
+  if (InvokeInst *II = dyn_cast<InvokeInst>(P)) {
+    //   P = invoke ... to NormalBB, unwind to UnwindBB
+    // UnwindBB:
+    //   ...
+    //   Q = ...
+    //
+    // In the above situation, we do not add alias checks for P and Q, because
+    // using P's value in the unwind basic block is invalid.
+    //
+    // Q may even be in other basic blocks dominated by UnwindBB. Filter out
+    // this case as well.
+    if (DT.dominates(II->getUnwindDest(), Q->getParent()))
+      return;
+  }
+
   // Compute the location to add the checker.
   BasicBlock::iterator Loc = Q;
   if (isa<PHINode>(Loc))
