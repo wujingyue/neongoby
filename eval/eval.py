@@ -98,7 +98,7 @@ def eval_baseline_mysql(threads='1'):
     os.chdir('mysql')
     invoke(['clang++', '-pthread', '-lcrypt', '-ldl', '-lz', '-o', 'mysqld',
             'mysqld.bc'])
-    with open('../baseline-mysql.out', 'w') as out_file:
+    with open('../baseline-mysql-%s.out' % threads, 'w') as out_file:
         run_mysql('mysqld', out_file, threads)
     os.chdir('..')
 
@@ -242,29 +242,30 @@ def eval_offline_httpd(threads='1'):
                            out_file, redirect_stderr=True)
     for pts_file in pts_files:
         shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
-    with open('../offline-httpd-deref-%s.out' % threads,
-              'w') as out_file:
-        invoke(['time', 'dynaa_hook_mem.py', '--hook-fork', 'httpd'], out_file)
-        run_httpd('httpd.inst', out_file, threads)
-    pts_files = list(get_pts_files())
-    # with open('../offline-httpd-ds-aa-deref-%s.out' % threads,
-    #           'w') as out_file:
-    #     for pts_file in pts_files:
-    #         out_file.write(pts_file + '\n')
-    #         invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
-    #                 'httpd.bc', pts_file, aa],
-    #                out_file, redirect_stderr=True)
-    with open('../offline-httpd-ds-aa-delta-deref-%s.out' % threads,
-              'w') as out_file:
+    if 'ds-aa' in AAS:
+        with open('../offline-httpd-deref-%s.out' % threads,
+                  'w') as out_file:
+            invoke(['time', 'dynaa_hook_mem.py', '--hook-fork', 'httpd'], out_file)
+            run_httpd('httpd.inst', out_file, threads)
+        pts_files = list(get_pts_files())
+        # with open('../offline-httpd-ds-aa-deref-%s.out' % threads,
+        #           'w') as out_file:
+        #     for pts_file in pts_files:
+        #         out_file.write(pts_file + '\n')
+        #         invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
+        #                 'httpd.bc', pts_file, aa],
+        #                out_file, redirect_stderr=True)
+        with open('../offline-httpd-ds-aa-delta-deref-%s.out' % threads,
+                  'w') as out_file:
+            for pts_file in pts_files:
+                out_file.write(pts_file + '\n')
+                invoke(['time', 'dynaa_check_aa.py',
+                        '--baseline', 'basicaa',
+                        '--disable-print-value',
+                        'httpd.bc', pts_file, aa],
+                       out_file, redirect_stderr=True)
         for pts_file in pts_files:
-            out_file.write(pts_file + '\n')
-            invoke(['time', 'dynaa_check_aa.py',
-                    '--baseline', 'basicaa',
-                    '--disable-print-value',
-                    'httpd.bc', pts_file, aa],
-                   out_file, redirect_stderr=True)
-    for pts_file in pts_files:
-        shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+            shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
     os.chdir('..')
 
 
