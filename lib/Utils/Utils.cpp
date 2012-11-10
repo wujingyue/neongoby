@@ -98,7 +98,8 @@ bool DynAAUtils::IsMalloc(const Function *F) {
           Name == "_Znaj" ||
           Name == "_Znam" ||
           Name == "strdup" ||
-          Name == "__strdup");
+          Name == "__strdup" ||
+          Name == "getline");
 }
 
 bool DynAAUtils::IsMallocCall(const Value *V) {
