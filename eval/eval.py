@@ -292,7 +292,7 @@ def main():
     import argparse
     global APPS, AAS
     parser = argparse.ArgumentParser(
-        description=('\033[1;33mnote: before running this script, please '
+        description=('\033[1;31mnote: before running this script, please '
                      'make sure that no httpd/mysqld instance is running, '
                      'and please remove apache-install/logs/error_log and '
                      'all existing /mnt/sdb/dyn-aa/pts* files.\033[m'))
