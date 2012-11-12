@@ -105,18 +105,18 @@ void AliasAnalysisChecker::collectMissingAliases(
       continue;
     }
 
+    // Ignore BitCasts and PhiNodes. The reports on them are typically
+    // redundant.
+    if (isa<BitCastInst>(V1) || isa<BitCastInst>(V2))
+      continue;
+    if (isa<PHINode>(V1) || isa<PHINode>(V2))
+      continue;
+
     if (!CheckAllPointers) {
       if (!DynAAUtils::PointerIsDereferenced(V1) ||
           !DynAAUtils::PointerIsDereferenced(V2)) {
         continue;
       }
-    }
-
-    if (CheckAllPointers) {
-      if (isa<BitCastInst>(V1) || isa<BitCastInst>(V2))
-        continue;
-      if (isa<PHINode>(V1) || isa<PHINode>(V2))
-        continue;
     }
 
     if (BaselineAA.alias(V1, V2) != AliasAnalysis::NoAlias &&
