@@ -196,11 +196,8 @@ void Preparer::expandAlloca(AllocaInst *AI) {
   }
 
   assert(AllocatedType->isSized());
-  TargetData &TD = getAnalysis<TargetData>();
-  unsigned Align = RoundUpToPowerOfTwo(TD.getTypeStoreSize(AllocatedType) + 1);
-  // AI->getAlignment() returns 0 if the alignment is unspecified.
-  Align = max(Align, AI->getAlignment());
-  AI->setAlignment(Align);
+  IntegerType *PadType = IntegerType::get(AI->getContext(), 8);
+  new AllocaInst(PadType, "alloca_pad", AI);
 }
 
 unsigned Preparer::RoundUpToPowerOfTwo(unsigned Value) {
