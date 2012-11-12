@@ -20,10 +20,11 @@ if __name__ == '__main__':
             metavar = 'aa',
             choices = dynaa_utils.get_aa_choices())
     parser.add_argument('--baseline',
-                        help = 'baseline AA which is assumed to be correct: ' + \
-                                str(dynaa_utils.get_aa_choices()),
+                        help = 'baseline AA which is assumed to be ' + \
+                                'correct: ' + str(dynaa_utils.get_aa_choices()),
                         metavar = 'baseline_aa',
-                        choices = dynaa_utils.get_aa_choices())
+                        default = 'no-aa',
+                        choices = ['no-aa', 'basicaa', 'tbaa'])
     parser.add_argument('--disable-inline',
                         help = 'do not inline the alias checks',
                         action = 'store_true',
@@ -81,18 +82,16 @@ if __name__ == '__main__':
     if args.input_alias_checks is not None:
         cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
     else:
-        # If alias checks are inputed by users, we don't need to run any AA
-        if args.baseline is None:
-            cmd = dynaa_utils.load_aa(cmd, args.aa)
-        else:
-            if args.baseline == args.aa:
-                sys.stderr.write('\033[1;31m')
-                print >> sys.stderr, 'Error: Baseline and the checked AA',
-                print >> sys.stderr, 'must be different'
-                sys.stderr.write('\033[m')
-                sys.exit(1)
-            # baseline need be put before aa
-            cmd = dynaa_utils.load_aa(cmd, args.baseline, args.aa)
+        if args.baseline == args.aa:
+            sys.stderr.write('\033[1;31m')
+            print >> sys.stderr, 'Error: Baseline and the checked AA',
+            print >> sys.stderr, 'must be different'
+            sys.stderr.write('\033[m')
+            sys.exit(1)
+        # baseline need be put before aa
+        cmd = dynaa_utils.load_aa(cmd, args.baseline)
+        cmd = ' '.join((cmd, '-baseline-aa'))
+        cmd = dynaa_utils.load_aa(cmd, args.aa)
     if args.output_alias_checks is not None:
         cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
     cmd = ' '.join((cmd, '-instrument-alias-checker'))
