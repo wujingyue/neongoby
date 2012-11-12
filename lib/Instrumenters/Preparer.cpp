@@ -49,6 +49,7 @@ struct Preparer: public ModulePass {
   void expandGlobal(Module &M, GlobalVariable *GV);
   void expandAlloca(AllocaInst *AI);
   void expandMalloc(CallSite CS);
+  void expandCallSite(CallSite CS);
 
   void fillInAllocationSize(Module &M);
   void fillInAllocationSize(CallSite CS);
@@ -153,6 +154,7 @@ void Preparer::expandMemoryAllocation(Function *F) {
         CallSite CS(Ins);
         if (CS) {
           if (Function *Callee = CS.getCalledFunction()) {
+            expandCallSite(CS);
             if (Callee && DynAAUtils::IsMalloc(Callee)) {
               expandMalloc(CS);
             }
@@ -215,6 +217,34 @@ void Preparer::expandAlloca(AllocaInst *AI) {
   assert(AllocatedType->isSized());
   IntegerType *PadType = IntegerType::get(AI->getContext(), 8);
   new AllocaInst(PadType, "alloca_pad", AI);
+}
+
+void Preparer::expandCallSite(CallSite CS) {
+  if (!CS.getCalledFunction()) return;
+  Function *F = CS.getCalledFunction();
+  if (!F->isVarArg()) return;
+  vector<Value *> Args;
+  for (CallSite::arg_iterator ArgI = CS.arg_begin();
+      ArgI != CS.arg_end(); ArgI++) {
+    Args.push_back(*ArgI);
+  }
+  Args.push_back(ConstantInt::get(
+        IntegerType::get(CS.getInstruction()->getContext(), 8), 0));
+  string InstName = "";
+  if (CS.getInstruction()->getName() != "")
+    InstName = CS.getInstruction()->getName().str() + ".padded";
+  if (CallInst *CI = dyn_cast<CallInst>(CS.getInstruction())) {
+    CallInst *NewCI = CallInst::Create(F, Args, InstName, CI);
+    NewCI->setAttributes(CI->getAttributes());
+    CI->replaceAllUsesWith(NewCI);
+    CI->eraseFromParent();
+  } else if (InvokeInst *II = dyn_cast<InvokeInst>(CS.getInstruction())) {
+    InvokeInst *NewII = InvokeInst::Create(F,
+        II->getNormalDest(), II->getUnwindDest(), Args, InstName, II);
+    NewII->setAttributes(II->getAttributes());
+    II->replaceAllUsesWith(NewII);
+    II->eraseFromParent();
+  }
 }
 
 unsigned Preparer::RoundUpToPowerOfTwo(unsigned Value) {
