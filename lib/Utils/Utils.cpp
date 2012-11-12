@@ -55,6 +55,16 @@ bool DynAAUtils::PointerIsDereferenced(const Value *V) {
     // We always consider missing call edges important.
     return true;
   }
+  {
+    ImmutableCallSite CS(V);
+    if (CS) {
+      if (const Function *Callee = CS.getCalledFunction()) {
+        if (Callee->isDeclaration()) {
+          return true;
+        }
+      }
+    }
+  }
   for (Value::const_use_iterator UI = V->use_begin();
        UI != V->use_end(); ++UI) {
     if (const LoadInst *LI = dyn_cast<LoadInst>(*UI)) {
