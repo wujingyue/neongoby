@@ -133,8 +133,17 @@ void AliasAnalysisChecker::reportMissingAliases(
   for (size_t i = 0; i < MissingAliases.size(); ++i) {
     Value *V1 = MissingAliases[i].first, *V2 = MissingAliases[i].second;
     errs().changeColor(raw_ostream::RED);
-    errs() << "Missing alias:\n";
+    errs() << "Missing alias:";
     errs().resetColor();
+
+    errs() << (DynAAUtils::IsIntraProcQuery(V1, V2) ? " (intra)" : " (inter)");
+    if (DynAAUtils::PointerIsDereferenced(V1) &&
+        DynAAUtils::PointerIsDereferenced(V2)) {
+      errs() << " (deref)";
+    } else {
+      errs() << " (non-deref)";
+    }
+    errs() << "\n";
 
     errs() << "[" << IDA.getValueID(V1) << "] ";
     if (PrintValueInReport)
