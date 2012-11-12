@@ -46,7 +46,7 @@ struct Preparer: public ModulePass {
   void allocateExtraBytes(Module &M);
 
   void expandMemoryAllocation(Function *F);
-  void expandGlobal(GlobalVariable *GV);
+  void expandGlobal(Module &M, GlobalVariable *GV);
   void expandAlloca(AllocaInst *AI);
   void expandMalloc(CallSite CS);
 
@@ -112,17 +112,34 @@ void Preparer::replaceUndefsWithNull(User *I, ValueSet &Replaced) {
 void Preparer::allocateExtraBytes(Module &M) {
   for (Module::global_iterator GI = M.global_begin();
        GI != M.global_end(); ++GI) {
-    expandGlobal(GI);
+    expandGlobal(M, GI);
   }
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     expandMemoryAllocation(F);
   }
 }
 
-void Preparer::expandGlobal(GlobalVariable *GV) {
-  TargetData &TD = getAnalysis<TargetData>();
-  uint64_t TypeSize = TD.getTypeStoreSize(GV->getType()->getElementType());
-  GV->setAlignment(RoundUpToPowerOfTwo(TypeSize + 1));
+void Preparer::expandGlobal(Module &M, GlobalVariable *GV) {
+  if (GV->isDeclaration()) return;
+  if (GV->getLinkage() == GlobalValue::AppendingLinkage) return;
+  Type *OrigType = GV->getType()->getTypeAtIndex((unsigned)0);
+  StructType *NewType = StructType::create(GV->getContext(), "pad_global_type");
+  NewType->setBody(OrigType, IntegerType::get(GV->getContext(), 8), NULL);
+
+  // FIXME: AddressSpace?
+  GlobalVariable *NewGV;
+  Constant *NewInit = NULL;
+  if (GV->hasInitializer()) {
+    assert(GV->getInitializer()->getType() == OrigType);
+    NewInit = ConstantStruct::get(NewType, GV->getInitializer(),
+        ConstantInt::get(IntegerType::get(GV->getContext(), 8), 0), NULL);
+  }
+  NewGV = new GlobalVariable(M, NewType, GV->isConstant(), GV->getLinkage(),
+      NewInit, "pad_global", GV, GV->isThreadLocal(), 0);
+
+  Constant *NewValue = ConstantExpr::getBitCast(NewGV, GV->getType());
+  assert(NewValue->getType() == GV->getType());
+  GV->replaceAllUsesWith(NewValue);
 }
 
 void Preparer::expandMemoryAllocation(Function *F) {
