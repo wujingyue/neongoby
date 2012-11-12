@@ -66,9 +66,17 @@ bool DynAAUtils::PointerIsDereferenced(const Value *V) {
         return true;
     }
     ImmutableCallSite CS(*UI);
-    if (CS && CS.getCalledValue() == V) {
-      // Return true if V is used as a callee.
-      return true;
+    if (CS) {
+      if (CS.getCalledValue() == V) {
+        // Return true if V is used as a callee.
+        return true;
+      }
+      if (const Function *Callee = CS.getCalledFunction()) {
+        if (Callee->isDeclaration()) {
+          // Treat as deref'ed if used by an external function call.
+          return true;
+        }
+      }
     }
   }
   return false;
