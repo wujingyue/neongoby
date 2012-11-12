@@ -17,6 +17,8 @@ logger = logging.getLogger('aa_analyze_log')
 logger.setLevel(logging.DEBUG)
 
 missing_reg = re.compile('.*Missing alias:.*')
+deref_reg = re.compile('.*Missing alias:.*\(deref\).*')
+intra_reg = re.compile('.*Missing alias:.*\(intra\).*')
 ptrinfo_reg = re.compile('.*\[(\d+)\](.*)$')
 
 ptrinfo_func_reg = re.compile('.*\[(\d+)\]\s+([^ ]+):\s+([^ ]+)\s+=\s+(.*)$')
@@ -25,17 +27,31 @@ both_global_count = 0
 one_global_count = 0
 same_func_count = 0
 diff_func_count = 0
+intra_deref= 0
+inter_deref= 0
+intra_nonderef= 0
+inter_nonderef= 0
 
 for input_file in args.input_files:
     logger.info('Processing %s' % input_file)
     value_desc_db = {}
     missing_db = set()
+    missing_detail_db = {}
     with open(input_file, 'r') as logf:
         while True:
             line = logf.readline()
             if (line == ''): break
             match_ret = missing_reg.match(line)
             if (match_ret):
+                if deref_reg.match(line):
+                    deref = True
+                else:
+                    deref = False
+                if intra_reg.match(line):
+                    intra = True
+                else:
+                    intra = False
+
                 got_ptr = 0
                 ptrinfo = []
                 ptrfunc = []
@@ -68,7 +84,9 @@ for input_file in args.input_files:
                             break
 
 #                print "Missing alias:", ptrinfo
-                missing_db.add(frozenset(ptrinfo))
+                fsptrinfo = frozenset(ptrinfo)
+                missing_db.add(fsptrinfo)
+                missing_detail_db[fsptrinfo] = [intra, deref]
                 if (args.count_interp_ptr):
                     both_global = False
                     one_global = False
@@ -92,18 +110,42 @@ for input_file in args.input_files:
 
         for pair in missing_db:
             print "Missing alias:"
-            if (len(pair) == 2):
-                for elem in pair:
-                    print "[%d]%s" % (elem, value_desc_db[elem])
+            detail = missing_detail_db[pair]
+            vpair = list(pair)
+            if (len(pair) != 2):
+                vpair += [vpair[0]]
+            if (vpair[0] < vpair[1]):
+                u = vpair[0]
+                vpair[0] = vpair[1]
+                vpair[1] = u
+
+            print "[%d]%s" % (vpair[0], value_desc_db[vpair[0]])
+            print "[%d]%s" % (vpair[1], value_desc_db[vpair[1]])
+            if detail[0]:
+                # intra
+                if detail[1]:
+                    # deref
+                    intra_deref+=1
+                else:
+                    intra_nonderef+=1
             else:
-                for elem in pair:
-                    print "[%d]%s" % (elem, value_desc_db[elem])
-                    print "[%d]%s" % (elem, value_desc_db[elem])
+                if detail[1]:
+                    inter_deref+=1
+                else:
+                    inter_nonderef+=1
         print "Total missing alias pairs: %d" % (len(missing_db))
         if (args.count_interp_ptr):
             print "Global pairs: %d" % both_global_count
             print "Global and local pairs: %d" % one_global_count
             print "Intra-procedure pairs: %d" % same_func_count
             print "Inter-procedure pairs: %d" % diff_func_count
+        print "Intra-procedure deref pairs: %d" % intra_deref
+        print "Intra-procedure non-deref pairs: %d" % intra_nonderef
+        print "Inter-procedure deref pairs: %d" % inter_deref
+        print "Inter-procedure non-deref pairs: %d" % inter_nonderef
+        print "Total intra-procedure pairs: %d" % (intra_deref + intra_nonderef)
+        print "Total inter-procedure pairs: %d" % (inter_deref + inter_nonderef)
+        print "Total deref pairs: %d" % (inter_deref + intra_deref)
+        print "Total non-deref pairs: %d" % (inter_nonderef + intra_nonderef)
 
 
