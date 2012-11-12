@@ -138,6 +138,14 @@ bool DynAAUtils::IsIntraProcQuery(const Value *V1, const Value *V2) {
   return F1 == NULL || F2 == NULL || F1 == F2;
 }
 
+// FIXME: Oh my god! What a name!
+bool DynAAUtils::IsReallyIntraProcQuery(const Value *V1, const Value *V2) {
+  assert(V1->getType()->isPointerTy() && V2->getType()->isPointerTy());
+  const Function *F1 = GetContainingFunction(V1);
+  const Function *F2 = GetContainingFunction(V2);
+  return F1 != NULL && F2 != NULL && F1 == F2;
+}
+
 const Function *DynAAUtils::GetContainingFunction(const Value *V) {
   if (const Instruction *Ins = dyn_cast<Instruction>(V))
     return Ins->getParent()->getParent();
