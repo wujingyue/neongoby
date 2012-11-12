@@ -646,27 +646,27 @@ void MemoryInstrumenter::lowerGlobalCtors(Module &M) {
   // Should be an array of '{ int, void ()* }' structs.  The first value is
   // the init priority, which must be 65535 if the bitcode is generated using
   // clang.
-  ConstantArray *InitList = dyn_cast<ConstantArray>(GV->getInitializer());
-  assert(InitList);
-  for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
-    ConstantStruct *CS =
-      dyn_cast<ConstantStruct>(InitList->getOperand(i));
-    assert(CS);
-    assert(CS->getNumOperands() == 2);
+  if (ConstantArray *InitList = dyn_cast<ConstantArray>(GV->getInitializer())) {
+    for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
+      ConstantStruct *CS =
+        dyn_cast<ConstantStruct>(InitList->getOperand(i));
+      assert(CS);
+      assert(CS->getNumOperands() == 2);
 
-    // Get the priority.
-    ConstantInt *Priority = dyn_cast<ConstantInt>(CS->getOperand(0));
-    assert(Priority);
-    // TODO: For now, we assume all priorities must be 65535.
-    assert(Priority->equalsInt(65535));
+      // Get the priority.
+      ConstantInt *Priority = dyn_cast<ConstantInt>(CS->getOperand(0));
+      assert(Priority);
+      // TODO: For now, we assume all priorities must be 65535.
+      assert(Priority->equalsInt(65535));
 
-    // Get the constructor function.
-    Constant *FP = CS->getOperand(1);
-    if (FP->isNullValue())
-      break;  // Found a null terminator, exit.
+      // Get the constructor function.
+      Constant *FP = CS->getOperand(1);
+      if (FP->isNullValue())
+        break;  // Found a null terminator, exit.
 
-    // Explicitly call the constructor at the main entry.
-    CallInst::Create(FP, "", Main->begin()->getFirstNonPHI());
+      // Explicitly call the constructor at the main entry.
+      CallInst::Create(FP, "", Main->begin()->getFirstNonPHI());
+    }
   }
 
   // Clear the global_ctors array.
