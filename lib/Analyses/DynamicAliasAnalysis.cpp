@@ -5,9 +5,9 @@
 #include <cstdio>
 
 #include "llvm/Pass.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/ADT/Statistic.h"
 
 #include "rcs/IDAssigner.h"
 
@@ -34,6 +34,9 @@ static cl::opt<string> OutputDynamicAliases(
 
 STATISTIC(NumRemoveOps, "Number of remove operations");
 STATISTIC(NumInsertOps, "Number of insert operations");
+STATISTIC(MaxNumPointersToSameLocation,
+          "Maximum number of pointers to the same location. "
+          "Used for analyzing time complexity");
 
 char DynamicAliasAnalysis::ID = 0;
 
@@ -199,6 +202,8 @@ void DynamicAliasAnalysis::addAliasPair(unsigned VID1, unsigned VID2) {
 
 void DynamicAliasAnalysis::addAliasPairs(unsigned VID1,
                                          const vector<unsigned> &VID2s) {
+  if (VID2s.size() > MaxNumPointersToSameLocation)
+    MaxNumPointersToSameLocation = VID2s.size();
   for (size_t j = 0; j < VID2s.size(); ++j)
     addAliasPair(VID1, VID2s[j]);
 }

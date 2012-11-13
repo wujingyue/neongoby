@@ -1,10 +1,13 @@
 // Author: Jingyue
 
+#define DEBUG_TYPE "dyn-aa"
+
 #include <string>
 #include <fstream>
 
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
@@ -58,6 +61,8 @@ static RegisterPass<AliasAnalysisChecker> X(
     "Check whether the alias analysis is sound",
     false, // Is CFG Only?
     true); // Is Analysis?
+
+STATISTIC(NumDynamicAliases, "Number of dynamic aliases");
 
 char AliasAnalysisChecker::ID = 0;
 
@@ -182,6 +187,7 @@ void AliasAnalysisChecker::sortMissingAliases(
 bool AliasAnalysisChecker::runOnModule(Module &M) {
   DenseSet<ValuePair> DynamicAliases;
   collectDynamicAliases(DynamicAliases);
+  NumDynamicAliases = DynamicAliases.size();
 
   vector<ValuePair> MissingAliases;
   collectMissingAliases(DynamicAliases, MissingAliases);
