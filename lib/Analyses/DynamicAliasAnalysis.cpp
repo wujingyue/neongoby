@@ -129,6 +129,10 @@ void DynamicAliasAnalysis::processTopLevelPointTo(
     PointedByMapTy::iterator I = BeingPointedBy.find(
         make_pair(PointeeAddress, Version));
     assert(I != BeingPointedBy.end()); // We just added a point-to in.
+    if (Version != UnknownVersion &&
+        I->second.size() > MaxNumPointersToSameLocation) {
+      MaxNumPointersToSameLocation = I->second.size();
+    }
     addAliasPairs(PointerVID, I->second);
   }
 }
@@ -202,8 +206,6 @@ void DynamicAliasAnalysis::addAliasPair(unsigned VID1, unsigned VID2) {
 
 void DynamicAliasAnalysis::addAliasPairs(unsigned VID1,
                                          const vector<unsigned> &VID2s) {
-  if (VID2s.size() > MaxNumPointersToSameLocation)
-    MaxNumPointersToSameLocation = VID2s.size();
   for (size_t j = 0; j < VID2s.size(); ++j)
     addAliasPair(VID1, VID2s[j]);
 }
