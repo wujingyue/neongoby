@@ -89,10 +89,10 @@ struct Environment {
   pthread_mutex_t Lock;
 };
 
-Environment *Global;
-__thread int NumCallingArgsSave;
-stack<int> NumCallingArgsStack;
-stack<bool> VAStartCalled;
+static Environment *Global;
+static __thread int NumCallingArgsSave;
+static stack<int> NumCallingArgsStack;
+static stack<bool> VAStartCalled;
 
 extern "C" void FinalizeMemHooks() {
   delete Global;
