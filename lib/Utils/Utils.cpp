@@ -115,6 +115,7 @@ bool DynAAUtils::IsMalloc(const Function *F) {
           Name == "valloc" ||
           Name == "realloc" ||
           Name == "memalign" ||
+          Name == "_Znwj" ||
           Name == "_Znwm" ||
           Name == "_Znaj" ||
           Name == "_Znam" ||
