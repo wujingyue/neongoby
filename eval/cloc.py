@@ -15,7 +15,25 @@ if __name__ == '__main__':
     base_cmd += '"Bourne Shell",'
     base_cmd += '"Bourne Again Shell"'
 
-    os.system(base_cmd + ' ../ ../../rcs/lib/CFG ../../rcs/lib/ID ../../rcs/lib/SourceLocator')
-    os.system(base_cmd + ' ../lib/Instrumenters')
-    os.system(base_cmd + ' ../runtime')
+    print '=== All ==='
+    os.system(base_cmd + \
+            ' ../ ../../rcs/lib/CFG' + \
+            ' ../../rcs/lib/ID' + \
+            ' ../../rcs/lib/SourceLocator')
+
+    print '=== Instrumenter ==='
+    os.system(base_cmd + \
+            ' ../lib/Instrumenters/MemoryInstrumenter.cpp' + \
+            ' ../lib/Instrumenters/Preparer.cpp')
+
+    print '=== Logger ==='
+    os.system(base_cmd + ' ../runtime/MemoryHooks')
+
+    print '=== Detector ==='
     os.system(base_cmd + ' ../lib/Analyses ../lib/Checkers')
+
+    print '=== Online Mode ==='
+    os.system(base_cmd + \
+            ' ../lib/Instrumenters/AliasCheckerInstrumenter.cpp' + \
+            ' ../lib/Instrumenters/AliasCheckerInliner.cpp' + \
+            ' ../runtime/AliasChecker')
