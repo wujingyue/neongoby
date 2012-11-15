@@ -1,5 +1,3 @@
-// Author: Junyang
-
 #ifndef __DYN_AA_TRACE_SLICER_H
 #define __DYN_AA_TRACE_SLICER_H
 

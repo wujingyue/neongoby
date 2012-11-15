@@ -1,5 +1,4 @@
 // vim: sw=2
-// Author: Jingyue
 
 // Hook functions are declared with extern "C", because we want to disable
 // the C++ name mangling and make the instrumentation easier.

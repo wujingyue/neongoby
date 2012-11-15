@@ -1,5 +1,3 @@
-# Author: Jingyue
-
 all:
 
 install:

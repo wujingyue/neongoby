@@ -1,5 +1,4 @@
 // vim: shiftwidth=2
-// Author: Jingyue
 
 // Three types of messages:
 // 1) Declare an addr-taken variable: allocator vid, start, bound

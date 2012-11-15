@@ -1,7 +1,7 @@
 dnl **************************************************************************
 dnl * Initialize
 dnl **************************************************************************
-AC_INIT([[[dyn-aa]]],[[[0.10]]],[jingyue@cs.columbia.edu])
+AC_INIT([[[dyn-aa]]],[[[0.10]]],[])
 
 dnl Tell autoconf that this is an LLVM project being configured
 dnl This provides the --with-llvmsrc and --with-llvmobj options

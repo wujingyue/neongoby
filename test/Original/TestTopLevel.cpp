@@ -1,5 +1,3 @@
-// Author: Jingyue
-
 #include <cstdio>
 using namespace std;
 

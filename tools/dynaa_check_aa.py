@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# Author: Jingyue
-
 import argparse
 import os
 import sys

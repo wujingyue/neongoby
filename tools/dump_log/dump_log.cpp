@@ -1,5 +1,3 @@
-// Author: Jingyue
-
 // Print the point-to log in a readable format. 
 
 #include <cstdio>

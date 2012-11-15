@@ -1,5 +1,3 @@
-// Author: Jingyue
-
 #include <string>
 
 #include "llvm/Support/CommandLine.h"

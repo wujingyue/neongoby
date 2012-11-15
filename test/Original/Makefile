@@ -1,5 +1,3 @@
-# Author: Jingyue
-
 PROGS = SimpleTest TestCalloc TestStore TestInit TestThread TestTopLevel TestFork
 PROGS += TestFP TestFP2
 BCS = $(PROGS:=.bc)

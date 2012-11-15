@@ -1,5 +1,3 @@
-// Author: Jingyue
-
 #ifndef __DYN_AA_UTILS_H
 #define __DYN_AA_UTILS_H
 

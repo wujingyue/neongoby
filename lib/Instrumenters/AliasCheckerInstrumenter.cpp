@@ -1,5 +1,4 @@
 // vim: sw=2
-// Author: Jingyue
 
 #define DEBUG_TYPE "dyn-aa"
 

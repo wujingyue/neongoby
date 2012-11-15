@@ -1,5 +1,3 @@
-// Author: Jingyue
-
 #include <cassert>
 #include <string>
 

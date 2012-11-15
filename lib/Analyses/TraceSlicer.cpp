@@ -1,5 +1,3 @@
-// Author: Junyang
-
 #define DEBUG_TYPE "dyn-aa"
 
 #include <cstdio>

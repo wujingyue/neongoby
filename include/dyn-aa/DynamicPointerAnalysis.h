@@ -1,5 +1,3 @@
-// Author: Jingyue
-//
 // A very precise but unsound pointer analysis.
 // The point-to relations are collected from a dynamic trace.
 

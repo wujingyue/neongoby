@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# Author: Jingyue
-
 import argparse
 import dynaa_utils
 import rcs_utils

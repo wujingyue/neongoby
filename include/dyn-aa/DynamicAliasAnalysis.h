@@ -1,5 +1,3 @@
-// Author: Jingyue
-
 #ifndef __DYN_AA_DYNAMIC_ALIAS_ANALYSIS_H
 #define __DYN_AA_DYNAMIC_ALIAS_ANALYSIS_H
 
