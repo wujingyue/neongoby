@@ -1,0 +1,41 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index 0a04038..6959b24 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -70,6 +70,7 @@
+ #include "llvm/ADT/Statistic.h"
+ #include "llvm/ADT/SparseBitVector.h"
+ #include "llvm/ADT/DenseSet.h"
++#include "llvm/IntrinsicInst.h"
+ 
+ // Added by Jingyue
+ #include "rcs/Version.h"
+@@ -1106,6 +1107,28 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+     }
+   }
+ 
++  Instruction *I = CS.getInstruction();
++  if (I) {
++    Function *ParentF = I->getParent()->getParent();
++    if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
++      Intrinsic::ID IID = II->getIntrinsicID();
++      if (IID == Intrinsic::vastart) {
++        assert(ParentF->getFunctionType()->isVarArg()
++            && "va_start in non-vararg function!");
++        Value *Arg = II->getArgOperand(0);
++        unsigned TempArg = GraphNodes.size();
++        GraphNodes.push_back(Node());
++        Constraints.push_back(Constraint(Constraint::AddressOf, TempArg,
++              getVarargNode(ParentF)));
++        Constraints.push_back(Constraint(Constraint::Store, getNode(Arg),
++              TempArg));
++        return true;
++      } else if (IID == Intrinsic::vaend) {
++        return true;
++      }
++    }
++  }
++
+   return false;
+ }
+ 

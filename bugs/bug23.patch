@@ -1,0 +1,30 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index 7778469..f68087c 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -1009,7 +1009,6 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+       F->getName() == "lstat" || F->getName() == "strtod" ||
+       F->getName() == "strtof" || F->getName() == "strtold" ||
+       F->getName() == "fopen" || F->getName() == "fdopen" ||
+-      F->getName() == "freopen" ||
+       F->getName() == "fflush" || F->getName() == "feof" ||
+       F->getName() == "fileno" || F->getName() == "clearerr" ||
+       F->getName() == "rewind" || F->getName() == "ftell" ||
+@@ -1118,6 +1117,17 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+     }
+   }
+ 
++  if (F->getName() == "freopen") {
++    const FunctionType *FTy = F->getFunctionType();
++    if (FTy->getNumParams() > 0 &&
++        isa<PointerType>(FTy->getParamType(2))) {
++      Constraints.push_back(Constraint(Constraint::Copy,
++                                       getNode(CS.getInstruction()),
++                                       getNode(CS.getArgument(2))));
++      return true;
++    }
++  }
++
+   Instruction *I = CS.getInstruction();
+   if (I) {
+     Function *ParentF = I->getParent()->getParent();

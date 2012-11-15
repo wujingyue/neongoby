@@ -1,0 +1,44 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index da86819..db24a16 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -2680,6 +2680,39 @@ void Andersens::SolveConstraints() {
+                bi != Solution.end();
+                ++bi) {
+             CurrMember = *bi;
++            K = li->Offset;
++
++            // CurrMember may points to function object
++            // Modify it to point to function pointer
++            // Adjust K according to function F's properties
++            if (K > 0) {
++              Value *V = GraphNodes[CurrMember].getValue();
++              if (V) {
++                Function *F = dyn_cast<Function>(V);
++                if (F) {
++                  DEBUG(PrintConstraint(*li));
++                  DEBUG(errs() << "Should look at: " << getNode(F) << ", K = " << K << "\n");
++                  CurrMember = getNode(F);
++                  if (K >= CallFirstArgPos) {
++                    int NArg = K - CallFirstArgPos;
++                    if (ReturnNodes.find(F) == ReturnNodes.end()) {
++                      // no return node: minus one
++                      DEBUG(errs() << "Function " << F->getName() << " has no return node. dec K.\n");
++                      K--;
++                    }
++                    if (VarargNodes.find(F) != VarargNodes.find(F)) {
++                      // has vararg node: plus one
++                      K++;
++                    }
++                    Function::arg_iterator AI = F->arg_begin();
++                    for (int i=0; i<NArg; i++, AI++) {
++                      if (!isa<PointerType>(AI->getType())) K--;
++                    }
++                    DEBUG(errs() << "new K: " << K << "\n");
++                  }
++                }
++              }
++            }
+ 
+             // Need to increment the member by K since that is where we are
+             // supposed to copy to/from.  Note that in positive weight cycles,

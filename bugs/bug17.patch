@@ -1,0 +1,55 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index 38e293b..57f2f72 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -415,6 +415,7 @@ class Andersens: public ModulePass,
+   std::vector<unsigned> VSSCCRep;
+   // Mapping from node to whether we have visited it during SCC finding yet.
+   std::vector<bool> Node2Visited;
++  std::vector<bool> Node3Visited;
+   // During variable substitution, we create unknowns to represent the unknown
+   // value that is a dereference of a variable.  These nodes are known as
+   // "ref" nodes (since they represent the value of dereferences).
+@@ -1848,6 +1849,7 @@ void Andersens::HU() {
+   Node2DFS.insert(Node2DFS.begin(), GraphNodes.size(), 0);
+   Node2Deleted.insert(Node2Deleted.begin(), GraphNodes.size(), false);
+   Node2Visited.insert(Node2Visited.begin(), GraphNodes.size(), false);
++  Node3Visited.insert(Node3Visited.begin(), GraphNodes.size(), false);
+ 
+   for (unsigned i = 0; i < FirstRefNode; ++i) {
+     if (FindNode(i) == i) {
+@@ -1860,12 +1862,14 @@ void Andersens::HU() {
+   // Reset tables for actual labeling
+   Node2DFS.clear();
+   Node2Visited.clear();
++  Node3Visited.clear();
+   Node2Deleted.clear();
+   // Pre-grow our densemap so that we don't get really bad behavior
+   Set2PEClass.resize(GraphNodes.size());
+ 
+   // Visit the condensed graph and generate pointer equivalence labels.
+   Node2Visited.insert(Node2Visited.begin(), GraphNodes.size(), false);
++  Node3Visited.insert(Node3Visited.begin(), GraphNodes.size(), false);
+   for (unsigned i = 0; i < FirstRefNode; ++i) {
+     if (FindNode(i) == i) {
+       unsigned Node = VSSCCRep[i];
+@@ -1969,9 +1973,10 @@ void Andersens::HUValNum(unsigned NodeIndex) {
+   // receives no points-to sets and has none).
+   if (NodeIndex >= FirstRefNode) {
+     unsigned j = VSSCCRep[FindNode(NodeIndex - FirstRefNode)];
+-    if ((Node2Visited[j] && !GraphNodes[j].PointerEquivLabel)
++    if ((Node3Visited[j] && !GraphNodes[j].PointerEquivLabel)
+         || (GraphNodes[j].Direct && !GraphNodes[j].PredEdges
+             && GraphNodes[j].PointsTo->empty())){
++      Node3Visited[NodeIndex] = true;
+       return;
+     }
+   }
+@@ -2025,6 +2030,7 @@ void Andersens::HUValNum(unsigned NodeIndex) {
+       N->PointerEquivLabel = PEClass++;
+     }
+   }
++  Node3Visited[NodeIndex] = true;
+ }
+ 
+ /// Rewrite our list of constraints so that pointer equivalent nodes are

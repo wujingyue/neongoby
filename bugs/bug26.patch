@@ -1,0 +1,27 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index 1adcff9..0f8f61f 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -1053,6 +1053,22 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+     }
+   }
+ 
++  if (F->getName() == "pthread_create") {
++    const FunctionType *FTy = F->getFunctionType();
++    if (FTy->getNumParams() == 4
++        && isa<PointerType>(FTy->getParamType(0))
++        && isa<PointerType>(FTy->getParamType(1))
++        && isa<PointerType>(FTy->getParamType(2))
++        && isa<PointerType>(FTy->getParamType(3))) {
++      // Copy the actual argument into the formal argument.
++      Value *ThrFunc = CS.getArgument(2);
++      Value *Arg = CS.getArgument(3);
++      Constraints.push_back(Constraint(Constraint::Store,
++                                       getNode(ThrFunc),
++                                       getNode(Arg), CallFirstArgPos));
++    }
++  }
++
+   return false;
+ }
+ 

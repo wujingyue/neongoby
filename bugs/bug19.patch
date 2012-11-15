@@ -1,0 +1,26 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index 57f2f72..da86819 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -1496,6 +1496,7 @@ void Andersens::ClumpAddressTaken() {
+ #define DEBUG_TYPE "anders-aa-renumber"
+   std::vector<unsigned> Translate;
+   std::vector<Node> NewGraphNodes;
++  std::map<unsigned, unsigned> NewMaxK;
+ 
+   Translate.resize(GraphNodes.size());
+   unsigned NewPos = 0;
+@@ -1559,6 +1560,13 @@ void Andersens::ClumpAddressTaken() {
+     C.Dest = Translate[C.Dest];
+   }
+ 
++  for (unsigned i = 0; i < GraphNodes.size(); ++i) {
++    if (MaxK.find(i) != MaxK.end()) {
++      NewMaxK[Translate[i]] = MaxK[i];
++    }
++  }
++  MaxK = NewMaxK;
++
+   GraphNodes.swap(NewGraphNodes);
+ #undef DEBUG_TYPE
+ #define DEBUG_TYPE "anders-aa"

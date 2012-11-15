@@ -1,0 +1,15 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index f68087c..f9f3748 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -1060,7 +1060,9 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+   // Result = Arg0
+   if (F->getName() == "realloc" || F->getName() == "strchr" ||
+       F->getName() == "strrchr" || F->getName() == "strstr" ||
+-      F->getName() == "strtok"  || F->getName() == "getcwd") {
++      F->getName() == "strtok"  || F->getName() == "getcwd" ||
++      F->getName() == "stpcpy"  || F->getName() == "strcpy" ||
++      F->getName() == "strcat") {
+     const FunctionType *FTy = F->getFunctionType();
+     if (FTy->getNumParams() > 0 &&
+         isa<PointerType>(FTy->getParamType(0))) {

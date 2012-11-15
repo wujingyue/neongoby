@@ -1,0 +1,31 @@
+diff --git a/lib/Andersens/Andersens.cpp b/lib/Andersens/Andersens.cpp
+index 6959b24..7778469 100644
+--- a/lib/Andersens/Andersens.cpp
++++ b/lib/Andersens/Andersens.cpp
+@@ -1061,7 +1061,7 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+   // Result = Arg0
+   if (F->getName() == "realloc" || F->getName() == "strchr" ||
+       F->getName() == "strrchr" || F->getName() == "strstr" ||
+-      F->getName() == "strtok") {
++      F->getName() == "strtok"  || F->getName() == "getcwd") {
+     const FunctionType *FTy = F->getFunctionType();
+     if (FTy->getNumParams() > 0 &&
+         isa<PointerType>(FTy->getParamType(0))) {
+@@ -1107,6 +1107,17 @@ bool Andersens::AddConstraintsForExternalCall(CallSite CS, Function *F) {
+     }
+   }
+ 
++  if (F->getName() == "realpath") {
++    const FunctionType *FTy = F->getFunctionType();
++    if (FTy->getNumParams() > 0 &&
++       isa<PointerType>(FTy->getParamType(1))) {
++      Constraints.push_back(Constraint(Constraint::Copy,
++                                       getNode(CS.getInstruction()),
++                                       getNode(CS.getArgument(1))));
++     return true;
++    }
++  }
++
+   Instruction *I = CS.getInstruction();
+   if (I) {
+     Function *ParentF = I->getParent()->getParent();
