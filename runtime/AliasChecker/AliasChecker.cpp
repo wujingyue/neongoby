@@ -10,41 +10,31 @@
 #include <queue>
 using namespace std;
 
-class SpinLock {
-private:
-  pthread_spinlock_t InternalSpinLock;
-
-public:
-  SpinLock() {
-    pthread_spin_init(&InternalSpinLock, 0);
+struct Environment {
+  Environment() {
+    pthread_spin_init(&FreeLock, 0);
+    pthread_mutex_init(&ReportLock, NULL);
   }
 
-  void Lock() {
-    pthread_spin_lock(&InternalSpinLock);
+  ~Environment() {
+    pthread_spin_destroy(&FreeLock);
+    pthread_mutex_destroy(&ReportLock);
   }
 
-  void Unlock() {
-    pthread_spin_unlock(&InternalSpinLock);
-  }
-
-  ~SpinLock() {
-    pthread_spin_destroy(&InternalSpinLock);
-  }
+  static const unsigned QueueSize;
+  queue<void *> FreeQueue, DeleteQueue, DeleteArrayQueue;
+  pthread_spinlock_t FreeLock;
+  pthread_mutex_t ReportLock;
 };
 
-static queue<void*> FreeQueue, DeleteQueue, DeleteArrayQueue;
-static unsigned FreeTriggerLimit = 20000;
-static unsigned FreeCount = 10000;
-static SpinLock FreeLock, ReportLock;
+const unsigned Environment::QueueSize = 10000;
 
-typedef void (*FreeFuncType)(void *Arg);
-extern "C" void _ZdlPv(void *MemBlock);
-extern "C" void _ZdaPv(void *Array);
+static Environment Global;
 
 extern "C" void ReportMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
-  ReportLock.Lock();
+  pthread_mutex_lock(&Global.ReportLock);
   fprintf(stderr, "Missing alias:\n[%u]\n[%u]\n", VIDOfP, VIDOfQ);
-  ReportLock.Unlock();
+  pthread_mutex_unlock(&Global.ReportLock);
 }
 
 extern "C" void SilenceMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
@@ -72,35 +62,30 @@ extern "C" void SilenceIfMissed(void *P, unsigned VIDOfP,
   }
 }
 
-static void RecordItemFreed(void *Item, queue<void*> &Queue, FreeFuncType Free) {
-#ifdef DEBUG_FREE_QUEUE
-  fprintf(stderr, "free: %p\n", Item);
-#endif
-  FreeLock.Lock();
+typedef void (*FreeFuncType)(void *Arg);
+
+static void DelayedFree(void *Item, queue<void*> &Queue, FreeFuncType Free) {
+  pthread_spin_lock(&Global.FreeLock);
   Queue.push(Item);
-  if (Queue.size() > FreeTriggerLimit) {
-#ifdef DEBUG_FREE_QUEUE
-    fprintf(stderr, "limit reached. freeing items\n");
-#endif
-    for (unsigned i=0; i<FreeCount; i++) {
-#ifdef DEBUG_FREE_QUEUE
-      fprintf(stderr, "real free: %p\n", Queue.front());
-#endif
-      Free(Queue.front());
-      Queue.pop();
-    }
+  if (Queue.size() > Environment::QueueSize) {
+    Free(Queue.front());
+    Queue.pop();
   }
-  FreeLock.Unlock();
+  pthread_spin_unlock(&Global.FreeLock);
 }
 
 extern "C" void dynaa_free(void *MemBlock) {
-  RecordItemFreed(MemBlock, FreeQueue, free);
+  DelayedFree(MemBlock, Global.FreeQueue, free);
 }
+
+extern "C" void _ZdlPv(void *MemBlock);
 
 extern "C" void dynaa_delete(void *MemBlock) {
-  RecordItemFreed(MemBlock, DeleteQueue, _ZdlPv);
+  DelayedFree(MemBlock, Global.DeleteQueue, _ZdlPv);
 }
 
+extern "C" void _ZdaPv(void *Array);
+
 extern "C" void dynaa_delete_array(void *Array) {
-  RecordItemFreed(Array, DeleteArrayQueue, _ZdaPv);
+  DelayedFree(Array, Global.DeleteArrayQueue, _ZdaPv);
 }
