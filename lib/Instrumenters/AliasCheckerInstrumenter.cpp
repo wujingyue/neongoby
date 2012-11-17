@@ -366,10 +366,10 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   addAliasChecks(F, Pointers, Checks);
   clock_t ClockFinishAdding = clock();
 
-  dbgs() << "Computing time = " <<
-      (ClockFinishComputing - ClockStart) / CLOCKS_PER_SEC << "\n";
-  dbgs() << "Adding time = " <<
-      (ClockFinishAdding - ClockFinishComputing) / CLOCKS_PER_SEC << "\n";
+  DEBUG(dbgs() << "Computing time = " <<
+        (ClockFinishComputing - ClockStart) / CLOCKS_PER_SEC << "\n";);
+  DEBUG(dbgs() << "Adding time = " <<
+        (ClockFinishAdding - ClockFinishComputing) / CLOCKS_PER_SEC << "\n";);
 
   return true;
 }
