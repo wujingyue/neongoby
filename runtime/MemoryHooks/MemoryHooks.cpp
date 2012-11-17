@@ -115,7 +115,7 @@ extern "C" void HookBeforeFork() {
   Global->LockLogFile();
 }
 
-extern "C" void HookFork(int Result) {
+extern "C" void HookAfterFork(int Result) {
   if (Result == 0) {
     // child process: wait for copy to finish, then open the log file
     Global->CloseLogFile();

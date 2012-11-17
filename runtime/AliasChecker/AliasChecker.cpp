@@ -3,10 +3,11 @@
 // Hook functions are declared with extern "C", because we want to disable
 // the C++ name mangling and make the instrumentation easier.
 
+#include <pthread.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <queue>
-#include <pthread.h>
 using namespace std;
 
 class SpinLock {
