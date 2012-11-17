@@ -13,10 +13,6 @@ if __name__ == '__main__':
                         help = 'hook all pointers (False by default)',
                         action = 'store_true',
                         default = False)
-    parser.add_argument('--hook-fork',
-                        help = 'hook fork() and vfork() (False by default)',
-                        action = 'store_true',
-                        default = False)
     args = parser.parse_args()
 
     instrumented_bc = args.prog + '.inst.bc'
@@ -28,8 +24,6 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-instrument-memory', '-prepare'))
     if args.hook_all:
         cmd = ' '.join((cmd, '-hook-all-pointers'))
-    if args.hook_fork:
-        cmd = ' '.join((cmd, '-hook-fork'))
     cmd = ' '.join((cmd, '-o', instrumented_bc))
     cmd = ' '.join((cmd, '<', args.prog + '.bc'))
     rcs_utils.invoke(cmd)

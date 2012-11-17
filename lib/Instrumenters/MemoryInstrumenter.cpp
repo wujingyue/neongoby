@@ -99,8 +99,6 @@ static RegisterPass<MemoryInstrumenter> X("instrument-memory",
 static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
 
-static cl::opt<bool> HookFork("hook-fork", cl::desc("Hook fork() and vfork()"));
-
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
 
@@ -346,10 +344,6 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
       }
     }
   }
-
-  // We don't support multi-process programs for now.
-  if (!HookFork)
-    assert(M.getFunction("fork") == NULL);
 }
 
 void MemoryInstrumenter::setupHooks(Module &M) {
@@ -807,11 +801,9 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     }
     // Instrument fork() to support multiprocess programs.
     // Instrument fork() at last, because it flushes the logs.
-    if (HookFork && Callee) {
-      StringRef CalleeName = Callee->getName();
-      if (CalleeName == "fork" || CalleeName == "vfork") {
-        instrumentFork(CS);
-      }
+    if (Callee &&
+        (Callee->getName() == "fork" || Callee->getName() == "vfork")) {
+      instrumentFork(CS);
     }
     if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
       instrumentIntrinsic(II);
