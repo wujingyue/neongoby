@@ -5,35 +5,63 @@
 
 #include <pthread.h>
 
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <queue>
+#include <sstream>
+#include <string>
 using namespace std;
 
 struct Environment {
-  Environment() {
+  Environment(): ReportFile(NULL) {
     pthread_spin_init(&FreeLock, 0);
     pthread_mutex_init(&ReportLock, NULL);
+    ReportFile = fopen(GetReportFileName().c_str(), "wb");
   }
 
   ~Environment() {
     pthread_spin_destroy(&FreeLock);
     pthread_mutex_destroy(&ReportLock);
+    assert(ReportFile);
+    fclose(ReportFile);
+  }
+
+  static string GetReportFileName() {
+    ostringstream OSS;
+    OSS << "/tmp/report-" << getpid();
+    return OSS.str();
   }
 
   static const unsigned QueueSize;
   queue<void *> FreeQueue, DeleteQueue, DeleteArrayQueue;
   pthread_spinlock_t FreeLock;
   pthread_mutex_t ReportLock;
+  FILE *ReportFile;
 };
 
 const unsigned Environment::QueueSize = 10000;
 
 static Environment Global;
 
+extern "C" void OnlineBeforeFork() {
+  assert(Global.ReportFile);
+  fclose(Global.ReportFile);
+}
+
+extern "C" void OnlineAfterFork(int Result) {
+  if (Result == 0) {
+    // child process
+    Global.ReportFile = fopen(Environment::GetReportFileName().c_str(), "wb");
+  } else {
+    // parent process
+    Global.ReportFile = fopen(Environment::GetReportFileName().c_str(), "ab");
+  }
+}
+
 extern "C" void ReportMissingAlias(unsigned VIDOfP, unsigned VIDOfQ, void *V) {
   pthread_mutex_lock(&Global.ReportLock);
-  fprintf(stderr, "Missing alias:\n[%u]\n[%u]\n", VIDOfP, VIDOfQ);
+  fprintf(Global.ReportFile, "Missing alias:\n[%u]\n[%u]\n", VIDOfP, VIDOfQ);
   pthread_mutex_unlock(&Global.ReportLock);
 }
 

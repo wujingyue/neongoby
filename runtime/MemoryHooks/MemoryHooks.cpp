@@ -1,4 +1,4 @@
-// vim: shiftwidth=2
+// vim: sw=2
 
 // Three types of messages:
 // 1) Declare an addr-taken variable: allocator vid, start, bound
