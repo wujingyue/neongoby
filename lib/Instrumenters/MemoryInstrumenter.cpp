@@ -210,14 +210,11 @@ void MemoryInstrumenter::instrumentFork(const CallSite &CS) {
   Function *Callee = CS.getCalledFunction();
   StringRef CalleeName = Callee->getName();
   assert(CalleeName == "fork" || CalleeName == "vfork");
+
   BasicBlock::iterator Loc = Ins;
-
   CallInst::Create(BeforeForkHook, "", Loc);
-
   ++Loc;
-  vector<Value *> Args;
-  Args.push_back(Ins);
-  CallInst::Create(AfterForkHook, Args, "", Loc);
+  CallInst::Create(AfterForkHook, Ins, "", Loc);
 }
 
 void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {

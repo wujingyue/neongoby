@@ -37,6 +37,7 @@ struct AliasCheckerInstrumenter: public FunctionPass {
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual bool doInitialization(Module &M);
   virtual bool runOnFunction(Function &F);
+  virtual bool doFinalization(Module &M);
 
  private:
   void computeAliasChecks(Function &F,
@@ -52,8 +53,9 @@ struct AliasCheckerInstrumenter: public FunctionPass {
                       const DenseMap<Instruction *, unsigned> &SlotOfPointer);
   unsigned addAliasChecks(Instruction *P, const InstList &Qs);
   void addAliasCheck(Instruction *P, Instruction *Q, SSAUpdater &SU);
+  void instrumentFork(CallSite CS);
 
-  Function *AliasCheck;
+  Function *AliasCheck, *OnlineBeforeFork, *OnlineAfterFork;
   // Types.
   Type *VoidType;
   IntegerType *CharType, *IntType, *LongType;
@@ -371,7 +373,29 @@ bool AliasCheckerInstrumenter::runOnFunction(Function &F) {
   DEBUG(dbgs() << "Adding time = " <<
         (ClockFinishAdding - ClockFinishComputing) / CLOCKS_PER_SEC << "\n";);
 
+  // Instrument forks.
+  for (Function::iterator B = F.begin(); B != F.end(); ++B) {
+    for (BasicBlock::iterator I = B->begin(); I != B->end(); ++I) {
+      CallSite CS(I);
+      if (CS) {
+        Function *Callee = CS.getCalledFunction();
+        if (Callee &&
+            (Callee->getName() == "fork" || Callee->getName() == "vfork")) {
+          instrumentFork(CS);
+        }
+      }
+    }
+  }
+
   return true;
+}
+
+void AliasCheckerInstrumenter::instrumentFork(CallSite CS) {
+  Instruction *I = CS.getInstruction();
+  CallInst::Create(OnlineBeforeFork, "", I);
+  assert(isa<CallInst>(I));
+  BasicBlock::iterator Next = I; ++Next;
+  CallInst::Create(OnlineAfterFork, I, "", Next);
 }
 
 bool AliasCheckerInstrumenter::doInitialization(Module &M) {
@@ -389,7 +413,14 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
   ArgTypes.push_back(IntType);
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(IntType);
+  // XXX(void *P, unsigned IDOfP, void *Q, unsigned IDOfQ)
   FunctionType *AliasCheckType = FunctionType::get(VoidType, ArgTypes, false);
+  // OnlineBeforeFork()
+  FunctionType *OnlineBeforeForkType = FunctionType::get(VoidType, false);
+  // OnlineAfterFork(int ResultOfFork)
+  FunctionType *OnlineAfterForkType = FunctionType::get(VoidType,
+                                                        IntType,
+                                                        false);
 
   // Initialize hooks.
   string AliasCheckName;
@@ -403,6 +434,14 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
                                 AliasCheckName,
                                 &M);
   AliasCheck->setDoesNotThrow(true);
+  OnlineBeforeFork = Function::Create(OnlineBeforeForkType,
+                                      GlobalValue::ExternalLinkage,
+                                      "OnlineBeforeFork",
+                                      &M);
+  OnlineAfterFork = Function::Create(OnlineAfterForkType,
+                                     GlobalValue::ExternalLinkage,
+                                     "OnlineAfterFork",
+                                     &M);
 
   assert(InputAliasChecksName == "" || OutputAliasChecksName == "");
   // Initialize the output file for alias checks if necessary.
@@ -420,6 +459,10 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
     fclose(InputFile);
   }
 
+  return true;
+}
+
+bool AliasCheckerInstrumenter::doFinalization(Module &M) {
   // replace free() and delete with our implementation
   vector<pair<string, string> > ReplacePairs;
   ReplacePairs.push_back(make_pair<string, string>("free", "dynaa_free"));
