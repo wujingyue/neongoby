@@ -18,44 +18,24 @@ using namespace std;
 using namespace llvm;
 
 namespace dyn_aa {
-struct TraceState{
-  TraceState() {
-    Action = TopLevelPointTo;
-    End = false;
-  }
-
-  // Indicates where the trace starts
-  unsigned StartingRecordID;
-  // The containing function of start pointer for printing ReturnInst
-  Function *StartingFunction;
-
-  // Indicates whether go on following the trace
-  bool End;
-
-  // Stores the sliced trace, key is RecordID, value is ValueID
-  vector<pair<unsigned, unsigned> > Trace;
-
-  // Indicates type of log record to deal with:
-  // If Action is AddrTakenPointTo, TraceSlicer will only track Address;
-  // If Action is TopLevelPointTo, if previous instruction is Select/PHI,
-  // TraceSlicer will track ValueIDCandidates and Address first, and then
-  // track ValueID; otherwise, TraceSlicer will only track ValueID;
-  // If Action is CallInstruction, ArgNo is used;
-  // If Action is ReturnInstruction, StartingFunction is used.
-  LogRecordType Action;
-
-  // All possible source pointers of PHI and Select for TopLevelPointTo record.
-  // If ValueIDCandidates is empty, TraceSlicer is not dealing with PHI or Select
-  DenseSet<unsigned> ValueIDCandidates;
-
-  // Value ID of dest pointer for AddrTakenPointTo record
+struct LogRecordInfo{
   unsigned ValueID;
-
-  // Address of pointer for AddrTakenPointTo record
-  void *Address;
-
-  // Index of argument for CallInstruction record
+  // for CallSite and Argument
   unsigned ArgNo;
+  // for LoadInst and StoreInst
+  void *PointerAddress;
+  // for PHI and SelectInst
+  void *PointeeAddress;
+};
+
+struct PointerTrace{
+  PointerTrace(): Active(false) {}
+
+  unsigned StartingRecordID;
+  Function *StartingFunction;
+  bool Active;
+  LogRecordInfo PreviousRecord;
+  vector<pair<unsigned, unsigned> > Slice;
 };
 
 struct TraceSlicer: public ModulePass, public LogProcessor {
@@ -73,17 +53,18 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void processCallInstruction(const CallInstructionLogRecord &Record);
   void processReturnInstruction(const ReturnInstructionLogRecord &Record);
 
+  bool dependsOn(PointerTrace &Trace,
+                 LogRecordInfo &CurrentRecord,
+                 rcs::IDAssigner &IDA);
+
   Value *getLatestCommonAncestor();
 
  private:
-  void trackSourcePointer(TraceState &TS,
-                         const TopLevelPointToLogRecord &Record);
   void printTrace(raw_ostream &O,
                   pair<unsigned, unsigned> TraceRecord,
                   int PointerLabel) const;
-  bool isLive(int PointerLabel);
 
-  TraceState CurrentState[2];
+  PointerTrace Trace[2];
   unsigned CurrentRecordID;
 };
 }

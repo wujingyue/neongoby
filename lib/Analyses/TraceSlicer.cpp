@@ -88,7 +88,7 @@ bool TraceSlicer::runOnModule(Module &M) {
 
   assert(StartingRecordIDs.size() == 2);
   for (unsigned i = 0; i < StartingRecordIDs.size(); ++i)
-    CurrentState[i].StartingRecordID = StartingRecordIDs[i];
+    Trace[i].StartingRecordID = StartingRecordIDs[i];
 
   errs() << "Backward slicing...\n";
   processLog(true);
@@ -120,21 +120,21 @@ void TraceSlicer::printTrace(raw_ostream &O,
 void TraceSlicer::print(raw_ostream &O, const Module *M) const {
   O << "RecID\tPtr\tValueID\tFunc:  Inst/Arg\n";
   int Index[2];
-  Index[0] = CurrentState[0].Trace.size() - 1;
-  Index[1] = CurrentState[1].Trace.size() - 1;
+  Index[0] = Trace[0].Slice.size() - 1;
+  Index[1] = Trace[1].Slice.size() - 1;
   while (true) {
     unsigned Min;
     int PointerLabel = -1;
     for (int i = 0; i < 2; ++i) {
       if (Index[i] >= 0 &&
-          (PointerLabel == -1 || CurrentState[i].Trace[Index[i]].first < Min)) {
-        Min = CurrentState[i].Trace[Index[i]].first;
+          (PointerLabel == -1 || Trace[i].Slice[Index[i]].first < Min)) {
+        Min = Trace[i].Slice[Index[i]].first;
         PointerLabel = i;
       }
     }
     if (PointerLabel != -1) {
       printTrace(O,
-                 CurrentState[PointerLabel].Trace[Index[PointerLabel]],
+                 Trace[PointerLabel].Slice[Index[PointerLabel]],
                  PointerLabel);
       Index[PointerLabel]--;
     } else
@@ -142,19 +142,11 @@ void TraceSlicer::print(raw_ostream &O, const Module *M) const {
   }
 }
 
-bool TraceSlicer::isLive(int PointerLabel) {
-  if (CurrentState[PointerLabel].StartingRecordID < CurrentRecordID ||
-      CurrentState[PointerLabel].End) {
-    return false;
-  }
-  return true;
-}
-
 void TraceSlicer::processAddrTakenDecl(const AddrTakenDeclLogRecord &Record) {
   CurrentRecordID--;
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
   }
 }
 
@@ -163,93 +155,45 @@ void TraceSlicer::processTopLevelPointTo(
   CurrentRecordID--;
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
+
+  LogRecordInfo CurrentRecord;
+  CurrentRecord.ValueID = Record.PointerValueID;
+  CurrentRecord.PointeeAddress = Record.PointeeAddress;
+  CurrentRecord.PointerAddress = Record.LoadedFrom;
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    if (CurrentState[PointerLabel].StartingRecordID == CurrentRecordID) {
+    if (Trace[PointerLabel].StartingRecordID == CurrentRecordID) {
       Value *V = IDA.getValue(Record.PointerValueID);
+
+      // input value must be a pointer
       assert(V->getType()->isPointerTy());
+
+      // set StartingFunction
       if (Argument *A = dyn_cast<Argument>(V))
-        CurrentState[PointerLabel].StartingFunction = A->getParent();
+        Trace[PointerLabel].StartingFunction = A->getParent();
       else if (Instruction *I = dyn_cast<Instruction>(V))
-        CurrentState[PointerLabel].StartingFunction =
-          I->getParent()->getParent();
+        Trace[PointerLabel].StartingFunction = I->getParent()->getParent();
       else
-        CurrentState[PointerLabel].StartingFunction = NULL;
-      CurrentState[PointerLabel].ValueID = Record.PointerValueID;
-    }
-    if (isLive(PointerLabel)) {
-      if (CurrentState[PointerLabel].Action != TopLevelPointTo) {
-        continue;
-      }
+        Trace[PointerLabel].StartingFunction = NULL;
 
-      if (!CurrentState[PointerLabel].ValueIDCandidates.empty()) {
-        // For select and PHI, find current ID according to Address and
-        // ValueIDCandidates.
-        // If two variables of select have the same value, we follow the one
-        // occurs latter, this is just a temporary method.
-        if (Record.PointeeAddress == CurrentState[PointerLabel].Address &&
-            CurrentState[PointerLabel].ValueIDCandidates.count(
-              Record.PointerValueID)) {
-          CurrentState[PointerLabel].ValueIDCandidates.clear();
-          CurrentState[PointerLabel].ValueID = Record.PointerValueID;
-
-          NumContainingSlices++;
-          CurrentState[PointerLabel].Trace.push_back(
-              make_pair(CurrentRecordID,
-                        CurrentState[PointerLabel].ValueID));
-          trackSourcePointer(CurrentState[PointerLabel], Record);
-        }
-      } else {
-        if (Record.PointerValueID == CurrentState[PointerLabel].ValueID) {
-          NumContainingSlices++;
-          CurrentState[PointerLabel].Trace.push_back(
-              make_pair(CurrentRecordID,
-                        CurrentState[PointerLabel].ValueID));
-          trackSourcePointer(CurrentState[PointerLabel], Record);
-        }
+      Trace[PointerLabel].Active = true;
+      Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                    CurrentRecord.ValueID));
+      Trace[PointerLabel].PreviousRecord = CurrentRecord;
+      NumContainingSlices++;
+    } else {
+      if (dependsOn(Trace[PointerLabel], CurrentRecord, IDA)) {
+        Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                      CurrentRecord.ValueID));
+        Trace[PointerLabel].PreviousRecord = CurrentRecord;
+        NumContainingSlices++;
       }
     }
   }
   // If two sliced traces meet, we stop tracking
   if (NumContainingSlices == 2) {
-    CurrentState[0].End = true;
-    CurrentState[1].End = true;
-  }
-}
-
-void TraceSlicer::trackSourcePointer(TraceState &TS,
-                                    const TopLevelPointToLogRecord &Record) {
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-  Value *V = IDA.getValue(TS.ValueID);
-  if (isa<LoadInst>(V)) {
-    TS.Address = Record.LoadedFrom;
-    TS.Action = AddrTakenPointTo;
-  } else if (GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(V)) {
-    TS.ValueID = IDA.getValueID(GEPI->getPointerOperand());
-  } else if (BitCastInst *BCI = dyn_cast<BitCastInst>(V)) {
-    TS.ValueID = IDA.getValueID(BCI->getOperand(0));
-  } else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
-    TS.ValueIDCandidates.insert(IDA.getValueID(SI->getTrueValue()));
-    TS.ValueIDCandidates.insert(IDA.getValueID(SI->getFalseValue()));
-    TS.Address = Record.PointeeAddress;
-  } else if (PHINode *PN = dyn_cast<PHINode>(V)) {
-    unsigned NumIncomingValues = PN->getNumIncomingValues();
-    for (unsigned VI = 0; VI != NumIncomingValues; ++VI) {
-      TS.ValueIDCandidates.insert(IDA.getValueID(PN->getIncomingValue(VI)));
-    }
-    TS.Address = Record.PointeeAddress;
-  } else if (Argument *A = dyn_cast<Argument>(V)) {
-    TS.Action = CallInstruction;
-    TS.ArgNo = A->getArgNo();
-    // errs() << "(argument of @" << A->getParent()->getName() << ")\n";
-  } else if (isa<CallInst>(V) || isa<InvokeInst>(V)) {
-    TS.Action = ReturnInstruction;
-  } else if (isa<AllocaInst>(V)) {
-    TS.End = true;
-  } else if (isa<GlobalValue>(V)) {
-    TS.End = true;
-  } else {
-    errs() << "Unknown instruction \'" << *V << "\'\n";
-    TS.End = true;
+    Trace[0].Active = false;
+    Trace[1].Active = false;
   }
 }
 
@@ -261,29 +205,24 @@ void TraceSlicer::processAddrTakenPointTo(
   Instruction *I = IDA.getInstruction(Record.InstructionID);
   assert(isa<StoreInst>(I));
 
+  LogRecordInfo CurrentRecord;
+  CurrentRecord.ValueID = IDA.getValueID(I);
+  CurrentRecord.PointerAddress = Record.PointerAddress;
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
-    if (isLive(PointerLabel)) {
-      if (CurrentState[PointerLabel].Action != AddrTakenPointTo) {
-        continue;
-      }
-      if (Record.PointerAddress == CurrentState[PointerLabel].Address) {
-        NumContainingSlices++;
-        CurrentState[PointerLabel].Trace.push_back(
-            make_pair(CurrentRecordID,
-                      IDA.getValueID(I)));
-        CurrentState[PointerLabel].Action = TopLevelPointTo;
-        StoreInst *SI = dyn_cast<StoreInst>(I);
-        CurrentState[PointerLabel].ValueID =
-          IDA.getValueID(SI->getValueOperand());
-      }
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
+    if (dependsOn(Trace[PointerLabel], CurrentRecord, IDA)) {
+      Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                    CurrentRecord.ValueID));
+      Trace[PointerLabel].PreviousRecord = CurrentRecord;
+      NumContainingSlices++;
     }
   }
   // If two sliced traces meet, we stop tracking
   if (NumContainingSlices == 2) {
-    CurrentState[0].End = true;
-    CurrentState[1].End = true;
+    Trace[0].Active = false;
+    Trace[1].Active = false;
   }
 }
 
@@ -296,32 +235,23 @@ void TraceSlicer::processCallInstruction(
   CallSite CS(I);
   assert(CS);
 
+  LogRecordInfo CurrentRecord;
+  CurrentRecord.ValueID = IDA.getValueID(I);
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
-    if (isLive(PointerLabel)) {
-      if (CurrentState[PointerLabel].Action == ReturnInstruction) {
-        // this callee is an external function, the trace ends
-        CurrentState[PointerLabel].End = true;
-        continue;
-      }
-      if (CurrentState[PointerLabel].Action != CallInstruction) {
-        continue;
-      }
-
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
+    if (dependsOn(Trace[PointerLabel], CurrentRecord, IDA)) {
+      Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                    CurrentRecord.ValueID));
+      Trace[PointerLabel].PreviousRecord = CurrentRecord;
       NumContainingSlices++;
-      CurrentState[PointerLabel].Trace.push_back(
-          make_pair(CurrentRecordID,
-                    IDA.getValueID(I)));
-      CurrentState[PointerLabel].Action = TopLevelPointTo;
-      CurrentState[PointerLabel].ValueID =
-        IDA.getValueID(CS.getArgument(CurrentState[PointerLabel].ArgNo));
     }
   }
   // If two sliced traces meet, we stop tracking
   if (NumContainingSlices == 2) {
-    CurrentState[0].End = true;
-    CurrentState[1].End = true;
+    Trace[0].Active = false;
+    Trace[1].Active = false;
   }
 }
 
@@ -333,51 +263,112 @@ void TraceSlicer::processReturnInstruction(
   Instruction *I = IDA.getInstruction(Record.InstructionID);
   assert(isa<ReturnInst>(I) || isa<ResumeInst>(I));
 
+  LogRecordInfo CurrentRecord;
+  CurrentRecord.ValueID = IDA.getValueID(I);
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevelPointTo record
-    assert(CurrentState[PointerLabel].StartingRecordID != CurrentRecordID);
-    if (isLive(PointerLabel)) {
-      if (CurrentState[PointerLabel].Action != ReturnInstruction) {
-        // print return instruction of the starting function
-        if (I->getParent()->getParent() ==
-            CurrentState[PointerLabel].StartingFunction) {
-          CurrentState[PointerLabel].Trace.push_back(
-              make_pair(CurrentRecordID,
-                        IDA.getValueID(I)));
-        }
-        continue;
-      }
-
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
+    if (dependsOn(Trace[PointerLabel], CurrentRecord, IDA)) {
+      Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                    CurrentRecord.ValueID));
+      Trace[PointerLabel].PreviousRecord = CurrentRecord;
       NumContainingSlices++;
-      CurrentState[PointerLabel].Trace.push_back(
-          make_pair(CurrentRecordID,
-                    IDA.getValueID(I)));
-      CurrentState[PointerLabel].Action = TopLevelPointTo;
-      if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
-        CurrentState[PointerLabel].ValueID =
-          IDA.getValueID(RI->getReturnValue());
-      } else if (isa<ResumeInst>(I)) {
-        assert(false);
-      } else {
-        assert(false);
+    } else if (ReturnInst *RI = dyn_cast<ReturnInst>(I)) {
+      // print return instruction of the starting function
+      if (RI->getParent()->getParent() == Trace[PointerLabel].StartingFunction) {
+        Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                      CurrentRecord.ValueID));
       }
     }
   }
   // If two sliced traces meet, we stop tracking
   if (NumContainingSlices == 2) {
-    CurrentState[0].End = true;
-    CurrentState[1].End = true;
+    Trace[0].Active = false;
+    Trace[1].Active = false;
+  }
+}
+
+// whether trace depend on current record
+bool TraceSlicer::dependsOn(PointerTrace &Trace,
+                            LogRecordInfo &CurrentRecord,
+                            rcs::IDAssigner &IDA) {
+  if (!Trace.Active) {
+    return false;
+  }
+
+  LogRecordInfo &PreviousRecord = Trace.PreviousRecord;
+  Value *CurrentValue = IDA.getValue(CurrentRecord.ValueID);
+  Value *PreviousValue = IDA.getValue(PreviousRecord.ValueID);
+  // currently we could not deal with ResumeInst
+  assert(!isa<ResumeInst>(CurrentValue));
+  CallSite PreviousCS(PreviousValue);
+  CallSite CurrentCS(CurrentValue);
+
+  if (PreviousCS) {
+    if (CurrentRecord.ValueID == PreviousRecord.ValueID) {
+      // Can't find ReturnInst in poiter log,
+      // PreviousRecord is an external function call
+      Trace.Active = false;
+      return false;
+    } else if (ReturnInst *RI = dyn_cast<ReturnInst>(CurrentValue)) {
+      if (RI->getParent()->getParent() == PreviousCS.getCalledFunction()) {
+        return true;
+      }
+      return CurrentRecord.ValueID ==
+             IDA.getValueID(PreviousCS.getArgument(PreviousRecord.ArgNo));
+    } else {
+      return CurrentRecord.ValueID ==
+             IDA.getValueID(PreviousCS.getArgument(PreviousRecord.ArgNo));
+    }
+  } else if (Argument *A = dyn_cast<Argument>(PreviousValue)) {
+    if (CurrentCS) {
+      CurrentRecord.ArgNo = A->getArgNo();
+      return true;
+    }
+    return false;
+  } else if (GetElementPtrInst *GEPI =
+             dyn_cast<GetElementPtrInst>(PreviousValue)) {
+    return CurrentRecord.ValueID == IDA.getValueID(GEPI->getPointerOperand());
+  } else if (BitCastInst *BCI = dyn_cast<BitCastInst>(PreviousValue)) {
+    return CurrentRecord.ValueID == IDA.getValueID(BCI->getOperand(0));
+  } else if (StoreInst *SI = dyn_cast<StoreInst>(PreviousValue)) {
+    return CurrentRecord.ValueID == IDA.getValueID(SI->getValueOperand());
+  } else if (ReturnInst *RI = dyn_cast<ReturnInst>(PreviousValue)) {
+    return CurrentRecord.ValueID == IDA.getValueID(RI->getReturnValue());
+  } else if (SelectInst *SI = dyn_cast<SelectInst>(PreviousValue)) {
+    return CurrentRecord.PointeeAddress == PreviousRecord.PointeeAddress &&
+    (CurrentRecord.ValueID == IDA.getValueID(SI->getTrueValue()) ||
+     CurrentRecord.ValueID == IDA.getValueID(SI->getTrueValue()));
+  } else if (PHINode *PN = dyn_cast<PHINode>(PreviousValue)) {
+    if (CurrentRecord.PointeeAddress == PreviousRecord.PointeeAddress) {
+      unsigned NumIncomingValues = PN->getNumIncomingValues();
+      for (unsigned VI = 0; VI != NumIncomingValues; ++VI) {
+        if (CurrentRecord.ValueID == IDA.getValueID(PN->getIncomingValue(VI))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  } else if (isa<LoadInst>(PreviousValue)) {
+    return isa<StoreInst>(CurrentValue) &&
+           CurrentRecord.PointerAddress == PreviousRecord.PointerAddress;
+  } else {
+    // PreviousRecord may be Global Variable, MallocInst,
+    // or unsupported Instructions
+    Trace.Active = false;
+    return false;
   }
 }
 
 // Get the latest common ancestor of the two slices.
 // Returns NULL if the two slices don't meet.
 Value *TraceSlicer::getLatestCommonAncestor() {
-  if (CurrentState[0].Trace.empty() || CurrentState[1].Trace.empty())
+  if (Trace[0].Slice.empty() || Trace[1].Slice.empty())
     return NULL;
-  if (CurrentState[0].Trace.back() == CurrentState[1].Trace.back()) {
+  if (Trace[0].Slice.back() == Trace[1].Slice.back()) {
     IDAssigner &IDA = getAnalysis<IDAssigner>();
-    return IDA.getValue(CurrentState[0].Trace.back().second);
+    return IDA.getValue(Trace[0].Slice.back().second);
   }
   return NULL;
 }
