@@ -19,10 +19,8 @@ struct DynAAUtils {
   static const std::string MemHooksIniterName;
   static const std::string AfterForkHookName;
   static const std::string BeforeForkHookName;
-  static const std::string SlotsName;
   static const std::string VAStartHookName;
-  static const std::string VAFuncBeginHookName;
-  static const std::string VAFuncReturnHookName;
+  static const std::string SlotsName;
 
   static void PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total);
   static bool PointerIsDereferenced(const llvm::Value *V);

@@ -49,16 +49,16 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentStoreInst(StoreInst *SI);
   void instrumentReturnInst(Instruction *I);
   void instrumentCallSite(CallSite CS);
-  void instrumentIntrinsic(IntrinsicInst *II);
   void instrumentPointer(Value *ValueOperand,
                          Value *PointerOperand,
                          Instruction *Loc);
-  void instrumentVarArgFunction(Function *F);
-  void instrumentVarArgFunctionReturn(Instruction *I);
   void instrumentPointerInstruction(Instruction *I);
   void instrumentPointerParameters(Function *F);
   void instrumentGlobals(Module &M);
   void instrumentMainArgs(Module &M);
+  void instrumentVarArgFunction(Function *F);
+
+  IntrinsicInst *findAnyVAStart(Function *F);
   void checkFeatures(Module &M);
   void setupScalarTypes(Module &M);
   void setupHooks(Module &M);
@@ -66,19 +66,13 @@ struct MemoryInstrumenter: public ModulePass {
   void addNewGlobalCtor(Module &M);
 
   // hooks
-  Function *MemAllocHook;
+  Function *MemAllocHook, *TopLevelHook, *AddrTakenHook;
   Function *MainArgsAllocHook;
-  Function *TopLevelHook;
-  Function *AddrTakenHook;
-  Function *CallHook;
-  Function *ReturnHook;
+  Function *CallHook, *ReturnHook;
   Function *GlobalsAllocHook;
   Function *MemHooksIniter;
-  Function *AfterForkHook;
-  Function *BeforeForkHook;
+  Function *AfterForkHook, *BeforeForkHook;
   Function *VAStartHook;
-  Function *VAFuncBeginHook;
-  Function *VAFuncReturnHook;
   // the main function
   Function *Main;
   // types
@@ -115,14 +109,12 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   CallHook = NULL;
   ReturnHook = NULL;
   GlobalsAllocHook = NULL;
+  VAStartHook = NULL;
   MemHooksIniter = NULL;
   Main = NULL;
   CharType = LongType = IntType = NULL;
   CharStarType = NULL;
   VoidType = NULL;
-  VAStartHook = NULL;
-  VAFuncBeginHook = NULL;
-  VAFuncReturnHook = NULL;
 }
 
 void MemoryInstrumenter::instrumentMainArgs(Module &M) {
@@ -462,27 +454,14 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                     DynAAUtils::BeforeForkHookName,
                                     &M);
 
-  ArgTypes.clear();
-  ArgTypes.push_back(CharStarType);
-  FunctionType *VAStartHookType = FunctionType::get(VoidType, ArgTypes, false);
-  VAStartHook = Function::Create(VAStartHookType, GlobalValue::ExternalLinkage,
-                                 DynAAUtils::VAStartHookName, &M);
-  ArgTypes.clear();
-  FunctionType *VAFuncBeginHookType = FunctionType::get(VoidType,
-                                                        ArgTypes,
-                                                        false);
-  VAFuncBeginHook = Function::Create(VAFuncBeginHookType,
+  // Setup VAStartHook
+  FunctionType *VAStartHookType = FunctionType::get(VoidType,
+                                                    CharStarType,
+                                                    false);
+  VAStartHook = Function::Create(VAStartHookType,
                                  GlobalValue::ExternalLinkage,
-                                 DynAAUtils::VAFuncBeginHookName,
+                                 DynAAUtils::VAStartHookName,
                                  &M);
-  ArgTypes.clear();
-  FunctionType *VAFuncReturnHookType = FunctionType::get(VoidType,
-                                                         ArgTypes,
-                                                         false);
-  VAFuncReturnHook = Function::Create(VAFuncReturnHookType,
-                                      GlobalValue::ExternalLinkage,
-                                      DynAAUtils::VAFuncReturnHookName,
-                                      &M);
 }
 
 void MemoryInstrumenter::setupScalarTypes(Module &M) {
@@ -730,21 +709,42 @@ void MemoryInstrumenter::instrumentCallSite(CallSite CS) {
   CallInst::Create(CallHook, Args, "", CS.getInstruction());
 }
 
-void MemoryInstrumenter::instrumentIntrinsic(IntrinsicInst *II) {
-  if (II->getIntrinsicID() == Intrinsic::vastart) {
-    Value *VAList = II->getArgOperand(0);
-    Instruction *CI = CallInst::Create(VAStartHook, VAList, "");
-    CI->insertAfter(II);
+IntrinsicInst *MemoryInstrumenter::findAnyVAStart(Function *F) {
+  for (Function::iterator B = F->begin(); B != F->end(); ++B) {
+    for (BasicBlock::iterator I = B->begin(); I != B->end(); ++I) {
+      if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
+        if (II->getIntrinsicID() == Intrinsic::vastart)
+          return II;
+      }
+    }
   }
+  return NULL;
 }
 
 void MemoryInstrumenter::instrumentVarArgFunction(Function *F) {
-  Instruction *I = &F->front().front();
-  CallInst::Create(VAFuncBeginHook, vector<Value *>(), "", I);
-}
+  IntrinsicInst *VAStart = findAnyVAStart(F);
+  assert(VAStart && "cannot find any llvm.va_start");
+  BitCastInst *ArrayDecay = dyn_cast<BitCastInst>(VAStart->getOperand(0));
+  assert(ArrayDecay && ArrayDecay->getType() == CharStarType);
+  AllocaInst *Alloca = dyn_cast<AllocaInst>(ArrayDecay->getOperand(0));
+  assert(Alloca);
 
-void MemoryInstrumenter::instrumentVarArgFunctionReturn(Instruction *I) {
-  CallInst::Create(VAFuncReturnHook, vector<Value *>(), "", I);
+  // Clone Alloca, ArrayDecay, and VAStart, and replace their operands.
+  Instruction *ClonedAlloca = Alloca->clone();
+  Instruction *ClonedArrayDecay = ArrayDecay->clone();
+  Instruction *ClonedVAStart = VAStart->clone();
+  ClonedArrayDecay->setOperand(0, ClonedAlloca);
+  ClonedVAStart->setOperand(0, ClonedArrayDecay);
+
+  // Insert the cloned instructions to the entry block.
+  BasicBlock::iterator InsertPos = F->begin()->begin();
+  BasicBlock::InstListType &InstList = F->begin()->getInstList();
+  InstList.insert(InsertPos, ClonedAlloca);
+  InstList.insert(InsertPos, ClonedArrayDecay);
+  InstList.insert(InsertPos, ClonedVAStart);
+
+  // Hook the llvm.va_start.
+  CallInst::Create(VAStartHook, ClonedArrayDecay, "", InsertPos);
 }
 
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
@@ -765,12 +765,6 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     if (isa<ReturnInst>(I) || isa<ResumeInst>(I)) {
       instrumentReturnInst(I);
       return;
-    }
-  }
-
-  if (I->getParent()->getParent()->isVarArg()) {
-    if (isa<ReturnInst>(I) || isa<ResumeInst>(I)) {
-      instrumentVarArgFunctionReturn(I);
     }
   }
 
@@ -801,9 +795,6 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     if (Callee &&
         (Callee->getName() == "fork" || Callee->getName() == "vfork")) {
       instrumentFork(CS);
-    }
-    if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
-      instrumentIntrinsic(II);
     }
   }
 

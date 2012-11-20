@@ -32,6 +32,7 @@
 #include "dyn-aa/LogRecord.h"
 
 using namespace std;
+using namespace rcs;
 using namespace dyn_aa;
 
 struct Environment {
@@ -89,9 +90,7 @@ struct Environment {
 };
 
 static Environment *Global;
-static __thread int NumCallingArgsSave;
-static stack<int> NumCallingArgsStack;
-static stack<bool> VAStartCalled;
+static __thread int NumActualArgs;
 
 extern "C" void FinalizeMemHooks() {
   delete Global;
@@ -175,13 +174,13 @@ extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
   pthread_mutex_unlock(&Global->Lock);
 }
 
-extern "C" void HookCall(unsigned InsID, int NumCallingArgs) {
+extern "C" void HookCall(unsigned InsID, int NumArgs) {
   pthread_mutex_lock(&Global->Lock);
-  // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumCallingArgs);
+  // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumArgs);
   PrintLogRecord(CallInstruction,
                  CallInstructionLogRecord(InsID));
   pthread_mutex_unlock(&Global->Lock);
-  NumCallingArgsSave = NumCallingArgs;
+  NumActualArgs = NumArgs;
 }
 
 extern "C" void HookReturn(unsigned InsID) {
@@ -204,23 +203,16 @@ extern "C" void HookVAStart(void *VAList) {
   // FIXME: we don't know if this is correct.
   const int NumIntRegs = 6;
   const int NumXMMRegs = 8;
+  // Allocating register saved area.
   // FIXME: use a correct ID.
-  if (!VAStartCalled.top()) {
-    VAStartCalled.top() = true;
-    HookMemAlloc(rcs::IDAssigner::InvalidID, PVAList->reg_save_area,
-                 NumIntRegs * 8 + NumXMMRegs * 16);
-    if (NumCallingArgsStack.top() > 6)
-      HookMemAlloc(rcs::IDAssigner::InvalidID, PVAList->overflow_arg_area,
-                   (NumCallingArgsStack.top() - 6) * 8);
+  HookMemAlloc(IDAssigner::InvalidID,
+               PVAList->reg_save_area,
+               NumIntRegs * 8 + NumXMMRegs * 16);
+  if (NumActualArgs > 6) {
+    // Allocating overflow area.
+    // FIXME: use a correct ID.
+    HookMemAlloc(IDAssigner::InvalidID,
+                 PVAList->overflow_arg_area,
+                 (NumActualArgs - 6) * 8);
   }
-}
-
-extern "C" void HookVAFuncBegin() {
-  NumCallingArgsStack.push(NumCallingArgsSave);
-  VAStartCalled.push(false);
-}
-
-extern "C" void HookVAFuncReturn() {
-  NumCallingArgsStack.pop();
-  VAStartCalled.pop();
 }
