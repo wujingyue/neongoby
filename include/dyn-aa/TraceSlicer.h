@@ -1,3 +1,5 @@
+// Author: Junyang
+
 #ifndef __DYN_AA_TRACE_SLICER_H
 #define __DYN_AA_TRACE_SLICER_H
 
@@ -19,9 +21,10 @@ using namespace llvm;
 
 namespace dyn_aa {
 struct LogRecordInfo{
+  LogRecordInfo(): ArgNo(-1) {}
   unsigned ValueID;
   // for CallSite and Argument
-  unsigned ArgNo;
+  int ArgNo;
   // for LoadInst and StoreInst
   void *PointerAddress;
   // for PHI and SelectInst
@@ -53,10 +56,8 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void processCallInstruction(const CallInstructionLogRecord &Record);
   void processReturnInstruction(const ReturnInstructionLogRecord &Record);
 
-  bool dependsOn(PointerTrace &Trace,
-                 LogRecordInfo &CurrentRecord,
-                 rcs::IDAssigner &IDA);
-
+  pair<bool, bool> dependsOn(LogRecordInfo &PreviousRecord,
+                             LogRecordInfo &CurrentRecord);
   Value *getLatestCommonAncestor();
 
  private:
