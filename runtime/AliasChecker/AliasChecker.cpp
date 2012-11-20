@@ -4,6 +4,7 @@
 // the C++ name mangling and make the instrumentation easier.
 
 #include <pthread.h>
+#include <unistd.h>
 
 #include <cassert>
 #include <cstdio>
