@@ -4,11 +4,6 @@
 *Debug/
 autoconf/aclocal.m4
 autoconf/autom4te.cache
-eval/*bc
-eval/*pts
-eval/*log
-eval/*ac
-eval/*inst
 Makefile.common
 *.swp
 config.log
