@@ -13,24 +13,12 @@ enum LogRecordType {
 } __attribute__((packed));
 
 struct AddrTakenDeclLogRecord {
-  AddrTakenDeclLogRecord() {}
-  AddrTakenDeclLogRecord(void *Addr, unsigned long Len, unsigned Alloc):
-      Address(Addr), Bound(Len), AllocatedBy(Alloc) {}
-
   void *Address;
   unsigned long Bound;
   unsigned AllocatedBy;
 } __attribute__((packed));
 
 struct TopLevelPointToLogRecord {
-  TopLevelPointToLogRecord() {}
-  TopLevelPointToLogRecord(unsigned PtrVID,
-                           void *PttAddr,
-                           void *PointerOperand = NULL):
-      PointerValueID(PtrVID),
-      PointeeAddress(PttAddr),
-      LoadedFrom(PointerOperand) {}
-
   unsigned PointerValueID;
   void *PointeeAddress;
   // If the pointer is a LoadInst, LoadFrom stores the pointer operand of the
@@ -39,10 +27,6 @@ struct TopLevelPointToLogRecord {
 } __attribute__((packed));
 
 struct AddrTakenPointToLogRecord {
-  AddrTakenPointToLogRecord() {}
-  AddrTakenPointToLogRecord(void *PtrAddr, void *PttAddr, unsigned InsID):
-      PointerAddress(PtrAddr), PointeeAddress(PttAddr), InstructionID(InsID) {}
-
   void *PointerAddress;
   void *PointeeAddress;
   // <InstructionID> is not a must, but makes debugging a lot easier. 
@@ -50,18 +34,23 @@ struct AddrTakenPointToLogRecord {
 } __attribute__((packed));
 
 struct CallInstructionLogRecord {
-  CallInstructionLogRecord() {}
-  CallInstructionLogRecord(unsigned InsID): InstructionID(InsID) {}
-
   unsigned InstructionID;
 } __attribute__((packed));
 
 struct ReturnInstructionLogRecord {
-  ReturnInstructionLogRecord() {}
-  ReturnInstructionLogRecord(unsigned InsID): InstructionID(InsID) {}
-
   unsigned InstructionID;
 } __attribute__((packed));
-}
+
+struct LogRecord {
+  LogRecordType RecordType;
+  union {
+    AddrTakenDeclLogRecord AddrTakenDecl;
+    TopLevelPointToLogRecord TopLevel;
+    AddrTakenPointToLogRecord AddrTaken;
+    CallInstructionLogRecord Call;
+    ReturnInstructionLogRecord Return;
+  };
+};
+} // namespace dyn_aa
 
 #endif
