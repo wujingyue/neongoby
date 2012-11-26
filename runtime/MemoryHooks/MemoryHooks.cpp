@@ -36,8 +36,6 @@ using namespace rcs;
 using namespace dyn_aa;
 
 struct Environment {
-  FILE *LogFile;
-
   string GetLogFileName(int pid = 0) {
     if (pid == 0)
       pid = getpid();
@@ -87,6 +85,7 @@ struct Environment {
   }
 
   pthread_mutex_t Lock;
+  FILE *LogFile;
 };
 
 static Environment *Global;
