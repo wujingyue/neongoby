@@ -88,16 +88,14 @@ void DynamicAliasAnalysis::updateVersion(void *Start,
   assert(lookupAddress(Start) == Version);
 }
 
-void DynamicAliasAnalysis::processAddrTakenDecl(
-    const AddrTakenDeclLogRecord &Record) {
+void DynamicAliasAnalysis::processMemAlloc(const MemAllocRecord &Record) {
   updateVersion(Record.Address, Record.Bound, CurrentVersion);
   ++CurrentVersion;
   // Check for numeric overflow.
   assert(CurrentVersion != UnknownVersion);
 }
 
-void DynamicAliasAnalysis::processTopLevelPointTo(
-    const TopLevelPointToLogRecord &Record) {
+void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
   unsigned PointerVID = Record.PointerValueID;
   void *PointeeAddress = Record.PointeeAddress;
 

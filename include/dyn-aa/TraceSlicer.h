@@ -50,11 +50,11 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   virtual void print(raw_ostream &O, const Module *M) const;
 
   // Interfaces of LogProcessor.
-  void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
-  void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
-  void processAddrTakenPointTo(const AddrTakenPointToLogRecord &Record);
-  void processCallInstruction(const CallInstructionLogRecord &Record);
-  void processReturnInstruction(const ReturnInstructionLogRecord &Record);
+  void processMemAlloc(const MemAllocRecord &Record);
+  void processTopLevel(const TopLevelRecord &Record);
+  void processStore(const StoreRecord &Record);
+  void processCall(const CallRecord &Record);
+  void processReturn(const ReturnRecord &Record);
 
   pair<bool, bool> dependsOn(LogRecordInfo &PreviousRecord,
                              LogRecordInfo &CurrentRecord);

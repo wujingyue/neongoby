@@ -14,11 +14,11 @@ struct LogProcessor {
 
   // TODO: We should have a common ancestor of all these records, and provide
   // a common processRecord interface.
-  virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &);
-  virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &);
-  virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &);
-  virtual void processCallInstruction(const CallInstructionLogRecord &);
-  virtual void processReturnInstruction(const ReturnInstructionLogRecord &);
+  virtual void processMemAlloc(const MemAllocRecord &);
+  virtual void processTopLevel(const TopLevelRecord &);
+  virtual void processStore(const StoreRecord &);
+  virtual void processCall(const CallRecord &);
+  virtual void processReturn(const ReturnRecord &);
 
 private:
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);

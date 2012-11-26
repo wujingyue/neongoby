@@ -101,11 +101,8 @@ extern "C" void InitMemHooks() {
 }
 
 // Must be called with Global->Lock held.
-template<class T>
-void PrintLogRecord(LogRecordType RecordType, const T &Record) {
-  fwrite(&RecordType, sizeof RecordType, 1, Global->LogFile);
+void PrintLogRecord(const LogRecord &Record) {
   fwrite(&Record, sizeof Record, 1, Global->LogFile);
-  fwrite(&RecordType, sizeof RecordType, 1, Global->LogFile);
 }
 
 extern "C" void HookBeforeFork() {
@@ -138,17 +135,19 @@ extern "C" void HookAfterFork(int Result) {
   }
 }
 
-extern "C" void HookMemAlloc(unsigned ValueID, void *StartAddr,
+extern "C" void HookMemAlloc(unsigned ValueID,
+                             void *StartAddr,
                              unsigned long Bound) {
   // Bound is sometimes zero for array allocation.
   if (Bound > 0) {
     pthread_mutex_lock(&Global->Lock);
     // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, StartAddr, Bound);
-    AddrTakenDeclLogRecord Record;
-    Record.Address = StartAddr;
-    Record.Bound = Bound;
-    Record.AllocatedBy = ValueID;
-    PrintLogRecord(AddrTakenDecl, Record);
+    LogRecord Record;
+    Record.RecordType = LogRecord::MemAlloc;
+    Record.MAR.Address = StartAddr;
+    Record.MAR.Bound = Bound;
+    Record.MAR.AllocatedBy = ValueID;
+    PrintLogRecord(Record);
     pthread_mutex_unlock(&Global->Lock);
   }
 }
@@ -163,31 +162,34 @@ extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],
 extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
   pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
-  TopLevelPointToLogRecord Record;
-  Record.PointerValueID = ValueID;
-  Record.PointeeAddress = Value;
-  Record.LoadedFrom = Pointer;
-  PrintLogRecord(TopLevelPointTo, Record);
+  LogRecord Record;
+  Record.RecordType = LogRecord::TopLevel;
+  Record.TLR.PointerValueID = ValueID;
+  Record.TLR.PointeeAddress = Value;
+  Record.TLR.LoadedFrom = Pointer;
+  PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
   pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookAddrTaken(%p, %p, %u)\n", Value, Pointer, InsID);
-  AddrTakenPointToLogRecord Record;
-  Record.PointerAddress = Pointer;
-  Record.PointeeAddress = Value;
-  Record.InstructionID = InsID;
-  PrintLogRecord(AddrTakenPointTo, Record);
+  LogRecord Record;
+  Record.RecordType = LogRecord::Store;
+  Record.SR.PointerAddress = Pointer;
+  Record.SR.PointeeAddress = Value;
+  Record.SR.InstructionID = InsID;
+  PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookCall(unsigned InsID, int NumArgs) {
   pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumArgs);
-  CallInstructionLogRecord Record;
-  Record.InstructionID = InsID;
-  PrintLogRecord(CallInstruction, Record);
+  LogRecord Record;
+  Record.RecordType = LogRecord::Call;
+  Record.CR.InstructionID = InsID;
+  PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);
   NumActualArgs = NumArgs;
 }
@@ -195,9 +197,10 @@ extern "C" void HookCall(unsigned InsID, int NumArgs) {
 extern "C" void HookReturn(unsigned InsID) {
   pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookReturn(%u)\n", InsID);
-  ReturnInstructionLogRecord Record;
-  Record.InstructionID = InsID;
-  PrintLogRecord(ReturnInstruction, Record);
+  LogRecord Record;
+  Record.RecordType = LogRecord::Return;
+  Record.RR.InstructionID = InsID;
+  PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);
 }
 

@@ -40,7 +40,7 @@ static RegisterPass<TraceSlicer> X("slice-trace",
 struct RecordFinder: public LogProcessor {
   RecordFinder(): RecordID1(-1), RecordID2(-1) {}
 
-  void processTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
+  void processTopLevel(const TopLevelRecord &Record) {
     if (StartingRecordIDs.size() == 2) {
       // Do nothing if already filled in.
       return;
@@ -144,16 +144,15 @@ void TraceSlicer::print(raw_ostream &O, const Module *M) const {
   }
 }
 
-void TraceSlicer::processAddrTakenDecl(const AddrTakenDeclLogRecord &Record) {
+void TraceSlicer::processMemAlloc(const MemAllocRecord &Record) {
   CurrentRecordID--;
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    // Starting record must be a TopLevelPointTo record
+    // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
   }
 }
 
-void TraceSlicer::processTopLevelPointTo(
-    const TopLevelPointToLogRecord &Record) {
+void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
   CurrentRecordID--;
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
@@ -202,8 +201,7 @@ void TraceSlicer::processTopLevelPointTo(
   }
 }
 
-void TraceSlicer::processAddrTakenPointTo(
-    const AddrTakenPointToLogRecord &Record) {
+void TraceSlicer::processStore(const StoreRecord &Record) {
   CurrentRecordID--;
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
@@ -215,7 +213,7 @@ void TraceSlicer::processAddrTakenPointTo(
   CurrentRecord.PointerAddress = Record.PointerAddress;
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    // Starting record must be a TopLevelPointTo record
+    // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
     if (Trace[PointerLabel].Active) {
       pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
@@ -236,8 +234,7 @@ void TraceSlicer::processAddrTakenPointTo(
   }
 }
 
-void TraceSlicer::processCallInstruction(
-    const CallInstructionLogRecord &Record) {
+void TraceSlicer::processCall(const CallRecord &Record) {
   CurrentRecordID--;
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
@@ -249,7 +246,7 @@ void TraceSlicer::processCallInstruction(
   CurrentRecord.ValueID = IDA.getValueID(I);
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    // Starting record must be a TopLevelPointTo record
+    // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
     if (Trace[PointerLabel].Active) {
       pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
@@ -270,8 +267,7 @@ void TraceSlicer::processCallInstruction(
   }
 }
 
-void TraceSlicer::processReturnInstruction(
-    const ReturnInstructionLogRecord &Record) {
+void TraceSlicer::processReturn(const ReturnRecord &Record) {
   CurrentRecordID--;
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
@@ -283,7 +279,7 @@ void TraceSlicer::processReturnInstruction(
   CurrentRecord.ValueID = IDA.getValueID(I);
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
-    // Starting record must be a TopLevelPointTo record
+    // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
     if (Trace[PointerLabel].Active) {
       pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
@@ -321,7 +317,7 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R2, LogRecordInfo &R1) {
 
   if (CS2) {
     if (R2.ArgNo != -1) {
-      // R2 is CallInstructionRecord
+      // R2 is CallRecord
       return make_pair(R1.ValueID ==
              IDA.getValueID(CS2.getArgument(R2.ArgNo)), true);
     } else if (CS1) {

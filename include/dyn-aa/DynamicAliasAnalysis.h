@@ -37,8 +37,8 @@ struct DynamicAliasAnalysis: public ModulePass,
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
 
   // Interfaces of LogProcessor.
-  void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
-  void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
+  void processMemAlloc(const MemAllocRecord &Record);
+  void processTopLevel(const TopLevelRecord &Record);
 
   const DenseSet<rcs::ValuePair> &getAllAliases() const {
     return Aliases;

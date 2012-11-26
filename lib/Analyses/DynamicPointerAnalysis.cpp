@@ -33,8 +33,7 @@ void DynamicPointerAnalysis::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<IDAssigner>();
 }
 
-void DynamicPointerAnalysis::processAddrTakenDecl(
-    const AddrTakenDeclLogRecord &Record) {
+void DynamicPointerAnalysis::processMemAlloc(const MemAllocRecord &Record) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   Value *Allocator = NULL;
@@ -47,13 +46,12 @@ void DynamicPointerAnalysis::processAddrTakenDecl(
   unsigned long Start = (unsigned long)Record.Address;
   Interval I(Start, Start + Record.Bound);
   pair<IntervalTree<Value *>::iterator, IntervalTree<Value *>::iterator> ER =
-      AddrTakenDecls.equal_range(I);
-  AddrTakenDecls.erase(ER.first, ER.second);
-  AddrTakenDecls.insert(make_pair(I, Allocator));
+      MemAllocs.equal_range(I);
+  MemAllocs.erase(ER.first, ER.second);
+  MemAllocs.insert(make_pair(I, Allocator));
 }
 
-void DynamicPointerAnalysis::processTopLevelPointTo(
-    const TopLevelPointToLogRecord &Record) {
+void DynamicPointerAnalysis::processTopLevel(const TopLevelRecord &Record) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   Value *Pointer = IDA.getValue(Record.PointerValueID);
@@ -66,8 +64,8 @@ void DynamicPointerAnalysis::processTopLevelPointTo(
 
 Value *DynamicPointerAnalysis::lookupAddress(void *Addr) const {
   Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
-  IntervalTree<Value *>::const_iterator Pos = AddrTakenDecls.find(I);
-  if (Pos == AddrTakenDecls.end())
+  IntervalTree<Value *>::const_iterator Pos = MemAllocs.find(I);
+  if (Pos == MemAllocs.end())
     return NULL;
   return Pos->second;
 }

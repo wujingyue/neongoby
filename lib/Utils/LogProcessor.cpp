@@ -24,24 +24,23 @@ static cl::opt<string> LogFileName(
     cl::desc("Point-to log file generated "
              "by running the instrumented program"));
 
-STATISTIC(NumAddrTakenDecls, "Number of addr-taken declaration records");
-STATISTIC(NumAddrTakenPointTos, "Number of addr-taken point-to records");
-STATISTIC(NumTopLevelPointTos, "Number of top-level point-tos records");
-STATISTIC(NumCallInstructions, "Number of call instructions records");
-STATISTIC(NumReturnInstructions, "Number of return instructions records");
+STATISTIC(NumMemAllocRecords, "Number of memory allocation records");
+STATISTIC(NumTopLevelRecords, "Number of top-level records");
+STATISTIC(NumStoreRecords, "Number of store records");
+STATISTIC(NumCallRecords, "Number of call records");
+STATISTIC(NumReturnRecords, "Number of return records");
 STATISTIC(NumRecords, "Number of all records");
 
 // By default, these call-back functions do nothing.
-void LogProcessor::processAddrTakenDecl(const AddrTakenDeclLogRecord &) {
+void LogProcessor::processMemAlloc(const MemAllocRecord &) {
 }
-void LogProcessor::processTopLevelPointTo(const TopLevelPointToLogRecord &) {
+void LogProcessor::processTopLevel(const TopLevelRecord &) {
 }
-void LogProcessor::processAddrTakenPointTo(const AddrTakenPointToLogRecord &) {
+void LogProcessor::processStore(const StoreRecord &) {
 }
-void LogProcessor::processCallInstruction(const CallInstructionLogRecord &) {
+void LogProcessor::processCall(const CallRecord &) {
 }
-void LogProcessor::processReturnInstruction(
-    const ReturnInstructionLogRecord &) {
+void LogProcessor::processReturn(const ReturnRecord &) {
 }
 
 void LogProcessor::processLog(bool Reversed) {
@@ -59,66 +58,34 @@ void LogProcessor::processLog(bool Reversed) {
   NumRecords = 0;
   CurrentRecordID = 0;
   DynAAUtils::PrintProgressBar(0, NumBytesRead, FileSize);
-  LogRecordType RecordType;
-  while (ReadData(&RecordType, sizeof RecordType, Reversed, LogFile)) {
+  LogRecord Record;
+  while (ReadData(&Record, sizeof Record, Reversed, LogFile)) {
     uint64_t OldNumBytesRead = NumBytesRead;
     ++NumRecords;
-    NumBytesRead += sizeof RecordType;
-    switch (RecordType) {
-      case AddrTakenDecl:
-        {
-          AddrTakenDeclLogRecord Record;
-          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
-          assert(R);
-          processAddrTakenDecl(Record);
-          ++NumAddrTakenDecls;
-          NumBytesRead += sizeof Record;
-        }
+    NumBytesRead += sizeof Record;
+    switch (Record.RecordType) {
+      case LogRecord::MemAlloc:
+        processMemAlloc(Record.MAR);
+        ++NumMemAllocRecords;
         break;
-      case TopLevelPointTo:
-        {
-          TopLevelPointToLogRecord Record;
-          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
-          assert(R);
-          processTopLevelPointTo(Record);
-          ++NumTopLevelPointTos;
-          NumBytesRead += sizeof Record;
-        }
+      case LogRecord::TopLevel:
+        processTopLevel(Record.TLR);
+        ++NumTopLevelRecords;
         break;
-      case AddrTakenPointTo:
-        {
-          AddrTakenPointToLogRecord Record;
-          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
-          assert(R);
-          processAddrTakenPointTo(Record);
-          ++NumAddrTakenPointTos;
-          NumBytesRead += sizeof Record;
-        }
+      case LogRecord::Store:
+        processStore(Record.SR);
+        ++NumStoreRecords;
         break;
-      case CallInstruction:
-        {
-          CallInstructionLogRecord Record;
-          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
-          assert(R);
-          processCallInstruction(Record);
-          ++NumCallInstructions;
-          NumBytesRead += sizeof Record;
-        }
+      case LogRecord::Call:
+        processCall(Record.CR);
+        ++NumCallRecords;
         break;
-      case ReturnInstruction:
-        {
-          ReturnInstructionLogRecord Record;
-          bool R = ReadData(&Record, sizeof Record, Reversed, LogFile);
-          assert(R);
-          processReturnInstruction(Record);
-          ++NumReturnInstructions;
-          NumBytesRead += sizeof Record;
-        }
+      case LogRecord::Return:
+        processReturn(Record.RR);
+        ++NumReturnRecords;
         break;
     }
     ++CurrentRecordID;
-    ReadData(&RecordType, sizeof RecordType, Reversed, LogFile);
-    NumBytesRead += sizeof RecordType;
     DynAAUtils::PrintProgressBar(OldNumBytesRead, NumBytesRead, FileSize);
   }
   errs() << "\n";

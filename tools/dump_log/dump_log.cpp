@@ -18,21 +18,21 @@ using namespace dyn_aa;
 
 namespace dyn_aa {
 struct LogDumper: public LogProcessor {
-  virtual void processAddrTakenDecl(const AddrTakenDeclLogRecord &);
-  virtual void processTopLevelPointTo(const TopLevelPointToLogRecord &);
-  virtual void processAddrTakenPointTo(const AddrTakenPointToLogRecord &);
-  virtual void processCallInstruction(const CallInstructionLogRecord &);
-  virtual void processReturnInstruction(const ReturnInstructionLogRecord &);
+  virtual void processMemAlloc(const MemAllocRecord &);
+  virtual void processTopLevel(const TopLevelRecord &);
+  virtual void processStore(const StoreRecord &);
+  virtual void processCall(const CallRecord &);
+  virtual void processReturn(const ReturnRecord &);
 };
 }
 
 static DenseSet<unsigned> TouchedPointers;
 
-void LogDumper::processAddrTakenDecl(const AddrTakenDeclLogRecord &Record) {
+void LogDumper::processMemAlloc(const MemAllocRecord &Record) {
   printf("%u: %p, %lu\n", Record.AllocatedBy, Record.Address, Record.Bound);
 }
 
-void LogDumper::processTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
+void LogDumper::processTopLevel(const TopLevelRecord &Record) {
   printf("%u => %p", Record.PointerValueID, Record.PointeeAddress);
   if (Record.LoadedFrom) {
     printf(", from %p", Record.LoadedFrom);
@@ -41,19 +41,16 @@ void LogDumper::processTopLevelPointTo(const TopLevelPointToLogRecord &Record) {
   TouchedPointers.insert(Record.PointerValueID);
 }
 
-void LogDumper::processAddrTakenPointTo(
-    const AddrTakenPointToLogRecord &Record) {
+void LogDumper::processStore(const StoreRecord &Record) {
   printf("%u: %p => %p\n",
          Record.InstructionID, Record.PointerAddress, Record.PointeeAddress);
 }
 
-void LogDumper::processCallInstruction(
-    const CallInstructionLogRecord &Record) {
+void LogDumper::processCall(const CallRecord &Record) {
   printf("%u: call\n", Record.InstructionID);
 }
 
-void LogDumper::processReturnInstruction(
-    const ReturnInstructionLogRecord &Record) {
+void LogDumper::processReturn(const ReturnRecord &Record) {
   printf("%u: return\n", Record.InstructionID);
 }
 

@@ -28,8 +28,8 @@ struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis, p
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
 
   // Interfaces of LogProcessor.
-  void processAddrTakenDecl(const AddrTakenDeclLogRecord &Record);
-  void processTopLevelPointTo(const TopLevelPointToLogRecord &Record);
+  void processMemAlloc(const MemAllocRecord &Record);
+  void processTopLevel(const TopLevelRecord &Record);
 
  private:
   // Returns the value ID of <Addr>'s allocator.
@@ -38,7 +38,7 @@ struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis, p
   Value *lookupAddress(void *Addr) const;
 
   // Stores all addr-taken declarations.
-  IntervalTree<Value *> AddrTakenDecls;
+  IntervalTree<Value *> MemAllocs;
   // Use DenseSet instead of vector, because they are usually lots of
   // duplicated edges.
   DenseMap<const Value *, rcs::ValueSet> PointTos;
