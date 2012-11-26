@@ -171,9 +171,9 @@ extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
   pthread_mutex_unlock(&Global->Lock);
 }
 
-extern "C" void HookAddrTaken(void *Value, void *Pointer, unsigned InsID) {
+extern "C" void HookStore(void *Value, void *Pointer, unsigned InsID) {
   pthread_mutex_lock(&Global->Lock);
-  // fprintf(stderr, "HookAddrTaken(%p, %p, %u)\n", Value, Pointer, InsID);
+  // fprintf(stderr, "HookStore(%p, %p, %u)\n", Value, Pointer, InsID);
   LogRecord Record;
   Record.RecordType = LogRecord::Store;
   Record.SR.PointerAddress = Pointer;

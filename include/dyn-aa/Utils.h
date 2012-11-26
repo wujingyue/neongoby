@@ -12,7 +12,7 @@ struct DynAAUtils {
   static const std::string MemAllocHookName;
   static const std::string MainArgsAllocHookName;
   static const std::string TopLevelHookName;
-  static const std::string AddrTakenHookName;
+  static const std::string StoreHookName;
   static const std::string CallHookName;
   static const std::string ReturnHookName;
   static const std::string GlobalsAllocHookName;

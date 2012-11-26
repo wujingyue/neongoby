@@ -66,7 +66,7 @@ struct MemoryInstrumenter: public ModulePass {
   void addNewGlobalCtor(Module &M);
 
   // hooks
-  Function *MemAllocHook, *TopLevelHook, *AddrTakenHook;
+  Function *MemAllocHook, *TopLevelHook, *StoreHook;
   Function *MainArgsAllocHook;
   Function *CallHook, *ReturnHook;
   Function *GlobalsAllocHook;
@@ -105,7 +105,7 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   MemAllocHook = NULL;
   MainArgsAllocHook = NULL;
   TopLevelHook = NULL;
-  AddrTakenHook = NULL;
+  StoreHook = NULL;
   CallHook = NULL;
   ReturnHook = NULL;
   GlobalsAllocHook = NULL;
@@ -340,7 +340,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(DynAAUtils::MemAllocHookName) == NULL);
   assert(M.getFunction(DynAAUtils::MainArgsAllocHookName) == NULL);
   assert(M.getFunction(DynAAUtils::TopLevelHookName) == NULL);
-  assert(M.getFunction(DynAAUtils::AddrTakenHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::StoreHookName) == NULL);
   assert(M.getFunction(DynAAUtils::CallHookName) == NULL);
   assert(M.getFunction(DynAAUtils::ReturnHookName) == NULL);
   assert(M.getFunction(DynAAUtils::GlobalsAllocHookName) == NULL);
@@ -394,18 +394,18 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                   DynAAUtils::TopLevelHookName,
                                   &M);
 
-  // Setup AddrTakenHook.
+  // Setup StoreHook.
   ArgTypes.clear();
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(CharStarType);
   ArgTypes.push_back(IntType);
-  FunctionType *AddrTakenHookType = FunctionType::get(VoidType,
+  FunctionType *StoreHookType = FunctionType::get(VoidType,
                                                       ArgTypes,
                                                       false);
-  AddrTakenHook = Function::Create(AddrTakenHookType,
-                                   GlobalValue::ExternalLinkage,
-                                   DynAAUtils::AddrTakenHookName,
-                                   &M);
+  StoreHook = Function::Create(StoreHookType,
+                               GlobalValue::ExternalLinkage,
+                               DynAAUtils::StoreHookName,
+                               &M);
 
   // Setup CallHook.
   ArgTypes.clear();
@@ -504,13 +504,6 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   }
 
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-    // These hooks added by us don't have a value ID.
-    if (MemAllocHook == F || MainArgsAllocHook == F || TopLevelHook == F ||
-        AddrTakenHook == F || CallHook == F || ReturnHook == F ||
-        GlobalsAllocHook == F || MemHooksIniter == F || AfterForkHook == F ||
-        BeforeForkHook == F) {
-      continue;
-    }
     // InvalidID: maybe this is inserted by alias checker in hybrid mode.
     if (IDA.getValueID(F) == IDAssigner::InvalidID)
       continue;
@@ -685,7 +678,7 @@ void MemoryInstrumenter::instrumentStoreInst(StoreInst *SI) {
     assert(InsID != IDAssigner::InvalidID);
     Args.push_back(ConstantInt::get(IntType, InsID));
 
-    CallInst::Create(AddrTakenHook, Args, "", SI);
+    CallInst::Create(StoreHook, Args, "", SI);
   }
 }
 
