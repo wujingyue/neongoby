@@ -31,21 +31,22 @@ if __name__ == '__main__':
                         help = 'baseline AA which is assumed to be ' + \
                                 'correct: ' + str(dynaa_utils.get_aa_choices()),
                         metavar = 'baseline_aa',
+                        default = 'no-aa',
                         choices = ['no-aa', 'basicaa', 'tbaa'])
     args = parser.parse_args()
 
     cmd = dynaa_utils.load_all_plugins('opt')
-    # Load the baseline AA if specified
-    if args.baseline is not None:
-        if args.baseline == args.aa:
-            sys.stderr.write('\033[1;31m')
-            print >> sys.stderr, 'Error: Baseline and the checked AA',
-            print >> sys.stderr, 'must be different'
-            sys.stderr.write('\033[m')
-            sys.exit(1)
-        # baseline need be put before aa
-        cmd = dynaa_utils.load_aa(cmd, args.baseline)
-        cmd = ' '.join((cmd, '-baseline-aa-name', args.baseline))
+    # Load the baseline AA
+    if args.baseline == args.aa:
+        sys.stderr.write('\033[1;31m')
+        print >> sys.stderr, 'Error: Baseline and the checked AA',
+        print >> sys.stderr, 'must be different'
+        sys.stderr.write('\033[m')
+        sys.exit(1)
+    # baseline need be put before aa
+    cmd = dynaa_utils.load_aa(cmd, args.baseline)
+    cmd = ' '.join((cmd, '-baseline-aa'))
+    cmd = ' '.join((cmd, '-baseline-aa-name', args.baseline))
 
     # Load the checked AA
     cmd = dynaa_utils.load_aa(cmd, args.aa)

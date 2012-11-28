@@ -73,6 +73,7 @@ if __name__ == '__main__':
             sys.exit(1)
         cmd = dynaa_utils.load_aa(cmd, args.baseline)
         cmd = ' '.join((cmd, '-baseline-aa'))
+        cmd = ' '.join((cmd, '-baseline-aa-name', args.baseline))
         cmd = dynaa_utils.load_aa(cmd, args.aa)
     if args.output_alias_checks is not None:
         cmd = ' '.join((cmd, '-output-alias-checks', args.output_alias_checks))
