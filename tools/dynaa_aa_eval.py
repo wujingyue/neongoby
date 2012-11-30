@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-# Author: Jingyue
+# FIXME: general enough to be a script in the rcs project. However, it uses
+# dynaa_utils.load_aa for now.
 
 import argparse
 import os
@@ -18,28 +19,9 @@ if __name__ == '__main__':
                                 str(dynaa_utils.get_aa_choices()),
                         metavar = 'aa',
                         choices = dynaa_utils.get_aa_choices())
-    # Due to the behavior of LLVM's alias analysis chaining, the baseline AA
-    # must be an ImmutablePass.
-    parser.add_argument('--baseline',
-                        help = 'baseline AA which is assumed to be ' + \
-                                'correct: ' + str(dynaa_utils.get_aa_choices()),
-                        metavar = 'baseline_aa',
-                        choices = ['no-aa', 'basicaa', 'tbaa'])
     args = parser.parse_args()
 
     cmd = dynaa_utils.load_all_plugins('opt')
-    # Load the baseline AA if specified
-    if args.baseline is not None:
-        if args.baseline == args.aa:
-            sys.stderr.write('\033[1;31m')
-            print >> sys.stderr, 'Error: Baseline and the checked AA',
-            print >> sys.stderr, 'must be different'
-            sys.stderr.write('\033[m')
-            sys.exit(1)
-        # baseline need be put before aa
-        cmd = dynaa_utils.load_aa(cmd, args.baseline)
-        cmd = ' '.join((cmd, '-baseline-aa-name', args.baseline))
-
     # Load the checked AA
     cmd = dynaa_utils.load_aa(cmd, args.aa)
 
