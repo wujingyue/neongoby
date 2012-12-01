@@ -21,9 +21,14 @@ using namespace llvm;
 
 namespace dyn_aa {
 struct LogRecordInfo{
-  LogRecordInfo(): ArgNo(-1) {}
+  LogRecordInfo(): Active(false), ArgNo(-1) {}
+  // for MissingAliasClassifier
+  bool Active;
+  bool RecordID;
   unsigned ValueID;
-  // for CallSite and Argument
+  // for CallInstRecord and Argument
+  // ArgNo != -1 indicates a CallInstRecord
+  // ArgNo = -1 indicates a TopLevelPointToRecord of CallSite type
   int ArgNo;
   // for LoadInst and StoreInst
   void *PointerAddress;
@@ -56,8 +61,8 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void processCall(const CallRecord &Record);
   void processReturn(const ReturnRecord &Record);
 
-  pair<bool, bool> dependsOn(LogRecordInfo &PreviousRecord,
-                             LogRecordInfo &CurrentRecord);
+  pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
+  static bool isCalledFunction(Function *F, CallSite CS);
   Value *getLatestCommonAncestor();
 
  private:

@@ -156,6 +156,9 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
   CurrentRecordID--;
   int NumContainingSlices = 0;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
+  Value *V = IDA.getValue(Record.PointerValueID);
+  // input value must be a pointer
+  assert(V->getType()->isPointerTy());
 
   LogRecordInfo CurrentRecord;
   CurrentRecord.ValueID = Record.PointerValueID;
@@ -164,11 +167,6 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     if (Trace[PointerLabel].StartingRecordID == CurrentRecordID) {
-      Value *V = IDA.getValue(Record.PointerValueID);
-
-      // input value must be a pointer
-      assert(V->getType()->isPointerTy());
-
       // set StartingFunction
       if (Argument *A = dyn_cast<Argument>(V))
         Trace[PointerLabel].StartingFunction = A->getParent();
@@ -183,8 +181,8 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
       Trace[PointerLabel].PreviousRecord = CurrentRecord;
       NumContainingSlices++;
     } else if (Trace[PointerLabel].Active) {
-      pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
-                                          CurrentRecord);
+      pair<bool, bool> Result = dependsOn(CurrentRecord,
+                                          Trace[PointerLabel].PreviousRecord);
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
@@ -216,8 +214,8 @@ void TraceSlicer::processStore(const StoreRecord &Record) {
     // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
     if (Trace[PointerLabel].Active) {
-      pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
-                                          CurrentRecord);
+      pair<bool, bool> Result = dependsOn(CurrentRecord,
+                                          Trace[PointerLabel].PreviousRecord);
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
@@ -226,11 +224,6 @@ void TraceSlicer::processStore(const StoreRecord &Record) {
         NumContainingSlices++;
       }
     }
-  }
-  // If two sliced traces meet, we stop tracking
-  if (NumContainingSlices == 2) {
-    Trace[0].Active = false;
-    Trace[1].Active = false;
   }
 }
 
@@ -249,8 +242,8 @@ void TraceSlicer::processCall(const CallRecord &Record) {
     // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
     if (Trace[PointerLabel].Active) {
-      pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
-                                          CurrentRecord);
+      pair<bool, bool> Result = dependsOn(CurrentRecord,
+                                          Trace[PointerLabel].PreviousRecord);
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
@@ -259,11 +252,6 @@ void TraceSlicer::processCall(const CallRecord &Record) {
         NumContainingSlices++;
       }
     }
-  }
-  // If two sliced traces meet, we stop tracking
-  if (NumContainingSlices == 2) {
-    Trace[0].Active = false;
-    Trace[1].Active = false;
   }
 }
 
@@ -282,8 +270,8 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
     // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
     if (Trace[PointerLabel].Active) {
-      pair<bool, bool> Result = dependsOn(Trace[PointerLabel].PreviousRecord,
-                                          CurrentRecord);
+      pair<bool, bool> Result = dependsOn(CurrentRecord,
+                                          Trace[PointerLabel].PreviousRecord);
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
@@ -300,15 +288,10 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
       }
     }
   }
-  // If two sliced traces meet, we stop tracking
-  if (NumContainingSlices == 2) {
-    Trace[0].Active = false;
-    Trace[1].Active = false;
-  }
 }
 
 // whether R1 depend on R2, return <depend, active>
-pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R2, LogRecordInfo &R1) {
+pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *V1 = IDA.getValue(R1.ValueID);
   Value *V2 = IDA.getValue(R2.ValueID);
@@ -320,18 +303,17 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R2, LogRecordInfo &R1) {
       // R2 is CallRecord
       return make_pair(R1.ValueID ==
              IDA.getValueID(CS2.getArgument(R2.ArgNo)), true);
-    } else if (CS1) {
-      assert(R1.ValueID == R2.ValueID);
+    } else if (CS1 && R1.ValueID == R2.ValueID) {
       // R2 is an external function call
       return make_pair(false, false);
     } else if (ReturnInst *RI = dyn_cast<ReturnInst>(V1)) {
-      assert(RI->getParent()->getParent() == CS2.getCalledFunction());
-      return make_pair(true, true);
+      return make_pair(isCalledFunction(RI->getParent()->getParent(), CS2),
+                       true);
     } else {
-      assert(false);
+      return make_pair(false, true);
     }
   } else if (Argument *A = dyn_cast<Argument>(V2)) {
-    if (CS1) {
+    if (CS1 && isCalledFunction(A->getParent(), CS1)) {
       R1.ArgNo = A->getArgNo();
       return make_pair(true, true);
     } else {
@@ -349,7 +331,7 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R2, LogRecordInfo &R1) {
   } else if (SelectInst *SI = dyn_cast<SelectInst>(V2)) {
     return make_pair(R1.PointeeAddress == R2.PointeeAddress &&
                      (R1.ValueID == IDA.getValueID(SI->getTrueValue()) ||
-                      R1.ValueID == IDA.getValueID(SI->getTrueValue())), true);
+                      R1.ValueID == IDA.getValueID(SI->getFalseValue())), true);
   } else if (PHINode *PN = dyn_cast<PHINode>(V2)) {
     if (R1.PointeeAddress == R2.PointeeAddress) {
       unsigned NumIncomingValues = PN->getNumIncomingValues();
@@ -368,6 +350,21 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R2, LogRecordInfo &R1) {
     // or unsupported Instructions
     return make_pair(false, false);
   }
+}
+
+bool TraceSlicer::isCalledFunction(Function *F, CallSite CS) {
+  if (CS.getCalledFunction() != NULL)
+    return F == CS.getCalledFunction();
+  // if CS call a value, judge by comparing return type and argument type
+  // this is a temporary method to solve multithread problem
+  if (F->getReturnType() != CS.getType())
+    return false;
+  if (F->getFunctionType()->getNumParams() != CS.arg_size())
+    return false;
+  for (unsigned i = 0; i < CS.arg_size(); ++i)
+    if (F->getFunctionType()->getParamType(i) != (CS.getArgument(i))->getType())
+      return false;
+  return true;
 }
 
 // Get the latest common ancestor of the two slices.
