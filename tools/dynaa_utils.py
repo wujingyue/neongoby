@@ -52,4 +52,4 @@ def supports_intra_proc_queries_only(aa):
 
 def get_aa_choices():
     return ['tbaa', 'basicaa', 'no-aa', 'ds-aa', 'anders-aa', 'bc2bdd-aa',
-            'su-aa']
+            'su-aa', 'scev-aa']
