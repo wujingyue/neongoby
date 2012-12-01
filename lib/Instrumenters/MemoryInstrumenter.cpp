@@ -312,24 +312,30 @@ void MemoryInstrumenter::checkFeatures(Module &M) {
     }
   }
 
-  // Sequential types except pointer types shouldn't be used as the type of
-  // an instruction, a function parameter, or a global variable.
+  // Global variables shouldn't be of the array type.
   for (Module::global_iterator GI = M.global_begin(), E = M.global_end();
        GI != E; ++GI) {
-    if (isa<SequentialType>(GI->getType()))
-      assert(GI->getType()->isPointerTy());
+    assert(!GI->getType()->isArrayTy());
   }
+  // A function parameter or an instruction can be an array, but we don't
+  // instrument such constructs for now. Issue a warning on such cases.
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     for (Function::arg_iterator AI = F->arg_begin(); AI != F->arg_end(); ++AI) {
-      if (isa<SequentialType>(AI->getType()))
-        assert(AI->getType()->isPointerTy());
+      if (AI->getType()->isArrayTy()) {
+        errs().changeColor(raw_ostream::RED);
+        errs() << F->getName() << ":" << *AI << " is an array\n";
+        errs().resetColor();
+      }
     }
   }
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator Ins = BB->begin(); Ins != BB->end(); ++Ins) {
-        if (isa<SequentialType>(Ins->getType()))
-          assert(Ins->getType()->isPointerTy());
+        if (Ins->getType()->isArrayTy()) {
+          errs().changeColor(raw_ostream::RED);
+          errs() << F->getName() << ":" << *Ins << " is an array\n";
+          errs().resetColor();
+        }
       }
     }
   }
