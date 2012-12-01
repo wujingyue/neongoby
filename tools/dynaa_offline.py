@@ -55,6 +55,10 @@ if __name__ == '__main__':
                 'Pick the latest modified one'
     rcs_utils.invoke(' '.join(('mv', the_log_file, args.prog + '.pts')))
 
+    # dynaa_clear.py
+    # clear other log files
+    rcs_utils.invoke('dynaa_clear.py')
+
     # dynaa_check_aa.py
     cmd = ' '.join(('dynaa_check_aa.py',
                     args.prog + '.bc',
