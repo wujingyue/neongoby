@@ -6,6 +6,7 @@
 
 import argparse
 import rcs_utils
+import dynaa_utils
 import os
 import re
 import sys
@@ -13,6 +14,11 @@ import sys
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Run the offline mode')
     parser.add_argument('prog', help = 'the program name (e.g. mysqld)')
+    parser.add_argument('aa',
+                        help = 'the checked alias analysis: ' + \
+                                str(dynaa_utils.get_aa_choices()),
+                        metavar = 'aa',
+                        choices = dynaa_utils.get_aa_choices())
     parser.add_argument('--all',
                         help = 'hook and check all pointers (False by default)',
                         action = 'store_true',
@@ -63,7 +69,7 @@ if __name__ == '__main__':
     cmd = ' '.join(('dynaa_check_aa.py',
                     args.prog + '.bc',
                     args.prog + '.pts',
-                    'basicaa'))
+                    args.aa))
     if args.all:
         cmd = ' '.join((cmd, '--check-all'))
     rcs_utils.invoke(cmd)
