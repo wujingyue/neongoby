@@ -58,18 +58,21 @@ if __name__ == '__main__':
     assert n_log_files != 0, 'cannot find any log file under ' + dir_name
     if n_log_files > 1:
         print >> sys.stderr, 'Warning: multiple log files. ' + \
-                'Pick the latest modified one'
-    rcs_utils.invoke(' '.join(('mv', the_log_file, args.prog + '.pts')))
-
-    # dynaa_clear.py
-    # clear other log files
-    rcs_utils.invoke('dynaa_clear.py')
+                'Pick the latest modified one.'
 
     # dynaa_check_aa.py
     cmd = ' '.join(('dynaa_check_aa.py',
                     args.prog + '.bc',
-                    args.prog + '.pts',
+                    the_log_file,
                     args.aa))
     if args.all:
         cmd = ' '.join((cmd, '--check-all'))
-    rcs_utils.invoke(cmd)
+    ret = rcs_utils.invoke(cmd, False)
+
+    # dynaa_clear.py
+    # clear other log files
+    # The script exits with the exit code of dynaa_check_aa.py.
+    # Therefore, we use False here to avoid overwriting the exit code.
+    rcs_utils.invoke('dynaa_clear.py', False)
+
+    sys.exit(ret)
