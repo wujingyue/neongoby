@@ -28,7 +28,15 @@ if __name__ == '__main__':
     parser.add_argument('--time-limit',
                         help = 'time limit for the program (in seconds)',
                         type = int)
+    parser.add_argument('--dir',
+                        help = 'where to put the log files (/tmp by default)',
+                        type = str,
+                        default = '/tmp')
     args = parser.parse_args()
+
+    # Check whether the log directory exists
+    assert os.path.exists(args.dir), args.dir + ' does not exist.'
+    assert os.path.isdir(args.dir), args.dir + ' is not a directory.'
 
     # dynaa_hook_mem
     cmd = ' '.join(('dynaa_hook_mem.py', args.prog))
@@ -40,22 +48,25 @@ if __name__ == '__main__':
     cmd = './' + args.prog + '.inst'
     if args.time_limit is not None:
         cmd = ' '.join(('timeout', str(args.time_limit), cmd))
+    cmd = ' '.join(('LOG_FILE=' + args.dir + '/pts', cmd))
     rcs_utils.invoke(cmd, False)
 
-    # move the log to the current directory
-    dir_name = '/tmp'
+    # search for the log file
+    # There can be multiple log files if the program is multiprocessed, or
+    # someone forgot to delete the old log files in the directory. In that
+    # case, we pick the latest modified one.
     the_log_file = ''
     n_log_files = 0
     max_modified_time = 0
-    for file_name in os.listdir(dir_name):
+    for file_name in os.listdir(args.dir):
         if re.match('pts-\\d+', file_name):
             n_log_files += 1
-            full_path = os.path.join(dir_name, file_name)
+            full_path = os.path.join(args.dir, file_name)
             modified_time = os.stat(full_path).st_mtime
             if modified_time > max_modified_time:
                 max_modified_time = modified_time
                 the_log_file = full_path
-    assert n_log_files != 0, 'cannot find any log file under ' + dir_name
+    assert n_log_files != 0, 'cannot find any log file under ' + args.dir
     if n_log_files > 1:
         print >> sys.stderr, 'Warning: multiple log files. ' + \
                 'Pick the latest modified one.'
@@ -73,6 +84,6 @@ if __name__ == '__main__':
     # clear other log files
     # The script exits with the exit code of dynaa_check_aa.py.
     # Therefore, we use False here to avoid overwriting the exit code.
-    rcs_utils.invoke('dynaa_clear.py', False)
+    rcs_utils.invoke('dynaa_clear.py ' + args.dir, False)
 
     sys.exit(ret)

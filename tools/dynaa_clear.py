@@ -1,7 +1,16 @@
 #!/usr/bin/env python
 
+import argparse
 import os
 
 if __name__ == '__main__':
-    os.system('rm -f /tmp/pts-*')
-    os.system('rm -f /tmp/report-*')
+    parser = argparse.ArgumentParser(description = 'Remove the log files')
+    parser.add_argument('dir',
+                        help = 'the containing directory of the log files ' + \
+                                '(/tmp by default)',
+                        nargs = '?',
+                        default = '/tmp')
+    args = parser.parse_args()
+
+    os.system('rm -f ' + args.dir + '/pts-*')
+    os.system('rm -f ' + args.dir + '/report-*')
