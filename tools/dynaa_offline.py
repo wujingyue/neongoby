@@ -40,7 +40,7 @@ if __name__ == '__main__':
     cmd = './' + args.prog + '.inst'
     if args.time_limit is not None:
         cmd = ' '.join(('timeout', str(args.time_limit), cmd))
-    rcs_utils.invoke(cmd)
+    rcs_utils.invoke(cmd, False)
 
     # move the log to the current directory
     dir_name = '/tmp'
