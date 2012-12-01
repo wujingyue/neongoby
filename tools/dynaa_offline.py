@@ -6,7 +6,6 @@
 
 import argparse
 import rcs_utils
-import dynaa_utils
 import os
 import re
 import sys
@@ -18,6 +17,11 @@ if __name__ == '__main__':
                         help = 'hook and check all pointers (False by default)',
                         action = 'store_true',
                         default = False)
+    # suited for csmith. The generated program is sometimes too large and takes
+    # forever to run.
+    parser.add_argument('--time-limit',
+                        help = 'time limit for the program (in seconds)',
+                        type = int)
     args = parser.parse_args()
 
     # dynaa_hook_mem
@@ -28,6 +32,8 @@ if __name__ == '__main__':
 
     # run the instrumented program
     cmd = './' + args.prog + '.inst'
+    if args.time_limit is not None:
+        cmd = ' '.join(('timeout', str(args.time_limit), cmd))
     rcs_utils.invoke(cmd)
 
     # move the log to the current directory
