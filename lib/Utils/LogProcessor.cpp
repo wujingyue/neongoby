@@ -90,7 +90,14 @@ void LogProcessor::processLog(bool Reversed) {
   }
   errs() << "\n";
 
-  assert(NumBytesRead == FileSize && "The file is not completely read.");
+  assert(NumBytesRead <= FileSize);
+  if (NumBytesRead < FileSize) {
+    errs().changeColor(raw_ostream::RED);
+    errs() << "The log file is broken, probably because ";
+    errs() << "the instrumented program might not exit normally. ";
+    errs() << "Try to process as much log as possible.\n";
+    errs().resetColor();
+  }
 
   fclose(LogFile);
 }
