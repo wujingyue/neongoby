@@ -28,6 +28,7 @@ struct AliasAnalysisChecker: public ModulePass {
 
   AliasAnalysisChecker(): ModulePass(ID) {}
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+  virtual void print(raw_ostream &O, const Module *M) const;
   virtual bool runOnModule(Module &M);
 
  private:
@@ -36,10 +37,10 @@ struct AliasAnalysisChecker: public ModulePass {
       const ValuePair &VP);
 
   void collectDynamicAliases(DenseSet<ValuePair> &DynamicAliases);
-  void collectMissingAliases(const DenseSet<ValuePair> &DynamicAliases,
-                             vector<ValuePair> &MissingAliases);
-  void sortMissingAliases(vector<ValuePair> &MissingAliases);
-  void reportMissingAliases(const vector<ValuePair> &MissingAliases);
+  void collectMissingAliases(const DenseSet<ValuePair> &DynamicAliases);
+  void sortMissingAliases();
+
+  vector<ValuePair> MissingAliases;
 };
 }
 
@@ -94,9 +95,9 @@ void AliasAnalysisChecker::collectDynamicAliases(
   }
 }
 
+// Collects missing aliases to <MissingAliases>.
 void AliasAnalysisChecker::collectMissingAliases(
-    const DenseSet<ValuePair> &DynamicAliases,
-    vector<ValuePair> &MissingAliases) {
+    const DenseSet<ValuePair> &DynamicAliases) {
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();
 
@@ -107,13 +108,6 @@ void AliasAnalysisChecker::collectMissingAliases(
     if (IntraProc && !DynAAUtils::IsIntraProcQuery(V1, V2)) {
       continue;
     }
-
-    // Ignore BitCasts and PhiNodes. The reports on them are typically
-    // redundant.
-    if (isa<BitCastInst>(V1) || isa<BitCastInst>(V2))
-      continue;
-    if (isa<PHINode>(V1) || isa<PHINode>(V2))
-      continue;
 
     if (!CheckAllPointers) {
       if (!DynAAUtils::PointerIsDereferenced(V1) ||
@@ -129,16 +123,58 @@ void AliasAnalysisChecker::collectMissingAliases(
   }
 }
 
-void AliasAnalysisChecker::reportMissingAliases(
-    const vector<ValuePair> &MissingAliases) {
+bool AliasAnalysisChecker::CompareMissingAliases(const ValuePair &VP1,
+                                                 const ValuePair &VP2) {
+  pair<Function *, Function *> FP1 = GetContainingFunctionPair(VP1);
+  pair<Function *, Function *> FP2 = GetContainingFunctionPair(VP2);
+  return FP1 < FP2;
+}
+
+// Sorts missing aliases so that missing aliases inside the same function are
+// likely clustered.
+void AliasAnalysisChecker::sortMissingAliases() {
+  sort(MissingAliases.begin(), MissingAliases.end(), CompareMissingAliases);
+}
+
+bool AliasAnalysisChecker::runOnModule(Module &M) {
+  DenseSet<ValuePair> DynamicAliases;
+  collectDynamicAliases(DynamicAliases);
+  NumDynamicAliases = DynamicAliases.size();
+
+  collectMissingAliases(DynamicAliases);
+  sortMissingAliases();
+
+  return false;
+}
+
+pair<Function *, Function *> AliasAnalysisChecker::GetContainingFunctionPair(
+    const ValuePair &VP) {
+  const Function *F1 = DynAAUtils::GetContainingFunction(VP.first);
+  const Function *F2 = DynAAUtils::GetContainingFunction(VP.second);
+  return make_pair(const_cast<Function *>(F1), const_cast<Function *>(F2));
+}
+
+void AliasAnalysisChecker::print(raw_ostream &O, const Module *M) const {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
+  unsigned NumReportedMissingAliases = 0;
   for (size_t i = 0; i < MissingAliases.size(); ++i) {
     Value *V1 = MissingAliases[i].first, *V2 = MissingAliases[i].second;
+
+    // Do not report BitCasts and PhiNodes. The reports on them are typically
+    // redundant.
+    if (isa<BitCastInst>(V1) || isa<BitCastInst>(V2))
+      continue;
+    if (isa<PHINode>(V1) || isa<PHINode>(V2))
+      continue;
+
+    ++NumReportedMissingAliases;
+
     errs().changeColor(raw_ostream::RED);
     errs() << "Missing alias:";
     errs().resetColor();
 
+    // Print some features of this missing alias.
     errs() << (DynAAUtils::IsIntraProcQuery(V1, V2) ? " (intra)" : " (inter)");
     if (DynAAUtils::PointerIsDereferenced(V1) &&
         DynAAUtils::PointerIsDereferenced(V2)) {
@@ -152,54 +188,19 @@ void AliasAnalysisChecker::reportMissingAliases(
     if (PrintValueInReport)
       DynAAUtils::PrintValue(errs(), V1);
     errs() << "\n";
-
     errs() << "[" << IDA.getValueID(V2) << "] ";
     if (PrintValueInReport)
       DynAAUtils::PrintValue(errs(), V2);
     errs() << "\n";
   }
 
-  if (MissingAliases.empty()) {
+  if (NumReportedMissingAliases == 0) {
     errs().changeColor(raw_ostream::GREEN, true);
     errs() << "Congrats! You passed all the tests.\n";
     errs().resetColor();
   } else {
     errs().changeColor(raw_ostream::RED, true);
-    errs() << "Detected " << MissingAliases.size() << " missing aliases.\n";
+    errs() << "Detected " << NumReportedMissingAliases << " missing aliases.\n";
     errs().resetColor();
   }
-}
-
-bool AliasAnalysisChecker::CompareMissingAliases(const ValuePair &VP1,
-                                                 const ValuePair &VP2) {
-  pair<Function *, Function *> FP1 = GetContainingFunctionPair(VP1);
-  pair<Function *, Function *> FP2 = GetContainingFunctionPair(VP2);
-  return FP1 < FP2;
-}
-
-void AliasAnalysisChecker::sortMissingAliases(
-    vector<ValuePair> &MissingAliases) {
-  sort(MissingAliases.begin(), MissingAliases.end(), CompareMissingAliases);
-}
-
-bool AliasAnalysisChecker::runOnModule(Module &M) {
-  DenseSet<ValuePair> DynamicAliases;
-  collectDynamicAliases(DynamicAliases);
-  NumDynamicAliases = DynamicAliases.size();
-
-  vector<ValuePair> MissingAliases;
-  collectMissingAliases(DynamicAliases, MissingAliases);
-
-  sortMissingAliases(MissingAliases);
-
-  reportMissingAliases(MissingAliases);
-
-  return false;
-}
-
-pair<Function *, Function *> AliasAnalysisChecker::GetContainingFunctionPair(
-    const ValuePair &VP) {
-  const Function *F1 = DynAAUtils::GetContainingFunction(VP.first);
-  const Function *F2 = DynAAUtils::GetContainingFunction(VP.second);
-  return make_pair(const_cast<Function *>(F1), const_cast<Function *>(F2));
 }
