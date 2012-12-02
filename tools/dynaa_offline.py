@@ -55,7 +55,9 @@ if __name__ == '__main__':
     if args.time_limit is not None:
         cmd = ' '.join(('timeout', str(args.time_limit), cmd))
     cmd = ' '.join(('LOG_FILE=' + args.dir + '/pts', cmd))
-    rcs_utils.invoke(cmd, False)
+    timeout = rcs_utils.invoke(cmd, False)
+    if timeout != 0:
+        print >> sys.stderr, 'Warning: runtime error or time limit exceeded'
 
     # search for the log file
     # There can be multiple log files if the program is multiprocessed, or
