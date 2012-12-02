@@ -38,6 +38,12 @@ if __name__ == '__main__':
     assert os.path.exists(args.dir), args.dir + ' does not exist.'
     assert os.path.isdir(args.dir), args.dir + ' is not a directory.'
 
+    # dynaa_clear.py
+    # clear other log files
+    # The script exits with the exit code of dynaa_check_aa.py.
+    # Therefore, we use False here to avoid overwriting the exit code.
+    rcs_utils.invoke('dynaa_clear.py ' + args.dir)
+
     # dynaa_hook_mem
     cmd = ' '.join(('dynaa_hook_mem.py', args.prog))
     if args.all:
@@ -78,12 +84,4 @@ if __name__ == '__main__':
                     args.aa))
     if args.all:
         cmd = ' '.join((cmd, '--check-all'))
-    ret = rcs_utils.invoke(cmd, False)
-
-    # dynaa_clear.py
-    # clear other log files
-    # The script exits with the exit code of dynaa_check_aa.py.
-    # Therefore, we use False here to avoid overwriting the exit code.
-    rcs_utils.invoke('dynaa_clear.py ' + args.dir, False)
-
-    sys.exit(ret)
+    rcs_utils.invoke(cmd)
