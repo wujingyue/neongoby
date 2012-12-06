@@ -13,6 +13,7 @@
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
 
+#include "dyn-aa/MissingAliasesClassifier.h"
 #include "dyn-aa/BaselineAliasAnalysis.h"
 #include "dyn-aa/DynamicAliasAnalysis.h"
 #include "dyn-aa/Utils.h"
@@ -53,6 +54,8 @@ static cl::opt<bool> CheckAllPointers("check-all-pointers",
 static cl::opt<bool> PrintValueInReport("print-value-in-report",
                                         cl::desc("print values in the report"),
                                         cl::init(true));
+static cl::opt<bool> RootCausesOnly("root-only",
+                                    cl::desc("output root causes only"));
 
 static RegisterPass<AliasAnalysisChecker> X(
     "check-aa",
@@ -70,6 +73,9 @@ void AliasAnalysisChecker::getAnalysisUsage(AnalysisUsage &AU) const {
   // AliasAnalysis group.
   if (InputDynamicAliases == "") {
     AU.addRequired<DynamicAliasAnalysis>();
+  }
+  if (RootCausesOnly) {
+    AU.addRequired<MissingAliasesClassifier>();
   }
   AU.addRequired<AliasAnalysis>();
   AU.addRequired<BaselineAliasAnalysis>();
@@ -135,9 +141,20 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   DenseSet<ValuePair> DynamicAliases;
   collectDynamicAliases(DynamicAliases);
   NumDynamicAliases = DynamicAliases.size();
-
   collectMissingAliases(DynamicAliases);
   sort(MissingAliases.begin(), MissingAliases.end());
+  if (RootCausesOnly) {
+    MissingAliasesClassifier &MAC = getAnalysis<MissingAliasesClassifier>();
+    MAC.setMissingAliases(MissingAliases);
+    for (vector<ValuePair>::iterator I = MissingAliases.begin();
+         I != MissingAliases.end();) {
+      if (!MAC.isRootCause(I->first, I->second)) {
+        I = MissingAliases.erase(I);
+      } else {
+        ++I;
+      }
+    }
+  }
   reportMissingAliases();
 
   return false;

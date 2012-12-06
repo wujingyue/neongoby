@@ -21,11 +21,8 @@ using namespace llvm;
 
 namespace dyn_aa {
 struct LogRecordInfo{
-  LogRecordInfo(): Active(false), ArgNo(-1) {}
-  // for MissingAliasClassifier
-  bool Active;
-  bool RecordID;
-  unsigned ValueID;
+  LogRecordInfo(): ArgNo(-1) {}
+  Value *V;
   // for CallInstRecord and Argument
   // ArgNo != -1 indicates a CallInstRecord
   // ArgNo = -1 indicates a TopLevelPointToRecord of CallSite type
@@ -43,7 +40,8 @@ struct PointerTrace{
   Function *StartingFunction;
   bool Active;
   LogRecordInfo PreviousRecord;
-  vector<pair<unsigned, unsigned> > Slice;
+  // <RecordID, Value>
+  vector<pair<unsigned, Value *> > Slice;
 };
 
 struct TraceSlicer: public ModulePass, public LogProcessor {
@@ -61,13 +59,13 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void processCall(const CallRecord &Record);
   void processReturn(const ReturnRecord &Record);
 
-  pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
+  static pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
   static bool isCalledFunction(Function *F, CallSite CS);
   Value *getLatestCommonAncestor();
 
  private:
   void printTrace(raw_ostream &O,
-                  pair<unsigned, unsigned> TraceRecord,
+                  pair<unsigned, Value *> TraceRecord,
                   int PointerLabel) const;
 
   PointerTrace Trace[2];

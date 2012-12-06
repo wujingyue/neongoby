@@ -104,12 +104,12 @@ void TraceSlicer::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 void TraceSlicer::printTrace(raw_ostream &O,
-                             pair<unsigned, unsigned> TraceRecord,
+                             pair<unsigned, Value *> TraceRecord,
                              int PointerLabel) const {
   unsigned RecordID = TraceRecord.first;
-  unsigned ValueID = TraceRecord.second;
+  Value *V = TraceRecord.second;
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  Value *V = IDA.getValue(ValueID);
+  unsigned ValueID = IDA.getValueID(V);
   O.changeColor(PointerLabel == 0 ? raw_ostream::GREEN : raw_ostream::RED);
   O << RecordID << "\t";
   O << "ptr" << PointerLabel + 1 << "\t";
@@ -161,7 +161,7 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
   assert(V->getType()->isPointerTy());
 
   LogRecordInfo CurrentRecord;
-  CurrentRecord.ValueID = Record.PointerValueID;
+  CurrentRecord.V = V;
   CurrentRecord.PointeeAddress = Record.PointeeAddress;
   CurrentRecord.PointerAddress = Record.LoadedFrom;
 
@@ -177,7 +177,7 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
 
       Trace[PointerLabel].Active = true;
       Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                    CurrentRecord.ValueID));
+                                                    CurrentRecord.V));
       Trace[PointerLabel].PreviousRecord = CurrentRecord;
       NumContainingSlices++;
     } else if (Trace[PointerLabel].Active) {
@@ -186,7 +186,7 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                      CurrentRecord.ValueID));
+                                                      CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
         NumContainingSlices++;
       }
@@ -207,7 +207,7 @@ void TraceSlicer::processStore(const StoreRecord &Record) {
   assert(isa<StoreInst>(I));
 
   LogRecordInfo CurrentRecord;
-  CurrentRecord.ValueID = IDA.getValueID(I);
+  CurrentRecord.V = I;
   CurrentRecord.PointerAddress = Record.PointerAddress;
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
@@ -219,7 +219,7 @@ void TraceSlicer::processStore(const StoreRecord &Record) {
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                      CurrentRecord.ValueID));
+                                                      CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
         NumContainingSlices++;
       }
@@ -236,7 +236,7 @@ void TraceSlicer::processCall(const CallRecord &Record) {
   assert(CS);
 
   LogRecordInfo CurrentRecord;
-  CurrentRecord.ValueID = IDA.getValueID(I);
+  CurrentRecord.V = I;
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevel record
@@ -247,7 +247,7 @@ void TraceSlicer::processCall(const CallRecord &Record) {
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                      CurrentRecord.ValueID));
+                                                      CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
         NumContainingSlices++;
       }
@@ -264,7 +264,7 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
   assert(isa<ReturnInst>(I));
 
   LogRecordInfo CurrentRecord;
-  CurrentRecord.ValueID = IDA.getValueID(I);
+  CurrentRecord.V = I;
 
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevel record
@@ -275,7 +275,7 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                      CurrentRecord.ValueID));
+                                                      CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
         NumContainingSlices++;
       } else {
@@ -283,7 +283,7 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
         if (I->getParent()->getParent() ==
             Trace[PointerLabel].StartingFunction) {
           Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                        CurrentRecord.ValueID));
+                                                        CurrentRecord.V));
         }
       }
     }
@@ -292,58 +292,54 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
 
 // whether R1 depend on R2, return <depend, active>
 pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
-  Value *V1 = IDA.getValue(R1.ValueID);
-  Value *V2 = IDA.getValue(R2.ValueID);
-  CallSite CS1(V1);
-  CallSite CS2(V2);
+  CallSite CS1(R1.V);
+  CallSite CS2(R2.V);
 
   if (CS2) {
     if (R2.ArgNo != -1) {
       // R2 is CallRecord
-      return make_pair(R1.ValueID ==
-             IDA.getValueID(CS2.getArgument(R2.ArgNo)), true);
-    } else if (CS1 && R1.ValueID == R2.ValueID) {
+      return make_pair(R1.V == CS2.getArgument(R2.ArgNo), true);
+    } else if (CS1 && R1.V == R2.V) {
       // R2 is an external function call
       return make_pair(false, false);
-    } else if (ReturnInst *RI = dyn_cast<ReturnInst>(V1)) {
+    } else if (ReturnInst *RI = dyn_cast<ReturnInst>(R1.V)) {
       return make_pair(isCalledFunction(RI->getParent()->getParent(), CS2),
                        true);
     } else {
       return make_pair(false, true);
     }
-  } else if (Argument *A = dyn_cast<Argument>(V2)) {
+  } else if (Argument *A = dyn_cast<Argument>(R2.V)) {
     if (CS1 && isCalledFunction(A->getParent(), CS1)) {
       R1.ArgNo = A->getArgNo();
       return make_pair(true, true);
     } else {
       return make_pair(false, true);
     }
-  } else if (GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(V2)) {
-    return make_pair(R1.ValueID == IDA.getValueID(GEPI->getPointerOperand()),
-                     true);
-  } else if (BitCastInst *BCI = dyn_cast<BitCastInst>(V2)) {
-    return make_pair(R1.ValueID == IDA.getValueID(BCI->getOperand(0)), true);
-  } else if (StoreInst *SI = dyn_cast<StoreInst>(V2)) {
-    return make_pair(R1.ValueID == IDA.getValueID(SI->getValueOperand()), true);
-  } else if (ReturnInst *RI = dyn_cast<ReturnInst>(V2)) {
-    return make_pair(R1.ValueID == IDA.getValueID(RI->getReturnValue()), true);
-  } else if (SelectInst *SI = dyn_cast<SelectInst>(V2)) {
+  } else if (GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(R2.V)) {
+    return make_pair(R1.V == GEPI->getPointerOperand(), true);
+  } else if (BitCastInst *BCI = dyn_cast<BitCastInst>(R2.V)) {
     return make_pair(R1.PointeeAddress == R2.PointeeAddress &&
-                     (R1.ValueID == IDA.getValueID(SI->getTrueValue()) ||
-                      R1.ValueID == IDA.getValueID(SI->getFalseValue())), true);
-  } else if (PHINode *PN = dyn_cast<PHINode>(V2)) {
+                     R1.V == BCI->getOperand(0), true);
+  } else if (StoreInst *SI = dyn_cast<StoreInst>(R2.V)) {
+    return make_pair(R1.V == SI->getValueOperand(), true);
+  } else if (ReturnInst *RI = dyn_cast<ReturnInst>(R2.V)) {
+    return make_pair(R1.V == RI->getReturnValue(), true);
+  } else if (SelectInst *SI = dyn_cast<SelectInst>(R2.V)) {
+    return make_pair(R1.PointeeAddress == R2.PointeeAddress &&
+                     (R1.V == SI->getTrueValue() ||
+                      R1.V == SI->getFalseValue()), true);
+  } else if (PHINode *PN = dyn_cast<PHINode>(R2.V)) {
     if (R1.PointeeAddress == R2.PointeeAddress) {
       unsigned NumIncomingValues = PN->getNumIncomingValues();
       for (unsigned VI = 0; VI != NumIncomingValues; ++VI) {
-        if (R1.ValueID == IDA.getValueID(PN->getIncomingValue(VI))) {
+        if (R1.V == PN->getIncomingValue(VI)) {
           return make_pair(true, true);
         }
       }
     }
     return make_pair(false, true);
-  } else if (isa<LoadInst>(V2)) {
-    return make_pair(isa<StoreInst>(V1) &&
+  } else if (isa<LoadInst>(R2.V)) {
+    return make_pair(isa<StoreInst>(R1.V) &&
                      R1.PointerAddress == R2.PointerAddress, true);
   } else {
     // R2 may be Global Variable, MallocInst,
@@ -373,8 +369,7 @@ Value *TraceSlicer::getLatestCommonAncestor() {
   if (Trace[0].Slice.empty() || Trace[1].Slice.empty())
     return NULL;
   if (Trace[0].Slice.back() == Trace[1].Slice.back()) {
-    IDAssigner &IDA = getAnalysis<IDAssigner>();
-    return IDA.getValue(Trace[0].Slice.back().second);
+    return Trace[0].Slice.back().second;
   }
   return NULL;
 }

@@ -26,6 +26,10 @@ if __name__ == '__main__':
                         help = 'disable printing values. only print value IDs',
                         action = 'store_true',
                         default = False)
+    parser.add_argument('--root-only',
+                        help = 'only print root missing aliases',
+                        action = 'store_true',
+                        default = False)
     # Due to the behavior of LLVM's alias analysis chaining, the baseline AA
     # must be an ImmutablePass.
     parser.add_argument('--baseline',
@@ -62,10 +66,12 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-check-aa'))
     cmd = ' '.join((cmd, '-log-file', args.log))
     # cmd = ' '.join((cmd, '-output-dyn-aliases', '/tmp/dyn-aliases'))
-    if args.check_all:
+    if args.check_all or args.root_only:
         cmd = ' '.join((cmd, '-check-all-pointers'))
     if args.disable_print_value:
         cmd = ' '.join((cmd, '-print-value-in-report=false'))
+    if args.root_only:
+        cmd = ' '.join((cmd, '-root-only'))
     cmd = ' '.join((cmd, '-stats'))
     cmd = ' '.join((cmd, '-disable-output', '<', args.bc))
 
