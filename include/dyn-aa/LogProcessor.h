@@ -20,7 +20,7 @@ struct LogProcessor {
   virtual void processCall(const CallRecord &);
   virtual void processReturn(const ReturnRecord &);
 
-private:
+ private:
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);
   static off_t GetFileSize(FILE *LogFile);
 
