@@ -58,6 +58,5 @@ int main(int argc, char *argv[]) {
   cl::ParseCommandLineOptions(argc, argv, "Dumps point-to logs");
   LogDumper LD;
   LD.processLog();
-  errs() << "# of touched pointers = " << TouchedPointers.size() << "\n";
   return 0;
 }
