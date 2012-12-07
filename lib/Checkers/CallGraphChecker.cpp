@@ -98,11 +98,11 @@ bool CallGraphChecker::runOnModule(Module &M) {
   }
 
   if (NumMissingCallEdges == 0) {
-    errs().changeColor(raw_ostream::GREEN, true);
+    errs().changeColor(raw_ostream::GREEN);
     errs() << "Congrats! You passed all the tests.\n";
     errs().resetColor();
   } else {
-    errs().changeColor(raw_ostream::RED, true);
+    errs().changeColor(raw_ostream::RED);
     errs() << "Detected " << NumMissingCallEdges << " missing call edges.\n";
     errs().resetColor();
   }
