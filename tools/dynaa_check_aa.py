@@ -66,8 +66,8 @@ if __name__ == '__main__':
         cmd = ' '.join((cmd, '-check-all-pointers'))
     if args.disable_print_value:
         cmd = ' '.join((cmd, '-print-value-in-report=false'))
-    cmd = ' '.join((cmd, '-stats', '-analyze', '-q'))
-    cmd = ' '.join((cmd, '<', args.bc))
+    cmd = ' '.join((cmd, '-stats'))
+    cmd = ' '.join((cmd, '-disable-output', '<', args.bc))
 
     sys.stderr.write('\n\033[0;34m')
     print >> sys.stderr, cmd

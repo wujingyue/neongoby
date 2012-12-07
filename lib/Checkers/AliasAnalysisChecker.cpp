@@ -28,7 +28,6 @@ struct AliasAnalysisChecker: public ModulePass {
 
   AliasAnalysisChecker(): ModulePass(ID) {}
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  virtual void print(raw_ostream &O, const Module *M) const;
   virtual bool runOnModule(Module &M);
 
  private:
@@ -39,6 +38,7 @@ struct AliasAnalysisChecker: public ModulePass {
   void collectDynamicAliases(DenseSet<ValuePair> &DynamicAliases);
   void collectMissingAliases(const DenseSet<ValuePair> &DynamicAliases);
   void sortMissingAliases();
+  void reportMissingAliases();
 
   vector<ValuePair> MissingAliases;
 };
@@ -143,6 +143,7 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
 
   collectMissingAliases(DynamicAliases);
   sortMissingAliases();
+  reportMissingAliases();
 
   return false;
 }
@@ -154,7 +155,7 @@ pair<Function *, Function *> AliasAnalysisChecker::GetContainingFunctionPair(
   return make_pair(const_cast<Function *>(F1), const_cast<Function *>(F2));
 }
 
-void AliasAnalysisChecker::print(raw_ostream &O, const Module *M) const {
+void AliasAnalysisChecker::reportMissingAliases() {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   unsigned NumReportedMissingAliases = 0;
@@ -188,6 +189,7 @@ void AliasAnalysisChecker::print(raw_ostream &O, const Module *M) const {
     if (PrintValueInReport)
       DynAAUtils::PrintValue(errs(), V1);
     errs() << "\n";
+
     errs() << "[" << IDA.getValueID(V2) << "] ";
     if (PrintValueInReport)
       DynAAUtils::PrintValue(errs(), V2);
