@@ -31,13 +31,12 @@ struct AliasAnalysisChecker: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  static bool CompareMissingAliases(const ValuePair &VP1, const ValuePair &VP2);
+  static bool CompareOnFunction(const ValuePair &VP1, const ValuePair &VP2);
   static pair<Function *, Function *> GetContainingFunctionPair(
       const ValuePair &VP);
 
   void collectDynamicAliases(DenseSet<ValuePair> &DynamicAliases);
   void collectMissingAliases(const DenseSet<ValuePair> &DynamicAliases);
-  void sortMissingAliases();
   void reportMissingAliases();
 
   vector<ValuePair> MissingAliases;
@@ -123,17 +122,13 @@ void AliasAnalysisChecker::collectMissingAliases(
   }
 }
 
-bool AliasAnalysisChecker::CompareMissingAliases(const ValuePair &VP1,
-                                                 const ValuePair &VP2) {
+// Sorts missing aliases so that missing aliases inside the same function are
+// likely clustered.
+bool AliasAnalysisChecker::CompareOnFunction(const ValuePair &VP1,
+                                             const ValuePair &VP2) {
   pair<Function *, Function *> FP1 = GetContainingFunctionPair(VP1);
   pair<Function *, Function *> FP2 = GetContainingFunctionPair(VP2);
   return FP1 < FP2;
-}
-
-// Sorts missing aliases so that missing aliases inside the same function are
-// likely clustered.
-void AliasAnalysisChecker::sortMissingAliases() {
-  sort(MissingAliases.begin(), MissingAliases.end(), CompareMissingAliases);
 }
 
 bool AliasAnalysisChecker::runOnModule(Module &M) {
@@ -142,7 +137,7 @@ bool AliasAnalysisChecker::runOnModule(Module &M) {
   NumDynamicAliases = DynamicAliases.size();
 
   collectMissingAliases(DynamicAliases);
-  sortMissingAliases();
+  sort(MissingAliases.begin(), MissingAliases.end());
   reportMissingAliases();
 
   return false;
@@ -158,7 +153,7 @@ pair<Function *, Function *> AliasAnalysisChecker::GetContainingFunctionPair(
 void AliasAnalysisChecker::reportMissingAliases() {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
-  unsigned NumReportedMissingAliases = 0;
+  vector<ValuePair> ReportedMissingAliases;
   for (size_t i = 0; i < MissingAliases.size(); ++i) {
     Value *V1 = MissingAliases[i].first, *V2 = MissingAliases[i].second;
 
@@ -169,7 +164,15 @@ void AliasAnalysisChecker::reportMissingAliases() {
     if (isa<PHINode>(V1) || isa<PHINode>(V2))
       continue;
 
-    ++NumReportedMissingAliases;
+    ReportedMissingAliases.push_back(MissingAliases[i]);
+  }
+  sort(ReportedMissingAliases.begin(),
+       ReportedMissingAliases.end(),
+       CompareOnFunction);
+
+  for (size_t i = 0; i < ReportedMissingAliases.size(); ++i) {
+    Value *V1 = ReportedMissingAliases[i].first;
+    Value *V2 = ReportedMissingAliases[i].second;
 
     errs().changeColor(raw_ostream::RED);
     errs() << "Missing alias:";
@@ -196,13 +199,14 @@ void AliasAnalysisChecker::reportMissingAliases() {
     errs() << "\n";
   }
 
-  if (NumReportedMissingAliases == 0) {
+  if (ReportedMissingAliases.empty()) {
     errs().changeColor(raw_ostream::GREEN);
     errs() << "Congrats! You passed all the tests.\n";
     errs().resetColor();
   } else {
     errs().changeColor(raw_ostream::RED);
-    errs() << "Detected " << NumReportedMissingAliases << " missing aliases.\n";
+    errs() << "Detected " << ReportedMissingAliases.size() <<
+        " missing aliases.\n";
     errs().resetColor();
   }
 }
