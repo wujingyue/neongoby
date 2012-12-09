@@ -2,8 +2,8 @@
 *Debug+Asserts/
 *Release/
 *Debug/
-autoconf/aclocal.m4
-autoconf/autom4te.cache
+aclocal.m4
+autom4te.cache
 Makefile.common
 *.swp
 config.log
