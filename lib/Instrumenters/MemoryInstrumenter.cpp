@@ -831,8 +831,8 @@ void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
   assert(ValueOperand->getType()->isPointerTy());
 
   unsigned ValueID = IDA.getValueID(ValueOperand);
+  // Skip the values that don't exist in the original program.
   if (ValueID == IDAssigner::InvalidID) {
-//    errs() << *ValueOperand << "\n";
     return;
   }
 
