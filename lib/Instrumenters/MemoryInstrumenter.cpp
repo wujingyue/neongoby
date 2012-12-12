@@ -871,7 +871,7 @@ void MemoryInstrumenter::instrumentPointerParameters(Function *F) {
       if (AI->hasByValAttr()) {
         uint64_t TypeSize = TD.getTypeStoreSize(ArgType->getElementType());
         instrumentMemoryAllocation(AI,
-                                   ConstantInt::get(IntType, TypeSize),
+                                   ConstantInt::get(LongType, TypeSize),
                                    NULL,
                                    Entry);
       }
