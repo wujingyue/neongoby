@@ -35,7 +35,8 @@ struct MemoryInstrumenter: public ModulePass {
   virtual bool runOnModule(Module &M);
 
  private:
-  bool isWhiteListed(Function &F) const;
+  static bool IsWhiteListed(const Function &F);
+
   void instrumentInstructionIfNecessary(Instruction *I);
   // Emit code to handle memory allocation.
   // If <Success>, range [<Start>, <Start> + <Size>) is allocated.
@@ -532,7 +533,7 @@ void MemoryInstrumenter::instrumentGlobals(Module &M) {
   }
 }
 
-bool MemoryInstrumenter::isWhiteListed(Function &F) const {
+bool MemoryInstrumenter::IsWhiteListed(const Function &F) {
   // TODO: now the whitelist is short. if it is long, we should use a hash set
   if (OfflineWhiteList.size() != 0) {
     for (unsigned i = 0; i < OfflineWhiteList.size(); i++) {
@@ -566,7 +567,7 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (F->isDeclaration())
       continue;
-    if (!isWhiteListed(*F))
+    if (!IsWhiteListed(*F))
       continue;
     // The second argument of main(int argc, char *argv[]) needs special
     // handling, which is done in instrumentMainArgs.
