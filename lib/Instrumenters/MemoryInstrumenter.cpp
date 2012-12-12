@@ -723,10 +723,15 @@ IntrinsicInst *MemoryInstrumenter::findAnyVAStart(Function *F) {
 void MemoryInstrumenter::instrumentVarArgFunction(Function *F) {
   IntrinsicInst *VAStart = findAnyVAStart(F);
   assert(VAStart && "cannot find any llvm.va_start");
-  BitCastInst *ArrayDecay = dyn_cast<BitCastInst>(VAStart->getOperand(0));
-  assert(ArrayDecay && ArrayDecay->getType() == CharStarType);
-  AllocaInst *Alloca = dyn_cast<AllocaInst>(ArrayDecay->getOperand(0));
-  assert(Alloca);
+  BitCastInst *ArrayDecay = cast<BitCastInst>(VAStart->getOperand(0));
+  assert(ArrayDecay->getType() == CharStarType);
+
+  // The source of the bitcast does not have to be an alloca. In unoptimized
+  // bitcode, it's likely a GEP. In that case, we need track further.
+  Instruction *Alloca = ArrayDecay;
+  while (!isa<AllocaInst>(Alloca)) {
+    Alloca = cast<Instruction>(Alloca->getOperand(0));
+  }
 
   // Clone Alloca, ArrayDecay, and VAStart, and replace their operands.
   Instruction *ClonedAlloca = Alloca->clone();
