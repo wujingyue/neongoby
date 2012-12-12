@@ -859,9 +859,23 @@ void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
 
 void MemoryInstrumenter::instrumentPointerParameters(Function *F) {
   assert(F && !F->isDeclaration());
-  Instruction *Entry = F->begin()->getFirstNonPHI();
+
+  TargetData &TD = getAnalysis<TargetData>();
+
+  Instruction *Entry = F->begin()->getFirstInsertionPt();
   for (Function::arg_iterator AI = F->arg_begin(); AI != F->arg_end(); ++AI) {
-    if (AI->getType()->isPointerTy())
+    if (PointerType *ArgType = dyn_cast<PointerType>(AI->getType())) {
+      // If an argument is marked as byval, add an implicit allocation.
+      // FIXME: still broken. We need allocate one extra byte for it. We'd
+      // better do it in the backend.
+      if (AI->hasByValAttr()) {
+        uint64_t TypeSize = TD.getTypeStoreSize(ArgType->getElementType());
+        instrumentMemoryAllocation(AI,
+                                   ConstantInt::get(IntType, TypeSize),
+                                   NULL,
+                                   Entry);
+      }
       instrumentPointer(AI, NULL, Entry);
+    }
   }
 }
