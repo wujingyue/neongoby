@@ -58,8 +58,6 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void processStore(const StoreRecord &Record);
   void processCall(const CallRecord &Record);
   void processReturn(const ReturnRecord &Record);
-
-  static pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
   static bool isCalledFunction(Function *F, CallSite CS);
   Value *getLatestCommonAncestor();
 
@@ -67,6 +65,7 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void printTrace(raw_ostream &O,
                   pair<unsigned, Value *> TraceRecord,
                   int PointerLabel) const;
+  pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
 
   PointerTrace Trace[2];
   unsigned CurrentRecordID;

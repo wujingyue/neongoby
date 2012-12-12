@@ -47,12 +47,13 @@ struct MissingAliasesClassifier: public ModulePass, public LogProcessor {
   list<Value *> ArgMem;
   // CallSite list
   list<Value *> CallMem;
-  // Keys are PointerAddress, values are LoadInst list
-  DenseMap<void *, vector<Value *> > LoadMem;
+  // Keys are PointerAddress, values are list of <LoadInst, PointeeAddress>
+  DenseMap<void *, list<pair<Value *, void *> > > LoadMem;
   // Keys are PointeeAddress, values are SelectInst or PHINode list
   DenseMap<void *, list<Value *> > SelectPHIMem;
   bool isDirectSrc(Value *V1, Value *V2);
   bool isMissingAlias(Value *V1, Value *V2);
+  bool hasCause(Value *V1, Value *V2);
 };
 }
 

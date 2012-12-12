@@ -10,6 +10,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Operator.h"
 
 #include "rcs/IDAssigner.h"
 
@@ -25,6 +26,13 @@ static RegisterPass<MissingAliasesClassifier> X("classify-missing-aliases",
                                                 "Classify All Missing Aliases",
                                                 false, // Is CFG Only?
                                                 true); // Is Analysis?
+
+STATISTIC(NumGlobalValue, "Number of root missing aliases of global value");
+STATISTIC(NumDirectSrc, "Number of root missing aliases of direct sources");
+STATISTIC(NumLoadInst, "Number of root missing aliases of load Inst");
+STATISTIC(NumGEPInst, "Number of root missing aliases of GEP Inst");
+STATISTIC(NumITPInst, "Number of root missing aliases of ITP Inst");
+STATISTIC(NumUncertain, "Number of root missing aliases of uncertain");
 
 char MissingAliasesClassifier::ID = 0;
 
@@ -49,6 +57,22 @@ void MissingAliasesClassifier::processTopLevel(const TopLevelRecord &Record) {
   Value *V = IDA.getValue(Record.PointerValueID);
   assert(V->getType()->isPointerTy());
 
+  // extract from LoadMem
+  if (isa<GlobalValue>(V)) {
+    for (DenseMap<void *, list<pair<Value *, void *> > >::iterator DI =
+         LoadMem.begin(), DE = LoadMem.end(); DI != DE; ++DI) {
+      for (list<pair<Value *, void *> >::iterator VI = DI->second.begin(),
+           VE = DI->second.end(); VI != VE;) {
+        if (VI->second == Record.PointeeAddress) {
+          PrevInst[VI->first].insert(V);
+          VI = DI->second.erase(VI);
+        } else {
+          VI++;
+        }
+      }
+    }
+  }
+
   // extract from SelectPHIMem
   for (list<Value *>::iterator I = SelectPHIMem[Record.PointeeAddress].begin(),
        E = SelectPHIMem[Record.PointeeAddress].end(); I != E;) {
@@ -72,15 +96,12 @@ void MissingAliasesClassifier::processTopLevel(const TopLevelRecord &Record) {
     } else
       ++I;
   }
-  if (SelectPHIMem[Record.PointeeAddress].empty()) {
-    SelectPHIMem.erase(Record.PointeeAddress);
-  }
 
   // push to Mem
   if (Record.PointeeAddress != NULL) {
     CallSite CS(V);
     if (isa<LoadInst>(V)) {
-      LoadMem[Record.LoadedFrom].push_back(V);
+      LoadMem[Record.LoadedFrom].push_back(make_pair(V, Record.PointeeAddress));
     } else if (CS) {
       CallMem.push_back(V);
     } else if (isa<Argument>(V)) {
@@ -97,9 +118,10 @@ void MissingAliasesClassifier::processStore(const StoreRecord &Record) {
   assert(isa<StoreInst>(V));
 
   // extract from LoadMem
-  for (vector<Value *>::iterator I = LoadMem[Record.PointerAddress].begin(),
+  for (list<pair<Value *, void *> >::iterator I =
+       LoadMem[Record.PointerAddress].begin(),
        E = LoadMem[Record.PointerAddress].end(); I != E; ++I) {
-    PrevInst[*I].insert(V);
+    PrevInst[I->first].insert(V);
   }
   LoadMem.erase(Record.PointerAddress);
 }
@@ -114,7 +136,14 @@ void MissingAliasesClassifier::processCall(const CallRecord &Record) {
   for (list<Value *>::iterator I = ArgMem.begin(), E = ArgMem.end(); I != E;) {
     Argument *A = dyn_cast<Argument>(*I);
     if (TraceSlicer::isCalledFunction(A->getParent(), CS)) {
-      PrevInst[A].insert(CS.getArgument(A->getArgNo()));
+      Value *Arg = CS.getArgument(A->getArgNo());
+      Operator *Op = dyn_cast<Operator>(Arg);
+      if (isa<ConstantExpr>(Arg) && Op) {
+        // gep or bitcast constant
+        PrevInst[A].insert(Op->getOperand(0));
+      } else {
+        PrevInst[A].insert(Arg);
+      }
       I = ArgMem.erase(I);
     } else
       ++I;
@@ -172,13 +201,24 @@ bool MissingAliasesClassifier::isDirectSrc(Value *V1, Value *V2) {
   } else if (LoadInst *LI = dyn_cast<LoadInst>(V2)) {
     for (set<Value *>::iterator I = PrevInst[V2].begin(),
          E = PrevInst[V2].end(); I != E; ++I) {
-      StoreInst *SI = dyn_cast<StoreInst>(*I);
-      if (V1 == SI->getValueOperand()) {
-        // when V2 is LoadInst and V1 is previous top level of V2,
-        // V1 is not direct source of V2,
-        // if the pointers of StoreInst and LoadInst are missing alias
-        return !isMissingAlias(LI->getPointerOperand(),
-                               SI->getPointerOperand());
+      if (StoreInst *SI = dyn_cast<StoreInst>(*I)) {
+        Value *ValueOperand = SI->getValueOperand();
+        Operator *Op = dyn_cast<Operator>(ValueOperand);
+        if ((isa<ConstantExpr>(ValueOperand) && Op &&
+             V1 == Op->getOperand(0)) || V1 == SI->getValueOperand()) {
+            // when V2 is LoadInst and V1 is previous top level of V2,
+            // V1 is not direct source of V2,
+            // if the pointers of StoreInst and LoadInst are missing alias
+          if (!isMissingAlias(LI->getPointerOperand(),
+                              SI->getPointerOperand())) {
+            return true;
+          }
+        }
+      } else {
+        assert(isa<GlobalValue>(*I));
+        if (V1 == *I) {
+          return true;
+        }
       }
     }
     return false;
@@ -194,34 +234,112 @@ bool MissingAliasesClassifier::isDirectSrc(Value *V1, Value *V2) {
       }
     }
     return false;
-  } else if (isa<IntToPtrInst>(V2)) {
-    // we can't handle IntToPtrInst, so conservatively return true
-    return true;
   }
-  // global value, alloca
+  // global value, alloca, inttoptr
   return false;
 }
 
 bool MissingAliasesClassifier::isRootCause(Value *V1, Value *V2) {
-  // we consider three cases that a missing alias is root cause
-  // case 1: one value is direct source of the other value
+  // we consider four cases that a missing alias is root cause
+  // case 1: both values are glabol variables
+  if (isa<GlobalValue>(V1) && isa<GlobalValue>(V2)) {
+    NumGlobalValue++;
+    return true;
+  }
+  // case 2: one value is direct source of the other value
   if (isDirectSrc(V1, V2) || isDirectSrc(V2, V1)) {
+    NumDirectSrc++;
     return true;
   }
 
-  // case 2: both values are LoadInst, and their pointers are not missing alias
+  // case 3: both values are LoadInst, and their pointers are not missing alias
   LoadInst *LI1 = dyn_cast<LoadInst>(V1);
   LoadInst *LI2 = dyn_cast<LoadInst>(V2);
   if (LI1 && LI2) {
+    NumLoadInst++;
     return !isMissingAlias(LI1->getPointerOperand(), LI2->getPointerOperand());
   }
 
-  // case 3: both values are GEPInst, and their sources are not missing alias
+  // case 4: both values are GEPInst, and their sources are not missing alias
   GetElementPtrInst *GEPI1 = dyn_cast<GetElementPtrInst>(V1);
   GetElementPtrInst *GEPI2 = dyn_cast<GetElementPtrInst>(V2);
   if (GEPI1 && GEPI2) {
+    NumGEPInst++;
     return !isMissingAlias(GEPI1->getPointerOperand(),
                            GEPI2->getPointerOperand());
   }
+
+  if (!hasCause(V1, V2) && !hasCause(V2, V1)) {
+    if (isa<IntToPtrInst>(V1) || isa<IntToPtrInst>(V2))
+      NumITPInst++;
+    else
+      NumUncertain++;
+    /*
+    IDAssigner &IDA = getAnalysis<IDAssigner>();
+    errs() << "undetected:\n";
+    errs() << "[" << IDA.getValueID(V1) << "] ";
+    DynAAUtils::PrintValue(errs(), V1);
+    errs() << "\n";
+    errs() << "[" << IDA.getValueID(V2) << "] ";
+    DynAAUtils::PrintValue(errs(), V2);
+    errs() << "\n";
+    errs() << "\n";
+     */
+    return true;
+  }
+  return false;
+}
+
+// whether (V1, previous top level of V2) or (V2, previous top level of V2)
+// is MissingAlias
+bool MissingAliasesClassifier::hasCause(Value *V1, Value *V2) {
+  CallSite CS2(V2);
+  if (GetElementPtrInst *GEPI = dyn_cast<GetElementPtrInst>(V2)) {
+    return isMissingAlias(V1, GEPI->getPointerOperand()) ||
+           isMissingAlias(V2, GEPI->getPointerOperand());
+  } else if (BitCastInst *BCI = dyn_cast<BitCastInst>(V2)) {
+    return isMissingAlias(V1, BCI->getOperand(0)) ||
+           isMissingAlias(V2, BCI->getOperand(0));
+  } else if (LoadInst *LI = dyn_cast<LoadInst>(V2)) {
+    for (set<Value *>::iterator I = PrevInst[V2].begin(),
+         E = PrevInst[V2].end(); I != E; ++I) {
+      if (StoreInst *SI = dyn_cast<StoreInst>(*I)) {
+        Value *ValueOperand = SI->getValueOperand();
+        Operator *Op = dyn_cast<Operator>(ValueOperand);
+        if (isa<ConstantExpr>(ValueOperand) && Op) {
+          ValueOperand = Op->getOperand(0);
+        }
+        if (V1 == ValueOperand &&
+            isMissingAlias(LI->getPointerOperand(), SI->getPointerOperand())) {
+          return true;
+        }
+        if (isMissingAlias(V1, ValueOperand) ||
+            isMissingAlias(V2, ValueOperand)) {
+          return true;
+        }
+      } else {
+        assert(isa<GlobalValue>(*I));
+        if (isMissingAlias(V1, *I) || isMissingAlias(V2, *I))
+          return true;
+      }
+    }
+    return false;
+  } else if (CS2 && PrevInst[V2].empty()) {
+    // external function
+    return false;
+  } else if (isa<Argument>(V2) || CS2 || isa<PHINode>(V2) ||
+             isa<SelectInst>(V2)) {
+    for (set<Value *>::iterator I = PrevInst[V2].begin(),
+         E = PrevInst[V2].end(); I != E; ++I) {
+      if (isMissingAlias(V1, *I) || isMissingAlias(V2, *I)) {
+        return true;
+      }
+    }
+    return false;
+  } else if (isa<IntToPtrInst>(V2)) {
+    // we can't handle IntToPtrInst, so conservatively return false
+    return false;
+  }
+  // global value, alloca
   return false;
 }

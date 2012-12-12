@@ -9,6 +9,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Operator.h"
 
 #include "rcs/IDAssigner.h"
 
@@ -298,7 +299,14 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
   if (CS2) {
     if (R2.ArgNo != -1) {
       // R2 is CallRecord
-      return make_pair(R1.V == CS2.getArgument(R2.ArgNo), true);
+      Value *Arg = CS2.getArgument(R2.ArgNo);
+      Operator *Op = dyn_cast<Operator>(Arg);
+      if (isa<ConstantExpr>(Arg) && Op) {
+        // gep or bitcast constant
+        return make_pair(R1.V == Op->getOperand(0), true);
+      } else {
+        return make_pair(R1.V == Arg, true);
+      }
     } else if (CS1 && R1.V == R2.V) {
       // R2 is an external function call
       return make_pair(false, false);
@@ -321,7 +329,14 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
     return make_pair(R1.PointeeAddress == R2.PointeeAddress &&
                      R1.V == BCI->getOperand(0), true);
   } else if (StoreInst *SI = dyn_cast<StoreInst>(R2.V)) {
-    return make_pair(R1.V == SI->getValueOperand(), true);
+    Value *ValueOperand = SI->getValueOperand();
+    Operator *Op = dyn_cast<Operator>(ValueOperand);
+    if (isa<ConstantExpr>(ValueOperand) && Op) {
+      // gep or bitcast constant
+      return make_pair(R1.V == Op->getOperand(0), true);
+    } else {
+      return make_pair(R1.V == ValueOperand, true);
+    }
   } else if (ReturnInst *RI = dyn_cast<ReturnInst>(R2.V)) {
     return make_pair(R1.V == RI->getReturnValue(), true);
   } else if (SelectInst *SI = dyn_cast<SelectInst>(R2.V)) {
@@ -339,8 +354,14 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
     }
     return make_pair(false, true);
   } else if (isa<LoadInst>(R2.V)) {
-    return make_pair(isa<StoreInst>(R1.V) &&
-                     R1.PointerAddress == R2.PointerAddress, true);
+    if (isa<StoreInst>(R1.V)) {
+      return make_pair(R1.PointerAddress == R2.PointerAddress, true);
+    } else if (isa<GlobalValue>(R1.V)) {
+      // predecessor of LoadInst may be a global value with same pointee address
+      return make_pair(R1.PointeeAddress == R2.PointeeAddress, true);
+    } else {
+      return make_pair(false, true);
+    }
   } else {
     // R2 may be Global Variable, MallocInst,
     // or unsupported Instructions
