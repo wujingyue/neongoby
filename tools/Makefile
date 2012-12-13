@@ -11,9 +11,9 @@ install-local::
 		echo Installing $$script ; \
 		$(MKDIR) $(DESTDIR)$(PROJ_bindir) ; \
 		if [ "$$script" = "dynaa_utils.py" ]; then \
-		  $(DataInstall) $(PROJ_SRC_DIR)/$$script $(DESTDIR)$(PROJ_bindir) ; \
+			$(DataInstall) $(PROJ_SRC_DIR)/$$script $(DESTDIR)$(PROJ_bindir) ; \
 		else \
-		  $(ScriptInstall) $(PROJ_SRC_DIR)/$$script $(DESTDIR)$(PROJ_bindir) ; \
+			$(ScriptInstall) $(PROJ_SRC_DIR)/$$script $(DESTDIR)$(PROJ_bindir) ; \
 		fi; \
 	done
 

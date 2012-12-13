@@ -154,7 +154,7 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
     cmd = ' '.join((cmd, rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a'))
     cmd = ' '.join((cmd, '-o', exe_hybrid))
-    linking_flags = dynaa_utils.get_linking_flags(args.prog)
+    linking_flags = rcs_utils.get_linking_flags(args.prog)
     cmd = ' '.join((cmd, ' '.join(linking_flags)))
     rcs_utils.invoke(cmd)
 
