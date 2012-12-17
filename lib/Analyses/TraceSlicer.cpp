@@ -299,14 +299,8 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
   if (CS2) {
     if (R2.ArgNo != -1) {
       // R2 is CallRecord
-      Value *Arg = CS2.getArgument(R2.ArgNo);
-      Operator *Op = dyn_cast<Operator>(Arg);
-      if (isa<ConstantExpr>(Arg) && Op) {
-        // gep or bitcast constant
-        return make_pair(R1.V == Op->getOperand(0), true);
-      } else {
-        return make_pair(R1.V == Arg, true);
-      }
+      return make_pair(R1.V == getOperandIfConstant(CS2.getArgument(R2.ArgNo)),
+                       true);
     } else if (CS1 && R1.V == R2.V) {
       // R2 is an external function call
       return make_pair(false, false);
@@ -329,14 +323,7 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
     return make_pair(R1.PointeeAddress == R2.PointeeAddress &&
                      R1.V == BCI->getOperand(0), true);
   } else if (StoreInst *SI = dyn_cast<StoreInst>(R2.V)) {
-    Value *ValueOperand = SI->getValueOperand();
-    Operator *Op = dyn_cast<Operator>(ValueOperand);
-    if (isa<ConstantExpr>(ValueOperand) && Op) {
-      // gep or bitcast constant
-      return make_pair(R1.V == Op->getOperand(0), true);
-    } else {
-      return make_pair(R1.V == ValueOperand, true);
-    }
+    return make_pair(R1.V == getOperandIfConstant(SI->getValueOperand()), true);
   } else if (ReturnInst *RI = dyn_cast<ReturnInst>(R2.V)) {
     return make_pair(R1.V == RI->getReturnValue(), true);
   } else if (SelectInst *SI = dyn_cast<SelectInst>(R2.V)) {
@@ -382,6 +369,14 @@ bool TraceSlicer::isCalledFunction(Function *F, CallSite CS) {
     if (F->getFunctionType()->getParamType(i) != (CS.getArgument(i))->getType())
       return false;
   return true;
+}
+
+// get operand if V is a constant expression
+Value *TraceSlicer::getOperandIfConstant(Value *V) {
+  Operator *Op = dyn_cast<Operator>(V);
+  if (isa<ConstantExpr>(V) && Op)
+    return Op->getOperand(0);
+  return V;
 }
 
 // Get the latest common ancestor of the two slices.

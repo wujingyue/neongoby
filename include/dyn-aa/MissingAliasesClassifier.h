@@ -51,9 +51,9 @@ struct MissingAliasesClassifier: public ModulePass, public LogProcessor {
   DenseMap<void *, list<pair<Value *, void *> > > LoadMem;
   // Keys are PointeeAddress, values are SelectInst or PHINode list
   DenseMap<void *, list<Value *> > SelectPHIMem;
-  bool isDirectSrc(Value *V1, Value *V2);
   bool isMissingAlias(Value *V1, Value *V2);
-  bool hasCause(Value *V1, Value *V2);
+  bool hasMissingAliasPointers(Value *V1, Value *V2);
+  void getPredecessors(Value *V, vector<Value *> &Predecessors);
 };
 }
 
