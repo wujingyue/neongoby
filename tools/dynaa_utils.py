@@ -20,7 +20,7 @@ def load_aa(cmd, *aas):
             cmd = rcs_utils.load_plugin(cmd, 'RCSAndersens')
         elif aa == 'bc2bdd-aa':
             if not os.path.exists('bc2bdd.conf'):
-                sys.stderr.write('\033[1;31m')
+                sys.stderr.write('\033[0;31m')
                 print >> sys.stderr, 'Error: bc2bdd-aa requires bc2bdd.conf,',
                 print >> sys.stderr, 'which cannot be found in the current',
                 print >> sys.stderr, 'directory.'
