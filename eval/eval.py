@@ -19,7 +19,7 @@ def is_useful(line):
 
 
 def invoke(args, out_file=None, redirect_stderr=False, is_mysqld=False):
-    sys.stdout.write('\033[1;32m%s\033[m\n' % string.join(args))
+    sys.stdout.write('\033[0;32m%s\033[m\n' % string.join(args))
     if is_mysqld:
         p = subprocess.Popen(args)
     else:
@@ -293,7 +293,7 @@ def main():
     import argparse
     global APPS, AAS
     parser = argparse.ArgumentParser(
-        description=('\033[1;31mnote: before running this script, please '
+        description=('\033[0;31mnote: before running this script, please '
                      'make sure that no httpd/mysqld instance is running, '
                      'and please remove apache-install/logs/error_log and '
                      'all existing /mnt/sdb/dyn-aa/pts* files.\033[m'))

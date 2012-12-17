@@ -66,7 +66,7 @@ if __name__ == '__main__':
         cmd = ' '.join((cmd, '-input-alias-checks', args.input_alias_checks))
     else:
         if args.baseline == args.aa:
-            sys.stderr.write('\033[1;31m')
+            sys.stderr.write('\033[0;31m')
             print >> sys.stderr, 'Error: Baseline and the checked AA',
             print >> sys.stderr, 'must be different'
             sys.stderr.write('\033[m')
