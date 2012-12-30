@@ -41,9 +41,10 @@ char DynamicAliasAnalysis::ID = 0;
 const unsigned DynamicAliasAnalysis::UnknownVersion = (unsigned)-1;
 
 bool DynamicAliasAnalysis::runOnModule(Module &M) {
-  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  // We needn't chain DynamicAliasAnalysis to the AA chain
+  // InitializeAliasAnalysis(this);
 
-  InitializeAliasAnalysis(this);
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   processLog();
 
@@ -72,6 +73,7 @@ bool DynamicAliasAnalysis::runOnModule(Module &M) {
 }
 
 void DynamicAliasAnalysis::getAnalysisUsage(AnalysisUsage &AU) const {
+  // TODO: Do we need this? since DynamicAliasAnalysis is not in the AA chain
   AliasAnalysis::getAnalysisUsage(AU);
   AU.setPreservesAll();
   AU.addRequired<IDAssigner>();
