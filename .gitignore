@@ -8,13 +8,5 @@ Makefile.common
 *.swp
 config.log
 config.status
-*.bc
-*.ll
-*.d
-*.pts
-*.vid
-*.iid
-*.dot
-*.ps
-*.png
-*.inst
+cscope.files
+cscope.out
