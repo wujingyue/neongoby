@@ -202,6 +202,8 @@ void Preparer::expandAlloca(AllocaInst *AI) {
     ArrayType *NewArrType = ArrayType::get(ArrType->getElementType(),
                                            ArrType->getNumElements() + 1);
     AllocaInst *NewAI = new AllocaInst(NewArrType, AI->getName(), AI);
+    // inherit the alignment as well
+    NewAI->setAlignment(AI->getAlignment());
     BitCastInst *CastNewAI = new BitCastInst(NewAI,
                                              AI->getType(),
                                              AI->getName(),
