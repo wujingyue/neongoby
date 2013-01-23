@@ -1,0 +1,55 @@
+<p>
+We are developing NeonGoby, a system for effectively detecting errors in alias
+analysis implementations, improving their correctness and hopefully widening
+their adoption. NeonGoby has effectively found 29 bugs in two very popular
+alias analyses implemented in LLVM, with very low false positive rate and
+reasonable performance overhead. 4 bugs we found have already been fixed by
+developers.
+</p>
+
+<p>
+Read more:
+</p>
+
+<p>
+Alias analysis is perhaps one of the most crucial and widely used analyses, and
+has attracted tremendous research efforts over the years. Yet, advanced alias
+analyses are extremely difficult to get right, and the bugs in these analyses
+are most likely the reason that they have not been adopted to production
+compilers.
+</p>
+
+<p>
+We are building NeonGoby, a system for effectively detecting errors in alias
+analysis implementations, improving their correctness and hopefully vastly
+widening their adoption. We explicitly designed NeonGoby to be agnostic to the
+alias analysis it checks: the only requirement is a standard
+<tt>MayAlias(p, q)</tt> interface that returns true if <tt>p</tt> and <tt>q</tt>
+may alias and false otherwise. This minimum requirement ensures maximum
+applicability and ease of use. To check an alias analysis with NeonGoby, a user
+additionally chooses a test program and workload at her will. For instance, she
+can choose a large program such as Apache and MySQL and a stressful workload
+that together exercise many diverse program constructs, such as the corner
+cases listed in the previous paragraph.  This flexibility enables NeonGoby to
+catch alias analysis bugs that manifest on real-world programs and workloads.
+</p>
+
+<p>
+We currently implemented NeonGoby within the LLVM compiler, and checked three
+popular LLVM alias analyses, including (1) <tt>basicaa</tt>, LLVM's default
+alias analysis; (2) <tt>anders-aa</tt>, LLVM's implementation of an
+inter-procedural Andersen's algorithm; (3) and <tt>ds-aa</tt>, a
+context-sensitive, field-sensitive algorithm with full heap cloning. To check
+these analyses, we selected two real-world programs MySQL and Apache and the
+workloads their developers use. NeonGoby found 29 bugs in <tt>anders-aa</tt>
+and <tt>ds-aa</tt>, including 24 previously unknown bugs, with only 2 false
+positives and reasonable performance overhead. We have reported five bugs to
+<tt>ds-aa</tt> developers, 4 of which have been patched.
+</p>
+
+<p>
+To enable alias analysis builders to start using NeonGoby today, we have
+released it open-source at
+<a href="https://github.com/wujingyue/neongoby">GitHub</a>, along with our
+error detection results and proposed patches.
+</p>
