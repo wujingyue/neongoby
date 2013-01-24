@@ -12,9 +12,9 @@ Finally, build Loom:
 
 ```bash
 ./configure \
---with-rcssrc=<rcs srouce directory> \
---with-rcsobj=<rcs object directory> \
---prefix=`llvm-config --prefix`
+    --with-rcssrc=<rcs srouce directory> \
+    --with-rcsobj=<rcs object directory> \
+    --prefix=`llvm-config --prefix`
 make
 make install
 ```
