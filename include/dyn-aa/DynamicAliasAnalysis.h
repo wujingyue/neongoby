@@ -22,7 +22,7 @@ struct DynamicAliasAnalysis: public ModulePass,
                              public LogProcessor {
   typedef std::pair<void *, unsigned> AddressTy;
   typedef std::pair<unsigned, unsigned> PointerTy;
-  typedef DenseMap<AddressTy, std::vector<PointerTy> > PointedByMapTy;
+  typedef DenseMap<AddressTy, DenseSet<PointerTy> > PointedByMapTy;
   typedef DenseMap<PointerTy, AddressTy> PointsToMapTy;
 
   static char ID;
@@ -59,7 +59,7 @@ struct DynamicAliasAnalysis: public ModulePass,
   void removePointedBy(PointerTy Ptr, AddressTy Loc);
   void addPointingTo(PointerTy Ptr, AddressTy Loc);
   // A convenient wrapper for a batch of reports.
-  void addAliasPairs(PointerTy P, const std::vector<PointerTy> &Qs);
+  void addAliasPairs(PointerTy P, const DenseSet<PointerTy> &Qs);
   // Adds two values to DidAlias if their contexts match.
   void addAliasPair(PointerTy P, PointerTy Q);
   // Report <V1, V2> as an alias pair.
