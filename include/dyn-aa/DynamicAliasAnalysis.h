@@ -84,8 +84,15 @@ struct DynamicAliasAnalysis: public ModulePass,
   rcs::ValueSet PointersVersionUnknown;
   // Addresses whose version is unknown.
   DenseSet<void *> AddressesVersionUnknown;
+  // This global variable gets incremented each time a function is called. Each
+  // pointer will be associated with the invocation ID to gain
+  // context-sensitivity.
   unsigned NumInvocations;
+  // Thread-specific call stack.
   DenseMap<pthread_t, std::stack<unsigned> > CallStacks;
+  // Pointers in PointingTo and BeingPointedBy. Indexed by invocation ID so that
+  // we can quickly find out what pointers to delete when exiting a function.
+  DenseMap<unsigned, std::vector<unsigned> > ActivePointers;
 };
 }
 
