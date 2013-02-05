@@ -168,18 +168,13 @@ void DynamicAliasAnalysis::removePointingTo(PointerTy Ptr) {
 }
 
 void DynamicAliasAnalysis::removePointingTo(unsigned InvocationID) {
-  ++NumRemoveOps;
-  vector<PointerTy> ToRemove;
-  for (PointsToMapTy::iterator I = PointingTo.begin();
-       I != PointingTo.end();
-       ++I) {
-    if (I->first.second == InvocationID) {
-      ToRemove.push_back(I->first);
-      removePointedBy(I->first, I->second);
-    }
+  DenseMap<unsigned, vector<unsigned> >::iterator I =
+      ActivePointers.find(InvocationID);
+  if (I != ActivePointers.end()) {
+    for (size_t i = 0; i < I->second.size(); ++i)
+      removePointingTo(PointerTy(I->second[i], InvocationID));
+    ActivePointers.erase(I);
   }
-  for (size_t i = 0; i < ToRemove.size(); ++i)
-    PointingTo.erase(ToRemove[i]);
 }
 
 void DynamicAliasAnalysis::addPointingTo(PointerTy Ptr, AddressTy Loc) {
@@ -187,6 +182,7 @@ void DynamicAliasAnalysis::addPointingTo(PointerTy Ptr, AddressTy Loc) {
   removePointingTo(Ptr);
   PointingTo[Ptr] = Loc;
   BeingPointedBy[Loc].push_back(Ptr);
+  ActivePointers[Ptr.second].push_back(Ptr.first);
 }
 
 unsigned DynamicAliasAnalysis::lookupAddress(void *Addr) const {

@@ -25,6 +25,8 @@ using namespace std;
 using namespace rcs;
 using namespace dyn_aa;
 
+// TODO: store logs from each run in a separate directory named by the
+// timestamp. e.g., /tmp/pts-20121113-100535.
 struct Environment {
   string GetLogFileName(int pid = 0) {
     if (pid == 0)
