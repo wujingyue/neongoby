@@ -3,8 +3,9 @@
 
 #include <cstdlib>
 
-namespace dyn_aa {
+// Structs are packed to save space.
 
+namespace dyn_aa {
 struct MemAllocRecord {
   void *Address;
   unsigned long Bound;
@@ -17,6 +18,10 @@ struct TopLevelRecord {
   // If the pointer is a LoadInst, LoadFrom stores the pointer operand of the
   // LoadInst; otherwise, LoadedFrom is NULL.
   void *LoadedFrom;
+} __attribute__((packed));
+
+struct EnterRecord {
+  unsigned FunctionID;
 } __attribute__((packed));
 
 struct StoreRecord {
@@ -38,16 +43,18 @@ struct LogRecord {
   enum LogRecordType {
     MemAlloc,
     TopLevel,
+    Enter,
     Store,
     Call,
     Return
   } __attribute__((packed));
 
   LogRecordType RecordType;
-
+  pthread_t ThreadID;
   union {
     MemAllocRecord MAR;
     TopLevelRecord TLR;
+    EnterRecord ER;
     StoreRecord SR;
     CallRecord CR;
     ReturnRecord RR;

@@ -26,22 +26,11 @@ static cl::opt<string> LogFileName(
 
 STATISTIC(NumMemAllocRecords, "Number of memory allocation records");
 STATISTIC(NumTopLevelRecords, "Number of top-level records");
+STATISTIC(NumEnterRecords, "Number of enter records");
 STATISTIC(NumStoreRecords, "Number of store records");
 STATISTIC(NumCallRecords, "Number of call records");
 STATISTIC(NumReturnRecords, "Number of return records");
 STATISTIC(NumRecords, "Number of all records");
-
-// By default, these call-back functions do nothing.
-void LogProcessor::processMemAlloc(const MemAllocRecord &) {
-}
-void LogProcessor::processTopLevel(const TopLevelRecord &) {
-}
-void LogProcessor::processStore(const StoreRecord &) {
-}
-void LogProcessor::processCall(const CallRecord &) {
-}
-void LogProcessor::processReturn(const ReturnRecord &) {
-}
 
 void LogProcessor::processLog(bool Reversed) {
   assert(LogFileName != "" && "Didn't specify the log file.");
@@ -63,6 +52,8 @@ void LogProcessor::processLog(bool Reversed) {
     uint64_t OldNumBytesRead = NumBytesRead;
     ++NumRecords;
     NumBytesRead += sizeof Record;
+    CurrentThreadID = Record.ThreadID;
+    beforeProcess(Record);
     switch (Record.RecordType) {
       case LogRecord::MemAlloc:
         processMemAlloc(Record.MAR);
@@ -71,6 +62,10 @@ void LogProcessor::processLog(bool Reversed) {
       case LogRecord::TopLevel:
         processTopLevel(Record.TLR);
         ++NumTopLevelRecords;
+        break;
+      case LogRecord::Enter:
+        processEnter(Record.ER);
+        ++NumEnterRecords;
         break;
       case LogRecord::Store:
         processStore(Record.SR);
@@ -85,6 +80,7 @@ void LogProcessor::processLog(bool Reversed) {
         ++NumReturnRecords;
         break;
     }
+    afterProcess(Record);
     ++CurrentRecordID;
     DynAAUtils::PrintProgressBar(OldNumBytesRead, NumBytesRead, FileSize);
   }

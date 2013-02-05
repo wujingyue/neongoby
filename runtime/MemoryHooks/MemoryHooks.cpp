@@ -1,15 +1,5 @@
 // vim: sw=2
 
-// Three types of messages:
-// 1) Declare an addr-taken variable: allocator vid, start, bound
-// 2) Top-level point to addr-taken: vid => pointee
-// 3) Addr-taken point to addr-taken: pointer, pointee, instruction id of
-//    the store instruction
-//
-// The third type of messages is not necessary for constructing a traditional
-// point-to graph, because users query with top-level variables only. However,
-// we put it there because we want to observe the shape.
-//
 // Hook functions are declared with extern "C", because we want to disable
 // the C++ name mangling and make the instrumentation easier.
 
@@ -144,6 +134,7 @@ extern "C" void HookMemAlloc(unsigned ValueID,
     // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, StartAddr, Bound);
     LogRecord Record;
     Record.RecordType = LogRecord::MemAlloc;
+    Record.ThreadID = pthread_self();
     Record.MAR.Address = StartAddr;
     Record.MAR.Bound = Bound;
     Record.MAR.AllocatedBy = ValueID;
@@ -164,9 +155,20 @@ extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
   // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
   LogRecord Record;
   Record.RecordType = LogRecord::TopLevel;
+  Record.ThreadID = pthread_self();
   Record.TLR.PointerValueID = ValueID;
   Record.TLR.PointeeAddress = Value;
   Record.TLR.LoadedFrom = Pointer;
+  PrintLogRecord(Record);
+  pthread_mutex_unlock(&Global->Lock);
+}
+
+extern "C" void HookEnter(unsigned FuncID) {
+  pthread_mutex_lock(&Global->Lock);
+  LogRecord Record;
+  Record.RecordType = LogRecord::Enter;
+  Record.ThreadID = pthread_self();
+  Record.ER.FunctionID = FuncID;
   PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);
 }
@@ -176,6 +178,7 @@ extern "C" void HookStore(void *Value, void *Pointer, unsigned InsID) {
   // fprintf(stderr, "HookStore(%p, %p, %u)\n", Value, Pointer, InsID);
   LogRecord Record;
   Record.RecordType = LogRecord::Store;
+  Record.ThreadID = pthread_self();
   Record.SR.PointerAddress = Pointer;
   Record.SR.PointeeAddress = Value;
   Record.SR.InstructionID = InsID;
@@ -188,6 +191,7 @@ extern "C" void HookCall(unsigned InsID, int NumArgs) {
   // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumArgs);
   LogRecord Record;
   Record.RecordType = LogRecord::Call;
+  Record.ThreadID = pthread_self();
   Record.CR.InstructionID = InsID;
   PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);
@@ -199,6 +203,7 @@ extern "C" void HookReturn(unsigned InsID) {
   // fprintf(stderr, "HookReturn(%u)\n", InsID);
   LogRecord Record;
   Record.RecordType = LogRecord::Return;
+  Record.ThreadID = pthread_self();
   Record.RR.InstructionID = InsID;
   PrintLogRecord(Record);
   pthread_mutex_unlock(&Global->Lock);

@@ -18,6 +18,7 @@ using namespace dyn_aa;
 const string DynAAUtils::MemAllocHookName = "HookMemAlloc";
 const string DynAAUtils::MainArgsAllocHookName = "HookMainArgsAlloc";
 const string DynAAUtils::TopLevelHookName = "HookTopLevel";
+const string DynAAUtils::EnterHookName = "HookEnter";
 const string DynAAUtils::StoreHookName = "HookStore";
 const string DynAAUtils::CallHookName = "HookCall";
 const string DynAAUtils::ReturnHookName = "HookReturn";

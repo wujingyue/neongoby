@@ -10,6 +10,7 @@
 #include "rcs/IDAssigner.h"
 
 #include "dyn-aa/DynamicAliasAnalysis.h"
+#include "dyn-aa/Utils.h"
 
 using namespace std;
 using namespace llvm;
