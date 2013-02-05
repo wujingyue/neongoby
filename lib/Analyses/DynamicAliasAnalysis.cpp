@@ -98,12 +98,21 @@ void DynamicAliasAnalysis::processMemAlloc(const MemAllocRecord &Record) {
   assert(CurrentVersion != UnknownVersion);
 }
 
+void DynamicAliasAnalysis::processEnter(const EnterRecord &Record) {
+  ++NumInvocations;
+  CallStacks[getCurrentThreadID()].push(NumInvocations);
+}
+
+void DynamicAliasAnalysis::processReturn(const ReturnRecord &Record) {
+  stack<unsigned> &CallStack = CallStacks[getCurrentThreadID()];
+  assert(!CallStack.empty());
+  removePointingTo(CallStack.top());
+  CallStack.pop();
+}
+
 void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
   unsigned PointerVID = Record.PointerValueID;
   void *PointeeAddress = Record.PointeeAddress;
-
-  // No matter the new address is NULL or not, remove the original mapping.
-  removePointingTo(PointerVID);
 
   // We don't consider NULLs as aliases.
   if (PointeeAddress != NULL) {
@@ -122,47 +131,62 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
       }
     }
 
-    addPointingTo(PointerVID, PointeeAddress, Version);
+    // Global variables are processed before any invocation.
+    stack<unsigned> &CallStack = CallStacks[getCurrentThreadID()];
+    PointerTy Ptr(PointerVID, CallStack.empty() ? 0 : CallStack.top());
+    AddressTy Loc(PointeeAddress, Version);
+    addPointingTo(Ptr, Loc);
 
     // Report aliases.
-    PointedByMapTy::iterator I = BeingPointedBy.find(
-        make_pair(PointeeAddress, Version));
+    PointedByMapTy::iterator I = BeingPointedBy.find(Loc);
     assert(I != BeingPointedBy.end()); // We just added a point-to in.
     if (Version != UnknownVersion &&
         I->second.size() > MaxNumPointersToSameLocation) {
       MaxNumPointersToSameLocation = I->second.size();
     }
-    addAliasPairs(PointerVID, I->second);
+    addAliasPairs(Ptr, I->second);
+  } // if (PointerAddress != NULL)
+}
+
+void DynamicAliasAnalysis::removePointedBy(PointerTy Ptr, AddressTy Loc) {
+  PointedByMapTy::iterator J = BeingPointedBy.find(Loc);
+  assert(J != BeingPointedBy.end());
+  vector<PointerTy>::iterator K = find(J->second.begin(),
+                                       J->second.end(),
+                                       Ptr);
+  assert(K != J->second.end());
+  J->second.erase(K);
+}
+
+void DynamicAliasAnalysis::removePointingTo(PointerTy Ptr) {
+  PointsToMapTy::iterator I = PointingTo.find(Ptr);
+  if (I != PointingTo.end()) {
+    ++NumRemoveOps;
+    removePointedBy(I->first, I->second);
+    PointingTo.erase(I);
   }
 }
 
-void DynamicAliasAnalysis::removePointingTo(unsigned ValueID) {
+void DynamicAliasAnalysis::removePointingTo(unsigned InvocationID) {
   ++NumRemoveOps;
-  if (ValueID < PointingTo.size() && PointingTo[ValueID].first != NULL) {
-    // Remove from BeingPointedBy.
-    PointedByMapTy::iterator J = BeingPointedBy.find(PointingTo[ValueID]);
-    assert(J != BeingPointedBy.end());
-    vector<unsigned>::iterator K = find(J->second.begin(),
-                                        J->second.end(),
-                                        ValueID);
-    assert(K != J->second.end());
-    J->second.erase(K);
-
-    // Remove from PointingTo.
-    PointingTo[ValueID].first = NULL;
-    PointingTo[ValueID].second = UnknownVersion;
+  vector<PointerTy> ToRemove;
+  for (PointsToMapTy::iterator I = PointingTo.begin();
+       I != PointingTo.end();
+       ++I) {
+    if (I->first.second == InvocationID) {
+      ToRemove.push_back(I->first);
+      removePointedBy(I->first, I->second);
+    }
   }
+  for (size_t i = 0; i < ToRemove.size(); ++i)
+    PointingTo.erase(ToRemove[i]);
 }
 
-void DynamicAliasAnalysis::addPointingTo(unsigned ValueID,
-                                         void *Address,
-                                         unsigned Version) {
+void DynamicAliasAnalysis::addPointingTo(PointerTy Ptr, AddressTy Loc) {
   ++NumInsertOps;
-  if (ValueID >= PointingTo.size())
-    PointingTo.resize(ValueID + 1);
-  PointingTo[ValueID].first = Address;
-  PointingTo[ValueID].second = Version;
-  BeingPointedBy[make_pair(Address, Version)].push_back(ValueID);
+  removePointingTo(Ptr);
+  PointingTo[Ptr] = Loc;
+  BeingPointedBy[Loc].push_back(Ptr);
 }
 
 unsigned DynamicAliasAnalysis::lookupAddress(void *Addr) const {
@@ -197,14 +221,20 @@ void DynamicAliasAnalysis::addAliasPair(Value *V1, Value *V2) {
   Aliases.insert(make_pair(V1, V2));
 }
 
-void DynamicAliasAnalysis::addAliasPair(unsigned VID1, unsigned VID2) {
-  assert(VID1 != IDAssigner::InvalidID && VID2 != IDAssigner::InvalidID);
+void DynamicAliasAnalysis::addAliasPair(PointerTy P, PointerTy Q) {
+  assert(P.first != IDAssigner::InvalidID &&
+         Q.first != IDAssigner::InvalidID);
   IDAssigner &IDA = getAnalysis<IDAssigner>();
-  addAliasPair(IDA.getValue(VID1), IDA.getValue(VID2));
+  Value *U = IDA.getValue(P.first), *V = IDA.getValue(Q.first);
+  if (DynAAUtils::GetContainingFunction(U) == DynAAUtils::GetContainingFunction(V) &&
+      P.second != Q.second) {
+    return;
+  }
+  addAliasPair(U, V);
 }
 
-void DynamicAliasAnalysis::addAliasPairs(unsigned VID1,
-                                         const vector<unsigned> &VID2s) {
-  for (size_t j = 0; j < VID2s.size(); ++j)
-    addAliasPair(VID1, VID2s[j]);
+void DynamicAliasAnalysis::addAliasPairs(PointerTy P,
+                                         const vector<PointerTy> &Qs) {
+  for (size_t j = 0; j < Qs.size(); ++j)
+    addAliasPair(P, Qs[j]);
 }
