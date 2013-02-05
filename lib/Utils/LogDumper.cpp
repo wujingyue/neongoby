@@ -15,6 +15,19 @@ using namespace llvm;
 using namespace rcs;
 using namespace dyn_aa;
 
+void LogDumper::beforeProcess(const LogRecord &Record) {
+  printf("%16lx ", Record.ThreadID);
+  switch (Record.RecordType) {
+    case LogRecord::MemAlloc  : printf("[   alloc] "); break;
+    case LogRecord::TopLevel  : printf("[ pointer] "); break;
+    case LogRecord::Enter     : printf("[   enter] "); break;
+    case LogRecord::Store     : printf("[   store] "); break;
+    case LogRecord::Call      : printf("[    call] "); break;
+    case LogRecord::Return    : printf("[  return] "); break;
+    case LogRecord::BasicBlock: printf("[      bb] "); break;
+  }
+}
+
 void LogDumper::processMemAlloc(const MemAllocRecord &Record) {
   printf("%u: %p, %lu\n", Record.AllocatedBy, Record.Address, Record.Bound);
 }
@@ -27,17 +40,23 @@ void LogDumper::processTopLevel(const TopLevelRecord &Record) {
   printf("\n");
 }
 
+void LogDumper::processEnter(const EnterRecord &Record) {
+  printf("%u\n", Record.FunctionID);
+}
+
 void LogDumper::processStore(const StoreRecord &Record) {
   printf("%u: %p => %p\n",
-         Record.InstructionID, Record.PointerAddress, Record.PointeeAddress);
+         Record.InstructionID,
+         Record.PointerAddress,
+         Record.PointeeAddress);
 }
 
 void LogDumper::processCall(const CallRecord &Record) {
-  printf("%u: call\n", Record.InstructionID);
+  printf("%u\n", Record.InstructionID);
 }
 
 void LogDumper::processReturn(const ReturnRecord &Record) {
-  printf("%u: return\n", Record.InstructionID);
+  printf("%u\n", Record.InstructionID);
 }
 
 void LogDumper::processBasicBlock(const BasicBlockRecord &Record) {

@@ -53,12 +53,13 @@ struct MemoryInstrumenter: public ModulePass {
   void instrumentCallSite(CallSite CS);
   void instrumentPointer(Value *ValueOperand,
                          Value *PointerOperand,
-                         Instruction *Loc);
+                         Instruction *DefLoc);
   void instrumentPointerInstruction(Instruction *I);
   void instrumentPointerParameters(Function *F);
   void instrumentGlobals(Module &M);
   void instrumentMainArgs(Module &M);
   void instrumentVarArgFunction(Function *F);
+  void instrumentEntry(Function &F);
 
   IntrinsicInst *findAnyVAStart(Function *F);
   void checkFeatures(Module &M);
@@ -68,7 +69,7 @@ struct MemoryInstrumenter: public ModulePass {
   void addNewGlobalCtor(Module &M);
 
   // hooks
-  Function *MemAllocHook, *TopLevelHook, *StoreHook;
+  Function *MemAllocHook, *TopLevelHook, *EnterHook, *StoreHook;
   Function *MainArgsAllocHook;
   Function *CallHook, *ReturnHook;
   Function *GlobalsAllocHook;
@@ -112,6 +113,7 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   MemAllocHook = NULL;
   MainArgsAllocHook = NULL;
   TopLevelHook = NULL;
+  EnterHook = NULL;
   StoreHook = NULL;
   CallHook = NULL;
   ReturnHook = NULL;
@@ -354,6 +356,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(DynAAUtils::MemAllocHookName) == NULL);
   assert(M.getFunction(DynAAUtils::MainArgsAllocHookName) == NULL);
   assert(M.getFunction(DynAAUtils::TopLevelHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::EnterHookName) == NULL);
   assert(M.getFunction(DynAAUtils::StoreHookName) == NULL);
   assert(M.getFunction(DynAAUtils::CallHookName) == NULL);
   assert(M.getFunction(DynAAUtils::ReturnHookName) == NULL);
@@ -408,6 +411,13 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                   GlobalValue::ExternalLinkage,
                                   DynAAUtils::TopLevelHookName,
                                   &M);
+
+  // Setup EnterHook.
+  FunctionType *EnterHookType = FunctionType::get(VoidType, IntType, false);
+  EnterHook = Function::Create(EnterHookType,
+                               GlobalValue::ExternalLinkage,
+                               DynAAUtils::EnterHookName,
+                               &M);
 
   // Setup StoreHook.
   ArgTypes.clear();
@@ -602,6 +612,7 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
         instrumentInstructionIfNecessary(I);
     }
+    instrumentEntry(*F);
   }
 
   // main(argc, argv)
@@ -773,6 +784,18 @@ void MemoryInstrumenter::instrumentVarArgFunction(Function *F) {
   CallInst::Create(VAStartHook, ClonedArrayDecay, "", InsertPos);
 }
 
+void MemoryInstrumenter::instrumentEntry(Function &F) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  unsigned FuncID = IDA.getFunctionID(&F);
+  // Skip the functions added by us.
+  if (FuncID != IDAssigner::InvalidID) {
+    CallInst::Create(EnterHook,
+                     ConstantInt::get(IntType, FuncID),
+                     "",
+                     F.begin()->getFirstInsertionPt());
+  }
+}
+
 void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   // Skip those instructions added by us.
   IDAssigner &IDA = getAnalysis<IDAssigner>();
@@ -786,12 +809,10 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     return;
   }
 
-  if (HookAllPointers) {
-    // Instrument returns and resume.
-    if (isa<ReturnInst>(I) || isa<ResumeInst>(I)) {
-      instrumentReturnInst(I);
-      return;
-    }
+  // Instrument returns and resume.
+  if (isa<ReturnInst>(I) || isa<ResumeInst>(I)) {
+    instrumentReturnInst(I);
+    return;
   }
 
   // Any instructions of a pointer type, including mallocs and AllocaInsts.
@@ -863,7 +884,7 @@ void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
 // otherwise, it is NULL.
 void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
                                            Value *PointerOperand,
-                                           Instruction *Loc) {
+                                           Instruction *DefLoc) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
 
   assert(ValueOperand->getType()->isPointerTy());
@@ -880,14 +901,15 @@ void MemoryInstrumenter::instrumentPointer(Value *ValueOperand,
       return;
   }
 
+  // Add a hook to define this pointer.
   vector<Value *> Args;
-  Args.push_back(new BitCastInst(ValueOperand, CharStarType, "", Loc));
+  Args.push_back(new BitCastInst(ValueOperand, CharStarType, "", DefLoc));
   if (PointerOperand != NULL)
-    Args.push_back(new BitCastInst(PointerOperand, CharStarType, "", Loc));
+    Args.push_back(new BitCastInst(PointerOperand, CharStarType, "", DefLoc));
   else
     Args.push_back(ConstantPointerNull::get(CharStarType));
   Args.push_back(ConstantInt::get(IntType, ValueID));
-  CallInst::Create(TopLevelHook, Args, "", Loc);
+  CallInst::Create(TopLevelHook, Args, "", DefLoc);
 }
 
 void MemoryInstrumenter::instrumentPointerParameters(Function *F) {

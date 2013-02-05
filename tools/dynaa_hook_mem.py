@@ -38,5 +38,8 @@ if __name__ == '__main__':
                     rcs_utils.get_libdir() + '/libDynAAMemoryHooks.a',
                     '-o', instrumented_exe))
     linking_flags = rcs_utils.get_linking_flags(args.prog)
+    # Memory hooks use pthread functions.
+    if '-pthread' not in linking_flags:
+        linking_flags.append('-pthread')
     cmd = ' '.join((cmd, ' '.join(linking_flags)))
     rcs_utils.invoke(cmd)

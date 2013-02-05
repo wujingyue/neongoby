@@ -5,8 +5,10 @@
 
 namespace dyn_aa {
 struct LogDumper: public LogProcessor {
+  virtual void beforeProcess(const LogRecord &);
   virtual void processMemAlloc(const MemAllocRecord &);
   virtual void processTopLevel(const TopLevelRecord &);
+  virtual void processEnter(const EnterRecord &);
   virtual void processStore(const StoreRecord &);
   virtual void processCall(const CallRecord &);
   virtual void processReturn(const ReturnRecord &);

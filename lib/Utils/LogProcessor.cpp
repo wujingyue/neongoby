@@ -26,25 +26,12 @@ static cl::list<string> LogFileNames(
 
 STATISTIC(NumMemAllocRecords, "Number of memory allocation records");
 STATISTIC(NumTopLevelRecords, "Number of top-level records");
+STATISTIC(NumEnterRecords, "Number of enter records");
 STATISTIC(NumStoreRecords, "Number of store records");
 STATISTIC(NumCallRecords, "Number of call records");
 STATISTIC(NumReturnRecords, "Number of return records");
 STATISTIC(NumBasicBlockRecords, "Number of basic block records");
 STATISTIC(NumRecords, "Number of all records");
-
-// By default, these call-back functions do nothing.
-void LogProcessor::processMemAlloc(const MemAllocRecord &) {
-}
-void LogProcessor::processTopLevel(const TopLevelRecord &) {
-}
-void LogProcessor::processStore(const StoreRecord &) {
-}
-void LogProcessor::processCall(const CallRecord &) {
-}
-void LogProcessor::processReturn(const ReturnRecord &) {
-}
-void LogProcessor::processBasicBlock(const BasicBlockRecord &) {
-}
 
 void LogProcessor::processLog(bool Reversed) {
   assert(LogFileNames.size() && "Didn't specify the log file.");
@@ -75,6 +62,8 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
     uint64_t OldNumBytesRead = NumBytesRead;
     ++NumRecords;
     NumBytesRead += sizeof Record;
+    CurrentThreadID = Record.ThreadID;
+    beforeProcess(Record);
     switch (Record.RecordType) {
       case LogRecord::MemAlloc:
         processMemAlloc(Record.MAR);
@@ -83,6 +72,10 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
       case LogRecord::TopLevel:
         processTopLevel(Record.TLR);
         ++NumTopLevelRecords;
+        break;
+      case LogRecord::Enter:
+        processEnter(Record.ER);
+        ++NumEnterRecords;
         break;
       case LogRecord::Store:
         processStore(Record.SR);
@@ -101,6 +94,7 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
         ++NumBasicBlockRecords;
         break;
     }
+    afterProcess(Record);
     ++CurrentRecordID;
     DynAAUtils::PrintProgressBar(OldNumBytesRead, NumBytesRead, FileSize);
   }
