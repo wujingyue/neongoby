@@ -151,11 +151,7 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
 void DynamicAliasAnalysis::removePointedBy(PointerTy Ptr, AddressTy Loc) {
   PointedByMapTy::iterator J = BeingPointedBy.find(Loc);
   assert(J != BeingPointedBy.end());
-  vector<PointerTy>::iterator K = find(J->second.begin(),
-                                       J->second.end(),
-                                       Ptr);
-  assert(K != J->second.end());
-  J->second.erase(K);
+  J->second.erase(Ptr);
 }
 
 void DynamicAliasAnalysis::removePointingTo(PointerTy Ptr) {
@@ -181,7 +177,7 @@ void DynamicAliasAnalysis::addPointingTo(PointerTy Ptr, AddressTy Loc) {
   ++NumInsertOps;
   removePointingTo(Ptr);
   PointingTo[Ptr] = Loc;
-  BeingPointedBy[Loc].push_back(Ptr);
+  BeingPointedBy[Loc].insert(Ptr);
   ActivePointers[Ptr.second].push_back(Ptr.first);
 }
 
@@ -222,15 +218,15 @@ void DynamicAliasAnalysis::addAliasPair(PointerTy P, PointerTy Q) {
          Q.first != IDAssigner::InvalidID);
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *U = IDA.getValue(P.first), *V = IDA.getValue(Q.first);
-  if (DynAAUtils::GetContainingFunction(U) == DynAAUtils::GetContainingFunction(V) &&
-      P.second != Q.second) {
+  const Function *F = DynAAUtils::GetContainingFunction(U);
+  const Function *G = DynAAUtils::GetContainingFunction(V);
+  if (F == G && P.second != Q.second)
     return;
-  }
   addAliasPair(U, V);
 }
 
 void DynamicAliasAnalysis::addAliasPairs(PointerTy P,
-                                         const vector<PointerTy> &Qs) {
-  for (size_t j = 0; j < Qs.size(); ++j)
-    addAliasPair(P, Qs[j]);
+                                         const DenseSet<PointerTy> &Qs) {
+  for (DenseSet<PointerTy>::const_iterator I = Qs.begin(); I != Qs.end(); ++I)
+    addAliasPair(P, *I);
 }
