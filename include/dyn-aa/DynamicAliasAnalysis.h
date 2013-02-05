@@ -2,6 +2,7 @@
 #define __DYN_AA_DYNAMIC_ALIAS_ANALYSIS_H
 
 #include <map>
+#include <stack>
 
 #include "llvm/Pass.h"
 #include "llvm/ADT/DenseSet.h"
@@ -20,14 +21,16 @@ struct DynamicAliasAnalysis: public ModulePass,
                              public AliasAnalysis,
                              public LogProcessor {
   typedef std::pair<void *, unsigned> AddressTy;
-  typedef DenseMap<AddressTy, std::vector<unsigned> > PointedByMapTy;
-  typedef std::vector<AddressTy> PointsToMapTy;
+  typedef std::pair<unsigned, unsigned> PointerTy;
+  typedef DenseMap<AddressTy, std::vector<PointerTy> > PointedByMapTy;
+  typedef DenseMap<PointerTy, AddressTy> PointsToMapTy;
 
   static char ID;
   static const unsigned UnknownVersion;
 
   DynamicAliasAnalysis(): ModulePass(ID) {
     CurrentVersion = 0;
+    NumInvocations = 0;
   }
   virtual bool runOnModule(Module &M);
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -39,6 +42,8 @@ struct DynamicAliasAnalysis: public ModulePass,
   // Interfaces of LogProcessor.
   void processMemAlloc(const MemAllocRecord &Record);
   void processTopLevel(const TopLevelRecord &Record);
+  void processEnter(const EnterRecord &Record);
+  void processReturn(const ReturnRecord &Record);
 
   const DenseSet<rcs::ValuePair> &getAllAliases() const {
     return Aliases;
@@ -48,12 +53,15 @@ struct DynamicAliasAnalysis: public ModulePass,
   // Returns the current version of <Addr>.
   unsigned lookupAddress(void *Addr) const;
   void updateVersion(void *Start, unsigned long Bound, unsigned Version);
-  void removePointingTo(unsigned ValueID);
-  void addPointingTo(unsigned ValueID, void *Address, unsigned Version);
+  void removePointingTo(unsigned InvocationID);
+  void removePointingTo(PointerTy Ptr);
+  // Helper function called by removePointingTo.
+  void removePointedBy(PointerTy Ptr, AddressTy Loc);
+  void addPointingTo(PointerTy Ptr, AddressTy Loc);
   // A convenient wrapper for a batch of reports.
-  void addAliasPairs(unsigned VID1, const std::vector<unsigned> &VID2s);
-  // A convenient wrapper of addAliasPair(Value *, Value *).
-  void addAliasPair(unsigned VID1, unsigned VID2);
+  void addAliasPairs(PointerTy P, const std::vector<PointerTy> &Qs);
+  // Adds two values to DidAlias if their contexts match.
+  void addAliasPair(PointerTy P, PointerTy Q);
   // Report <V1, V2> as an alias pair.
   // This function canonicalizes the pair, so that <V1, V2> and
   // <V2, V1> are considered the same.
@@ -76,6 +84,8 @@ struct DynamicAliasAnalysis: public ModulePass,
   rcs::ValueSet PointersVersionUnknown;
   // Addresses whose version is unknown.
   DenseSet<void *> AddressesVersionUnknown;
+  unsigned NumInvocations;
+  DenseMap<pthread_t, std::stack<unsigned> > CallStacks;
 };
 }
 
