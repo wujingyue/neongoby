@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
-import subprocess
 import os
 import sys
-import re
+import string
 import rcs_utils
 import dynaa_utils
 
@@ -75,18 +74,4 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, '-stats'))
     cmd = ' '.join((cmd, '-disable-output', '<', args.bc))
 
-    sys.stderr.write('\n\033[0;34m')
-    print >> sys.stderr, cmd
-    sys.stderr.write('\n\033[m')
-
-    child = subprocess.Popen(cmd, shell = True, stderr = subprocess.PIPE)
-    missing = False
-    for line in iter(child.stderr.readline, ''):
-        sys.stderr.write(line)
-        if re.search('missing', line):
-            missing = True
-    if child.wait() != 0:
-        sys.exit(1)
-
-    if missing:
-        sys.exit(2)
+    rcs_utils.invoke(cmd)
