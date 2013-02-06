@@ -22,6 +22,7 @@ const string DynAAUtils::StoreHookName = "HookStore";
 const string DynAAUtils::CallHookName = "HookCall";
 const string DynAAUtils::ReturnHookName = "HookReturn";
 const string DynAAUtils::GlobalsAllocHookName = "HookGlobalsAlloc";
+const string DynAAUtils::BasicBlockHookName = "HookBasicBlock";
 const string DynAAUtils::MemHooksIniterName = "InitMemHooks";
 const string DynAAUtils::AfterForkHookName = "HookAfterFork";
 const string DynAAUtils::BeforeForkHookName = "HookBeforeFork";

@@ -291,6 +291,14 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
   }
 }
 
+void TraceSlicer::processBasicBlock(const BasicBlockRecord &Record) {
+  CurrentRecordID--;
+  for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+    // Starting record must be a TopLevel record
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
+  }
+}
+
 // whether R1 depend on R2, return <depend, active>
 pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
   CallSite CS1(R1.V);

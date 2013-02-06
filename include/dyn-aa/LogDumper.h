@@ -10,6 +10,7 @@ struct LogDumper: public LogProcessor {
   virtual void processStore(const StoreRecord &);
   virtual void processCall(const CallRecord &);
   virtual void processReturn(const ReturnRecord &);
+  virtual void processBasicBlock(const BasicBlockRecord &);
 };
 }
 

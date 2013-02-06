@@ -38,6 +38,7 @@ struct MemoryInstrumenter: public ModulePass {
   static bool IsWhiteListed(const Function &F);
 
   void instrumentInstructionIfNecessary(Instruction *I);
+  void instrumentBasicBlock(BasicBlock *BB);
   // Emit code to handle memory allocation.
   // If <Success>, range [<Start>, <Start> + <Size>) is allocated.
   void instrumentMemoryAllocation(Value *Start,
@@ -71,6 +72,7 @@ struct MemoryInstrumenter: public ModulePass {
   Function *MainArgsAllocHook;
   Function *CallHook, *ReturnHook;
   Function *GlobalsAllocHook;
+  Function *BasicBlockHook;
   Function *MemHooksIniter;
   Function *AfterForkHook, *BeforeForkHook;
   Function *VAStartHook;
@@ -94,6 +96,10 @@ static RegisterPass<MemoryInstrumenter> X("instrument-memory",
 static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
 
+static cl::opt<bool> Diagnose("diagnose",
+                              cl::desc("Instrument for test case reduction and "
+                                       "trace slicing"));
+
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
 
@@ -110,6 +116,7 @@ MemoryInstrumenter::MemoryInstrumenter(): ModulePass(ID) {
   CallHook = NULL;
   ReturnHook = NULL;
   GlobalsAllocHook = NULL;
+  BasicBlockHook = NULL;
   VAStartHook = NULL;
   MemHooksIniter = NULL;
   Main = NULL;
@@ -351,6 +358,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   assert(M.getFunction(DynAAUtils::CallHookName) == NULL);
   assert(M.getFunction(DynAAUtils::ReturnHookName) == NULL);
   assert(M.getFunction(DynAAUtils::GlobalsAllocHookName) == NULL);
+  assert(M.getFunction(DynAAUtils::BasicBlockHookName) == NULL);
   assert(M.getFunction(DynAAUtils::MemHooksIniterName) == NULL);
   assert(M.getFunction(DynAAUtils::AfterForkHookName) == NULL);
   assert(M.getFunction(DynAAUtils::BeforeForkHookName) == NULL);
@@ -443,6 +451,17 @@ void MemoryInstrumenter::setupHooks(Module &M) {
                                       GlobalValue::ExternalLinkage,
                                       DynAAUtils::GlobalsAllocHookName,
                                       &M);
+
+  // Setup BasicBlockHook.
+  ArgTypes.clear();
+  ArgTypes.push_back(IntType);
+  FunctionType *BasicBlockHookType = FunctionType::get(VoidType,
+                                                       ArgTypes,
+                                                       false);
+  BasicBlockHook = Function::Create(BasicBlockHookType,
+                                    GlobalValue::ExternalLinkage,
+                                    DynAAUtils::BasicBlockHookName,
+                                    &M);
 
   // Setup AfterForkHook
   ArgTypes.clear();
@@ -578,6 +597,8 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
     if (F->isVarArg())
       instrumentVarArgFunction(F);
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
+      if (Diagnose)
+        instrumentBasicBlock(BB);
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
         instrumentInstructionIfNecessary(I);
     }
@@ -806,6 +827,17 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
   // Instrument AllocaInsts.
   if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
     instrumentAlloca(AI);
+}
+
+void MemoryInstrumenter::instrumentBasicBlock(BasicBlock *BB) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  unsigned ValueID = IDA.getValueID(BB);
+  if (ValueID != IDAssigner::InvalidID) {
+    CallInst::Create(BasicBlockHook,
+                     ConstantInt::get(IntType,  ValueID),
+                     "",
+                     BB->getFirstNonPHI());
+  }
 }
 
 void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
