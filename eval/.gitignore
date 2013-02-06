@@ -1,4 +1,3 @@
 *
 !.gitignore
-!eval.py
-!cloc.py
+!*.py
