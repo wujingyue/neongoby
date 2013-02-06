@@ -235,7 +235,7 @@ def eval_offline_httpd(threads='1'):
     os.chdir('httpd')
     with open('../offline-httpd-%s.out' % threads, 'w') as out_file:
         invoke(['time', 'dynaa_hook_mem.py',
-                '--hook-all', '--hook-fork', 'httpd'],
+                '--hook-all', 'httpd'],
                out_file)
         run_httpd('httpd.inst', out_file, threads)
     pts_files = list(get_pts_files())
@@ -263,7 +263,7 @@ def eval_offline_httpd(threads='1'):
     if 'anders-aa' in AAS:
         with open('../offline-httpd-deref-%s.out' % threads,
                   'w') as out_file:
-            invoke(['time', 'dynaa_hook_mem.py', '--hook-fork', 'httpd'], out_file)
+            invoke(['time', 'dynaa_hook_mem.py', 'httpd'], out_file)
             run_httpd('httpd.inst', out_file, threads)
         pts_files = list(get_pts_files())
         # with open('../offline-httpd-anders-aa-deref-%s.out' % threads,
