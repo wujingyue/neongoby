@@ -58,11 +58,12 @@ def run_httpd(executable, out_file, threads='1', report=False):
     else:
         invoke(['taskset', '-c', cpu0, './' + executable])
     time.sleep(3)
-    invoke(['taskset', '-c', cpu1, os.path.join(APPS_DIR, 'apache/run-ab'),
+    invoke(['time', 'taskset', '-c', cpu1,
+            os.path.join(APPS_DIR, 'apache/run-ab'),
             '--times', '10', '10000', threads, 'localhost:8000/test.html'],
            out_file)
-    invoke(['./' + executable, '-k', 'stop'])
-    time.sleep(3)
+    invoke(['./httpd', '-k', 'stop'])
+    time.sleep(5)
 
 
 def run_mysql(executable, out_file, threads='1', small_workload=False):
@@ -124,50 +125,51 @@ def eval_online_httpd(threads='1'):
                       'w') as out_file:
                 invoke(args + ['--baseline', 'basicaa'], out_file)
                 run_httpd('httpd.ac', out_file, threads)
-        if aa == 'ds-aa':
-            with open('../online-httpd-ds-aa-%s.out' % threads,
+        continue
+        if aa == 'anders-aa':
+            with open('../online-httpd-anders-aa-%s.out' % threads,
                       'w') as out_file:
                 invoke(args + ['--check-all'], out_file)
                 run_httpd('httpd.ac', out_file, threads)
-            with open('../online-httpd-ds-aa-delta-%s.out' % threads,
+            with open('../online-httpd-anders-aa-delta-%s.out' % threads,
                       'w') as out_file:
                 invoke(args + ['--baseline', 'basicaa', '--check-all'],
                        out_file)
                 run_httpd('httpd.ac', out_file, threads)
-            # with open('../online-httpd-ds-aa-deref-%s.out' % threads,
+            # # with open('../online-httpd-anders-aa-deref-%s.out' % threads,
+            # #           'w') as out_file:
+            # #     invoke(args, out_file)
+            # #     run_httpd('httpd.ac', out_file, threads)
+            # with open('../online-httpd-anders-aa-report-%s.out' % threads,
             #           'w') as out_file:
-            #     invoke(args, out_file)
-            #     run_httpd('httpd.ac', out_file, threads)
-            with open('../online-httpd-ds-aa-report-%s.out' % threads,
-                      'w') as out_file:
-                invoke(args + ['--check-all', '--action-if-missed', 'report'])
-                run_httpd('httpd.ac', out_file, threads, report=True)
-                shutil.move('apache-install/logs/error_log',
-                            ('../online-httpd-ds-aa-report-%s.error_log' %
-                             threads))
-            with open('../online-httpd-ds-aa-delta-report-%s.out' % threads,
-                      'w') as out_file:
-                invoke(args + ['--baseline', 'basicaa', '--check-all',
-                               '--action-if-missed', 'report'])
-                run_httpd('httpd.ac', out_file, threads, report=True)
-                shutil.move('apache-install/logs/error_log',
-                            ('../online-httpd-ds-aa-delta-report-%s.error_log' %
-                             threads))
-            # with open('../online-httpd-ds-aa-deref-report-%s.out' % threads,
-            #           'w') as out_file:
-            #     invoke(args + ['--action-if-missed', 'report'])
+            #     invoke(args + ['--check-all', '--action-if-missed', 'report'])
             #     run_httpd('httpd.ac', out_file, threads, report=True)
             #     shutil.move('apache-install/logs/error_log',
-            #                 ('../online-httpd-ds-aa-deref-report-%s.error_log'
-            #                  % threads))
-            with open(('../online-httpd-ds-aa-delta-deref-report-%s.out' %
-                       threads), 'w') as out_file:
-                invoke(args + ['--baseline', 'basicaa',
-                               '--action-if-missed', 'report'])
-                run_httpd('httpd.ac', out_file, threads, report=True)
-                shutil.move('apache-install/logs/error_log',
-                            ('../online-httpd-ds-aa-deref-report.error_log' %
-                             threads))
+            #                 ('../online-httpd-anders-aa-report-%s.error_log' %
+            #                  threads))
+            # with open('../online-httpd-anders-aa-delta-report-%s.out' % threads,
+            #           'w') as out_file:
+            #     invoke(args + ['--baseline', 'basicaa', '--check-all',
+            #                    '--action-if-missed', 'report'])
+            #     run_httpd('httpd.ac', out_file, threads, report=True)
+            #     shutil.move('apache-install/logs/error_log',
+            #                 ('../online-httpd-anders-aa-delta-report-%s.error_log' %
+            #                  threads))
+            # # with open('../online-httpd-anders-aa-deref-report-%s.out' % threads,
+            # #           'w') as out_file:
+            # #     invoke(args + ['--action-if-missed', 'report'])
+            # #     run_httpd('httpd.ac', out_file, threads, report=True)
+            # #     shutil.move('apache-install/logs/error_log',
+            # #                 ('../online-httpd-anders-aa-deref-report-%s.error_log'
+            # #                  % threads))
+            # with open(('../online-httpd-anders-aa-delta-deref-report-%s.out' %
+            #            threads), 'w') as out_file:
+            #     invoke(args + ['--baseline', 'basicaa',
+            #                    '--action-if-missed', 'report'])
+            #     run_httpd('httpd.ac', out_file, threads, report=True)
+            #     shutil.move('apache-install/logs/error_log',
+            #                 ('../online-httpd-anders-aa-delta-deref-report-%s.error_log' %
+            #                  threads))
     os.chdir('..')
 
 
@@ -183,11 +185,27 @@ def eval_online_mysql(threads='1'):
         # with open('../online-mysql-%s-sl.out' % aa, 'w') as out_file:
         #     invoke(args + ['--no-phi'], out_file)
         #     run_mysql('mysqld.ac', out_file)
-        if aa == 'ds-aa':
-            with open('../hybrid-mysql-ds-aa-delta-deref-%s.out' % threads,
+        if aa in ['ds-aa', 'anders-aa']:
+            with open('../hybrid-mysql-%s-delta-deref-%s.out' % (aa, threads),
                       'w') as out_file:
                 invoke(['dynaa_hybrid.py', 'mysqld', aa,
                         '--baseline', 'basicaa',
+                        '--offline-funcs', '_Z10MYSQLparsePv',],
+                       out_file)
+                run_mysql('mysqld.hybrid', out_file, threads)
+                pts_files = list(get_pts_files())
+                for pts_file in pts_files:
+                    out_file.write(pts_file + '\n')
+                    invoke(['time', 'dynaa_check_aa.py',
+                            '--disable-print-value',
+                            'mysqld.bc', pts_file, aa],
+                           out_file, redirect_stderr=True)
+            for pts_file in pts_files:
+                shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+        elif aa == 'basicaa':
+            with open('../hybrid-mysql-%s-deref-%s.out' % (aa, threads),
+                      'w') as out_file:
+                invoke(['dynaa_hybrid.py', 'mysqld', aa,
                         '--offline-funcs', '_Z10MYSQLparsePv',],
                        out_file)
                 run_mysql('mysqld.hybrid', out_file, threads)
@@ -230,8 +248,8 @@ def eval_offline_httpd(threads='1'):
                         '--disable-print-value',
                         'httpd.bc', pts_file, aa],
                        out_file, redirect_stderr=True)
-        if aa == 'ds-aa':
-            with open('../offline-httpd-ds-aa-delta-%s.out' % threads,
+        if aa == 'anders-aa':
+            with open('../offline-httpd-anders-aa-delta-%s.out' % threads,
                       'w') as out_file:
                 for pts_file in pts_files:
                     out_file.write(pts_file + '\n')
@@ -242,20 +260,20 @@ def eval_offline_httpd(threads='1'):
                            out_file, redirect_stderr=True)
     for pts_file in pts_files:
         shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
-    if 'ds-aa' in AAS:
+    if 'anders-aa' in AAS:
         with open('../offline-httpd-deref-%s.out' % threads,
                   'w') as out_file:
             invoke(['time', 'dynaa_hook_mem.py', 'httpd'], out_file)
             run_httpd('httpd.inst', out_file, threads)
         pts_files = list(get_pts_files())
-        # with open('../offline-httpd-ds-aa-deref-%s.out' % threads,
+        # with open('../offline-httpd-anders-aa-deref-%s.out' % threads,
         #           'w') as out_file:
         #     for pts_file in pts_files:
         #         out_file.write(pts_file + '\n')
         #         invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
         #                 'httpd.bc', pts_file, aa],
         #                out_file, redirect_stderr=True)
-        with open('../offline-httpd-ds-aa-delta-deref-%s.out' % threads,
+        with open('../offline-httpd-anders-aa-delta-deref-%s.out' % threads,
                   'w') as out_file:
             for pts_file in pts_files:
                 out_file.write(pts_file + '\n')
@@ -301,7 +319,7 @@ def main():
                         help='only eval the specified application')
     parser.add_argument('--aa', choices=AAS,
                         help='only eval the specified AA')
-    parser.add_argument('--threads', choices=['1', '4'], default='1',
+    parser.add_argument('--threads', choices=['1', '4'], default='4',
                         help='number of threads')
     parser.add_argument('--no-eval-baseline', action='store_true',
                         help='do not eval the baseline')
