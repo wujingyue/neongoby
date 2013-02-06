@@ -39,3 +39,7 @@ void LogDumper::processCall(const CallRecord &Record) {
 void LogDumper::processReturn(const ReturnRecord &Record) {
   printf("%u: return\n", Record.InstructionID);
 }
+
+void LogDumper::processBasicBlock(const BasicBlockRecord &Record) {
+  printf("%u: bb\n", Record.ValueID);
+}

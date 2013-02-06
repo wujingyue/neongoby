@@ -204,6 +204,16 @@ extern "C" void HookReturn(unsigned InsID) {
   pthread_mutex_unlock(&Global->Lock);
 }
 
+extern "C" void HookBasicBlock(unsigned ValueID) {
+  pthread_mutex_lock(&Global->Lock);
+  // fprintf(stderr, "HookBasicBlock(%u)\n", ValueID);
+  LogRecord Record;
+  Record.RecordType = LogRecord::BasicBlock;
+  Record.BBR.ValueID = ValueID;
+  PrintLogRecord(Record);
+  pthread_mutex_unlock(&Global->Lock);
+}
+
 extern "C" void HookVAStart(void *VAList) {
   struct TPVAList {
     int32_t gp_offset;

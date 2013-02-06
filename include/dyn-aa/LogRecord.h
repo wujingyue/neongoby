@@ -34,13 +34,18 @@ struct ReturnRecord {
   unsigned InstructionID;
 } __attribute__((packed));
 
+struct BasicBlockRecord {
+  unsigned ValueID;
+} __attribute__((packed));
+
 struct LogRecord {
   enum LogRecordType {
     MemAlloc,
     TopLevel,
     Store,
     Call,
-    Return
+    Return,
+    BasicBlock
   } __attribute__((packed));
 
   LogRecordType RecordType;
@@ -51,6 +56,7 @@ struct LogRecord {
     StoreRecord SR;
     CallRecord CR;
     ReturnRecord RR;
+    BasicBlockRecord BBR;
   };
 };
 } // namespace dyn_aa

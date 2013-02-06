@@ -19,6 +19,7 @@ struct LogProcessor {
   virtual void processStore(const StoreRecord &);
   virtual void processCall(const CallRecord &);
   virtual void processReturn(const ReturnRecord &);
+  virtual void processBasicBlock(const BasicBlockRecord &);
 
  private:
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);

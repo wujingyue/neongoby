@@ -58,6 +58,7 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   void processStore(const StoreRecord &Record);
   void processCall(const CallRecord &Record);
   void processReturn(const ReturnRecord &Record);
+  void processBasicBlock(const BasicBlockRecord &Record);
   static bool isCalledFunction(Function *F, CallSite CS);
   static Value *getOperandIfConstant(Value *V);
   Value *getLatestCommonAncestor();
