@@ -13,7 +13,8 @@ if __name__ == '__main__':
                         action = 'store_true',
                         default = False)
     parser.add_argument('--diagnose',
-                        help = 'instrument for test case reduction (False by default)',
+                        help = 'instrument for test case reduction and ' + \
+                               'trace slicing (False by default)',
                         action = 'store_true',
                         default = False)
     args = parser.parse_args()

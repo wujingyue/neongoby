@@ -65,39 +65,30 @@ void Reducer::reduceFunctions(Module &M) {
   }
   errs() << "# of total functions " << M.size() << "\n";
   errs() << "# of deleted functions " << M.size() - ExecutedFunctions.size()
-  << "\n";
+      << "\n";
 }
 
 void Reducer::reduceBasicBlocks(Module &M) {
   unsigned NumBasicBlocks = 0;
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
     if (!F->isDeclaration()) {
+      BasicBlock *UnreachableBB = BasicBlock::Create(F->getContext(), "", F);
+      new UnreachableInst(UnreachableBB->getContext(), UnreachableBB);
       for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
         ++NumBasicBlocks;
-        if (!ExecutedBasicBlocks.count(BB)
-            && BB->getTerminator()->getNumSuccessors()) {
-          // Loop over all of the successors of this block,
-          // deleting any PHI nodes that might include it.
-          for (succ_iterator SI = succ_begin(BB), E = succ_end(BB);
-               SI != E; ++SI)
-            (*SI)->removePredecessor(BB);
-
-          TerminatorInst *BBTerm = BB->getTerminator();
-
-          if (!BB->getTerminator()->getType()->isVoidTy())
-            BBTerm->replaceAllUsesWith(
-                Constant::getNullValue(BBTerm->getType()));
-
-          // Replace the old terminator instruction.
-          BB->getInstList().pop_back();
-          new UnreachableInst(BB->getContext(), BB);
+        for (succ_iterator SI = succ_begin(BB), E = succ_end(BB); SI != E;
+             ++SI) {
+          if (!ExecutedBasicBlocks.count(*SI)) {
+            BB->getTerminator()->setSuccessor(SI.getSuccessorIndex(),
+                                              UnreachableBB);
+          }
         }
       }
     }
   }
   errs() << "# of total basic blocks " << NumBasicBlocks << "\n";
   errs() << "# of deleted basic blocks "
-  << NumBasicBlocks - ExecutedBasicBlocks.size() << "\n";
+      << NumBasicBlocks - ExecutedBasicBlocks.size() << "\n";
 }
 
 bool Reducer::runOnModule(Module &M) {

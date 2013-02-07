@@ -97,7 +97,8 @@ static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
 
 static cl::opt<bool> Diagnose("diagnose",
-                              cl::desc("Instrument for test case reduction"));
+                              cl::desc("Instrument for test case reduction and "
+                                       "trace slicing"));
 
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
