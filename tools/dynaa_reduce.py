@@ -15,13 +15,13 @@ if __name__ == '__main__':
 
     cmd = dynaa_utils.load_all_plugins('opt')
 
-    cmd = ' '.join((cmd, '-reduce-testcase'))
-    cmd = ' '.join((cmd, '-prog-name', args.prog))
+    cmd = ' '.join((cmd, '-remove-untouched-code'))
+    cmd = ' '.join((cmd, '-simplifycfg'))
     for index, log in enumerate(args.logs):
         cmd = ' '.join((cmd, '-log-file', log))
     cmd = ' '.join((cmd, '-pointer-value', args.vid1))
     cmd = ' '.join((cmd, '-pointer-value', args.vid2))
-    cmd = ' '.join((cmd, '-o', '/tmp/out'))
+    cmd = ' '.join((cmd, '-o', args.prog + '.reduce.bc'))
     cmd = ' '.join((cmd, '<', args.prog + '.bc'))
     rcs_utils.invoke(cmd)
 

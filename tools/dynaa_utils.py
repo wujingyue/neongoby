@@ -9,6 +9,7 @@ def load_all_plugins(cmd):
     cmd = rcs_utils.load_plugin(cmd, 'DynAAAnalyses')
     cmd = rcs_utils.load_plugin(cmd, 'DynAACheckers')
     cmd = rcs_utils.load_plugin(cmd, 'DynAAInstrumenters')
+    cmd = rcs_utils.load_plugin(cmd, 'DynAATransforms')
     return cmd
 
 def load_aa(cmd, *aas):

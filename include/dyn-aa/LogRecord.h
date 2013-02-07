@@ -35,6 +35,8 @@ struct ReturnRecord {
 } __attribute__((packed));
 
 struct BasicBlockRecord {
+  // IDAssigner does not build a BasicBlockMapping,
+  // so we use ValueID to identify a basic block
   unsigned ValueID;
 } __attribute__((packed));
 

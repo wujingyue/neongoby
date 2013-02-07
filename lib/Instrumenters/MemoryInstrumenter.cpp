@@ -96,8 +96,8 @@ static RegisterPass<MemoryInstrumenter> X("instrument-memory",
 static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
 
-static cl::opt<bool> HookBasicBlocks("hook-basic-blocks",
-                                     cl::desc("Hook basic blocks"));
+static cl::opt<bool> Diagnose("diagnose",
+                              cl::desc("Instrument for test case reduction"));
 
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
@@ -596,7 +596,7 @@ bool MemoryInstrumenter::runOnModule(Module &M) {
     if (F->isVarArg())
       instrumentVarArgFunction(F);
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
-      if (HookBasicBlocks)
+      if (Diagnose)
         instrumentBasicBlock(BB);
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
         instrumentInstructionIfNecessary(I);
