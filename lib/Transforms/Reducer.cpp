@@ -79,11 +79,13 @@ void Reducer::reduceBasicBlocks(Module &M) {
         for (succ_iterator SI = succ_begin(BB), E = succ_end(BB); SI != E;
              ++SI) {
           if (!ExecutedBasicBlocks.count(*SI)) {
+            (*SI)->removePredecessor(BB);
             BB->getTerminator()->setSuccessor(SI.getSuccessorIndex(),
                                               UnreachableBB);
           }
         }
       }
+      --NumBasicBlocks;
     }
   }
   errs() << "# of total basic blocks " << NumBasicBlocks << "\n";
