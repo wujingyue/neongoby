@@ -17,7 +17,8 @@ if __name__ == '__main__':
 
     cmd = ' '.join((cmd, '-remove-untouched-code'))
     cmd = ' '.join((cmd, '-simplifycfg'))
-    cmd = ' '.join((cmd, '-strip'))
+    cmd = ' '.join((cmd, '-verify-reducer'))
+#    cmd = ' '.join((cmd, '-strip'))
     for index, log in enumerate(args.logs):
         cmd = ' '.join((cmd, '-log-file', log))
     cmd = ' '.join((cmd, '-pointer-value', args.vid1))

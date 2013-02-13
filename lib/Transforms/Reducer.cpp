@@ -4,12 +4,13 @@
 
 #include <string>
 
+#include "llvm/IntrinsicInst.h"
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/CFG.h"
-#include "llvm/ADT/DenseSet.h"
 
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
@@ -96,6 +97,28 @@ void Reducer::reduceBasicBlocks(Module &M) {
 bool Reducer::runOnModule(Module &M) {
   // get executed functions and basic blocks from pointer logs
   processLog();
+
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  Function *DeclareFn = Intrinsic::getDeclaration(&M, Intrinsic::dbg_declare);
+  IntegerType *IntType = IntegerType::get(M.getContext(), 32);
+  for (unsigned i = 0; i < 2; ++i) {
+    Value *V = IDA.getValue(ValueIDs[i]);
+    Constant *AliasID = ConstantInt::get(IntType, i);
+    if (Instruction *Inst = dyn_cast<Instruction>(V)) {
+      Inst->setMetadata("alias_id", MDNode::get(M.getContext(), AliasID));
+    } else {
+      Function *F;
+      if (Argument *A = dyn_cast<Argument>(V)) {
+        F = A->getParent();
+      } else {
+        F = M.getFunction("main");
+      }
+      Value *Args[] = { MDNode::get(V->getContext(), V),
+                        MDNode::get(M.getContext(), AliasID)};
+      Instruction *InsertBefore = F->getEntryBlock().getFirstNonPHI();
+      CallInst::Create(DeclareFn, Args, "", InsertBefore);
+    }
+  }
 
   // try to reduce the number of functions in the module to something small.
   reduceFunctions(M);
