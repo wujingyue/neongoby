@@ -37,6 +37,7 @@ struct Reducer: public ModulePass, public LogProcessor {
 
   void reduceFunctions(Module &M);
   void reduceBasicBlocks(Module &M);
+  void tagPointers(Module &M);
 };
 }
 
@@ -94,31 +95,35 @@ void Reducer::reduceBasicBlocks(Module &M) {
       << NumBasicBlocks - ExecutedBasicBlocks.size() << "\n";
 }
 
-bool Reducer::runOnModule(Module &M) {
-  // get executed functions and basic blocks from pointer logs
-  processLog();
-
+void Reducer::tagPointers(Module &M) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Function *DeclareFn = Intrinsic::getDeclaration(&M, Intrinsic::dbg_declare);
-  IntegerType *IntType = IntegerType::get(M.getContext(), 32);
   for (unsigned i = 0; i < 2; ++i) {
     Value *V = IDA.getValue(ValueIDs[i]);
-    Constant *AliasID = ConstantInt::get(IntType, i);
-    if (Instruction *Inst = dyn_cast<Instruction>(V)) {
-      Inst->setMetadata("alias_id", MDNode::get(M.getContext(), AliasID));
-    } else {
+    Instruction *Inst = dyn_cast<Instruction>(V);
+    if (!Inst) {
       Function *F;
       if (Argument *A = dyn_cast<Argument>(V)) {
         F = A->getParent();
       } else {
         F = M.getFunction("main");
+        assert(F);
       }
       Value *Args[] = { MDNode::get(V->getContext(), V),
-                        MDNode::get(M.getContext(), AliasID)};
-      Instruction *InsertBefore = F->getEntryBlock().getFirstNonPHI();
-      CallInst::Create(DeclareFn, Args, "", InsertBefore);
+                        MDNode::get(M.getContext(), NULL)};
+      Instruction *InsertBefore = F->getEntryBlock().getFirstInsertionPt();
+      Inst = CallInst::Create(DeclareFn, Args, "", InsertBefore);
     }
+    Inst->setMetadata("alias", MDNode::get(M.getContext(), NULL));
   }
+}
+
+bool Reducer::runOnModule(Module &M) {
+  // get executed functions and basic blocks from pointer logs
+  processLog();
+
+  // add metadata for input pointers
+  tagPointers(M);
 
   // try to reduce the number of functions in the module to something small.
   reduceFunctions(M);

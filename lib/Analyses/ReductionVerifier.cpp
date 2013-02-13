@@ -32,30 +32,21 @@ static RegisterPass<ReductionVerifier> X("verify-reducer",
                                          "the bug",
                                          false, // Is CFG Only?
                                          true); // Is Analysis?
-// Don't register to AliasAnalysis group. It would confuse CallGraphChecker
-// to use ReductionVerifier as the underlying AA to generate the call
-// graph.
-// static RegisterAnalysisGroup<AliasAnalysis> Y(X);
 
 char ReductionVerifier::ID = 0;
 
 bool ReductionVerifier::runOnModule(Module &M) {
-  Function *DeclareFn = Intrinsic::getDeclaration(&M, Intrinsic::dbg_declare);
-  for (Value::use_iterator UI = DeclareFn->use_begin();
-       UI != DeclareFn->use_end(); ++UI) {
-    User *Usr = *UI;
-    assert(isa<CallInst>(Usr) || isa<InvokeInst>(Usr));
-    CallSite CS(cast<Instruction>(Usr));
-    MDNode *MD = cast<MDNode>(CS.getArgument(0));
-    Value *V = MD->getOperand(0);
-    errs() << *V << "\n";
-  }
-
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
 		for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
 			for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
-        if (I->getMetadata("alias_id")) {
-          errs() << *I << "\n";
+        if (I->getMetadata("alias")) {
+          DbgDeclareInst *DDI = dyn_cast<DbgDeclareInst>(I);
+          if (DDI) {
+            Value *V = DDI->getAddress();
+            errs() << *V << "\n";
+          } else {
+            errs() << *I << "\n";
+          }
         }
 			}
 		}
