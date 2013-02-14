@@ -4,12 +4,13 @@
 
 #include <string>
 
+#include "llvm/IntrinsicInst.h"
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/CFG.h"
-#include "llvm/ADT/DenseSet.h"
 
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
@@ -36,6 +37,7 @@ struct Reducer: public ModulePass, public LogProcessor {
 
   void reduceFunctions(Module &M);
   void reduceBasicBlocks(Module &M);
+  void tagPointers(Module &M);
 };
 }
 
@@ -93,9 +95,35 @@ void Reducer::reduceBasicBlocks(Module &M) {
       << NumBasicBlocks - ExecutedBasicBlocks.size() << "\n";
 }
 
+void Reducer::tagPointers(Module &M) {
+  IDAssigner &IDA = getAnalysis<IDAssigner>();
+  Function *DeclareFn = Intrinsic::getDeclaration(&M, Intrinsic::dbg_declare);
+  for (unsigned i = 0; i < 2; ++i) {
+    Value *V = IDA.getValue(ValueIDs[i]);
+    Instruction *Inst = dyn_cast<Instruction>(V);
+    if (!Inst) {
+      Function *F;
+      if (Argument *A = dyn_cast<Argument>(V)) {
+        F = A->getParent();
+      } else {
+        F = M.getFunction("main");
+        assert(F);
+      }
+      Value *Args[] = { MDNode::get(V->getContext(), V),
+                        MDNode::get(M.getContext(), NULL)};
+      Instruction *InsertBefore = F->getEntryBlock().getFirstInsertionPt();
+      Inst = CallInst::Create(DeclareFn, Args, "", InsertBefore);
+    }
+    Inst->setMetadata("alias", MDNode::get(M.getContext(), NULL));
+  }
+}
+
 bool Reducer::runOnModule(Module &M) {
   // get executed functions and basic blocks from pointer logs
   processLog();
+
+  // add metadata for input pointers
+  tagPointers(M);
 
   // try to reduce the number of functions in the module to something small.
   reduceFunctions(M);
