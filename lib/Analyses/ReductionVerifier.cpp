@@ -10,7 +10,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "rcs/IDAssigner.h"
+#include "dyn-aa/BaselineAliasAnalysis.h"
 
 namespace dyn_aa {
 struct ReductionVerifier: public ModulePass {
@@ -24,7 +24,6 @@ struct ReductionVerifier: public ModulePass {
 
 using namespace std;
 using namespace llvm;
-using namespace rcs;
 using namespace dyn_aa;
 
 static RegisterPass<ReductionVerifier> X("verify-reducer",
@@ -36,26 +35,41 @@ static RegisterPass<ReductionVerifier> X("verify-reducer",
 char ReductionVerifier::ID = 0;
 
 bool ReductionVerifier::runOnModule(Module &M) {
+  Value *V[2];
+  unsigned ValueNum = 0;
   for (Module::iterator F = M.begin(); F != M.end(); ++F) {
-		for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
-			for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
+    for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
+      for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
         if (I->getMetadata("alias")) {
           DbgDeclareInst *DDI = dyn_cast<DbgDeclareInst>(I);
           if (DDI) {
-            Value *V = DDI->getAddress();
-            errs() << *V << "\n";
+            V[ValueNum++] = DDI->getAddress();
           } else {
-            errs() << *I << "\n";
+            V[ValueNum++] = I;
           }
         }
-			}
-		}
-	}
+      }
+    }
+  }
+  assert(ValueNum == 2);
+
+  AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
+  AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();
+  errs().changeColor(raw_ostream::RED);
+  errs() << "Reduction Verifier: ";
+  if (BaselineAA.alias(V[0], V[1]) != AliasAnalysis::NoAlias &&
+      AA.alias(V[0], V[1]) == AliasAnalysis::NoAlias) {
+    errs() << "Pass\n";
+  } else {
+    errs() << "Fail\n";
+  }
+  errs().resetColor();
 
   return false;
 }
 
 void ReductionVerifier::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
-  AU.addRequired<IDAssigner>();
+  AU.addRequired<AliasAnalysis>();
+  AU.addRequired<BaselineAliasAnalysis>();
 }
