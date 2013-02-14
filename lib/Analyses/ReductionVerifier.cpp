@@ -6,11 +6,16 @@
 #include "llvm/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "dyn-aa/BaselineAliasAnalysis.h"
+#include "dyn-aa/Utils.h"
+
+using namespace std;
+using namespace llvm;
+using namespace dyn_aa;
 
 namespace dyn_aa {
 struct ReductionVerifier: public ModulePass {
@@ -21,10 +26,6 @@ struct ReductionVerifier: public ModulePass {
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 }
-
-using namespace std;
-using namespace llvm;
-using namespace dyn_aa;
 
 static RegisterPass<ReductionVerifier> X("verify-reducer",
                                          "Verify whether reducer keeps "
@@ -52,13 +53,12 @@ bool ReductionVerifier::runOnModule(Module &M) {
       }
     }
   }
+  assert(ValueNum == 2);
 
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();
   errs().changeColor(raw_ostream::RED);
   errs() << "Reduction Verifier: ";
-  if (BaselineAA.alias(V[0], V[1]) != AliasAnalysis::NoAlias &&
-      AA.alias(V[0], V[1]) == AliasAnalysis::NoAlias) {
+  if (AA.alias(V[0], V[1]) == AliasAnalysis::NoAlias) {
     errs() << "Pass\n";
   } else {
     errs() << "Fail\n";
@@ -71,5 +71,4 @@ bool ReductionVerifier::runOnModule(Module &M) {
 void ReductionVerifier::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
   AU.addRequired<AliasAnalysis>();
-  AU.addRequired<BaselineAliasAnalysis>();
 }
