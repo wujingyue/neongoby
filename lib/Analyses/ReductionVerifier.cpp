@@ -41,6 +41,7 @@ bool ReductionVerifier::runOnModule(Module &M) {
     for (Function::iterator BB = F->begin(); BB != F->end(); ++BB) {
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); ++I) {
         if (I->getMetadata("alias")) {
+          assert(ValueNum < 2);
           DbgDeclareInst *DDI = dyn_cast<DbgDeclareInst>(I);
           if (DDI) {
             V[ValueNum++] = DDI->getAddress();
@@ -51,7 +52,6 @@ bool ReductionVerifier::runOnModule(Module &M) {
       }
     }
   }
-  assert(ValueNum == 2);
 
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
   AliasAnalysis &BaselineAA = getAnalysis<BaselineAliasAnalysis>();

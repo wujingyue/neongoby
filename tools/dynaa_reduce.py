@@ -48,9 +48,7 @@ if __name__ == '__main__':
     cmd = dynaa_utils.load_aa(cmd, args.aa)
 
     # Some AAs don't support inter-procedural alias queries.
-    # Add -intra or -baseline-intra option for them.
-    if dynaa_utils.supports_intra_proc_queries_only(args.aa):
-      cmd = ' '.join((cmd, '-intra'))
+    # Add -baseline-intra option for them.
     if dynaa_utils.supports_intra_proc_queries_only(args.baseline):
       cmd = ' '.join((cmd, '-baseline-intra'))
 
