@@ -835,6 +835,7 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
       // Instrument all call sites for debugging.
       // By default, when HookAllPointers is off, we don't instrument any
       // call site for performance reasons.
+      // TODO: skip call to intrinsics
       instrumentCallSite(CS);
     }
     // Instrument fork() to support multiprocess programs.

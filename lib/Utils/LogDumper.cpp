@@ -16,7 +16,6 @@ using namespace rcs;
 using namespace dyn_aa;
 
 void LogDumper::beforeProcess(const LogRecord &Record) {
-  printf("%16lx ", Record.ThreadID);
   switch (Record.RecordType) {
     case LogRecord::MemAlloc  : printf("[   alloc] "); break;
     case LogRecord::TopLevel  : printf("[ pointer] "); break;

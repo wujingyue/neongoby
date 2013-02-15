@@ -89,7 +89,7 @@ struct DynamicAliasAnalysis: public ModulePass,
   // context-sensitivity.
   unsigned NumInvocations;
   // Thread-specific call stack.
-  DenseMap<pthread_t, std::stack<unsigned> > CallStacks;
+  std::stack<unsigned> CallStack;
   // Pointers in PointingTo and BeingPointedBy. Indexed by invocation ID so that
   // we can quickly find out what pointers to delete when exiting a function.
   DenseMap<unsigned, std::vector<unsigned> > ActivePointers;
