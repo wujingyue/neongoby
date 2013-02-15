@@ -52,7 +52,6 @@ void LogProcessor::processLog(bool Reversed) {
     uint64_t OldNumBytesRead = NumBytesRead;
     ++NumRecords;
     NumBytesRead += sizeof Record;
-    CurrentThreadID = Record.ThreadID;
     beforeProcess(Record);
     switch (Record.RecordType) {
       case LogRecord::MemAlloc:

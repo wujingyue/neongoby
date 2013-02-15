@@ -50,7 +50,6 @@ struct LogRecord {
   } __attribute__((packed));
 
   LogRecordType RecordType;
-  pthread_t ThreadID;
   union {
     MemAllocRecord MAR;
     TopLevelRecord TLR;
