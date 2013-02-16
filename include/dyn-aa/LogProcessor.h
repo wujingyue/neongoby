@@ -13,7 +13,6 @@ struct LogProcessor {
 
   void processLog(bool Reversed = false);
   unsigned getCurrentRecordID() const { return CurrentRecordID; }
-  pthread_t getCurrentThreadID() const { return CurrentThreadID; }
 
   // By default, these call-back functions do nothing.
   virtual void beforeProcess(const LogRecord &) {}
@@ -30,7 +29,6 @@ struct LogProcessor {
   static off_t GetFileSize(FILE *LogFile);
 
   unsigned CurrentRecordID;
-  pthread_t CurrentThreadID;
 };
 }
 

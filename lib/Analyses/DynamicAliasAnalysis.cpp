@@ -100,11 +100,10 @@ void DynamicAliasAnalysis::processMemAlloc(const MemAllocRecord &Record) {
 
 void DynamicAliasAnalysis::processEnter(const EnterRecord &Record) {
   ++NumInvocations;
-  CallStacks[getCurrentThreadID()].push(NumInvocations);
+  CallStack.push(NumInvocations);
 }
 
 void DynamicAliasAnalysis::processReturn(const ReturnRecord &Record) {
-  stack<unsigned> &CallStack = CallStacks[getCurrentThreadID()];
   assert(!CallStack.empty());
   removePointingTo(CallStack.top());
   CallStack.pop();
@@ -132,7 +131,6 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
     }
 
     // Global variables are processed before any invocation.
-    stack<unsigned> &CallStack = CallStacks[getCurrentThreadID()];
     PointerTy Ptr(PointerVID, CallStack.empty() ? 0 : CallStack.top());
     AddressTy Loc(PointeeAddress, Version);
     addPointingTo(Ptr, Loc);

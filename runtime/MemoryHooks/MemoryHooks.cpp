@@ -11,11 +11,14 @@
 #include <cstring>
 #include <vector>
 #include <cassert>
+#include <signal.h>
 #include <string>
 #include <sstream>
 #include <unistd.h>
 #include <stack>
 #include <sys/file.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 
 #include "rcs/IDAssigner.h"
 
@@ -25,105 +28,139 @@ using namespace std;
 using namespace rcs;
 using namespace dyn_aa;
 
+static __thread FILE *MyLogFile = NULL;
+static vector<FILE *> LogFiles;
+static pthread_mutex_t Lock = PTHREAD_MUTEX_INITIALIZER;
+static __thread int NumActualArgs;
+// These two thread-specific flags are used to workaround the issue with signal
+// handling.
+static __thread bool IsLogging = false;
+static __thread bool DisableLogging = false;
+
 // TODO: store logs from each run in a separate directory named by the
 // timestamp. e.g., /tmp/pts-20121113-100535.
-struct Environment {
-  string GetLogFileName(int pid = 0) {
-    if (pid == 0)
-      pid = getpid();
-    const char *LogFileEnv = getenv("LOG_FILE");
-    string LogFileName;
-    if (!LogFileEnv) {
-      LogFileName = "/tmp/pts";
-    } else {
-      LogFileName = LogFileEnv;
-    }
-    ostringstream OS;
-    OS << LogFileName << "-" << pid;
-    return OS.str();
+string GetLogFileName(pid_t ThreadID) {
+  const char *LogFileEnv = getenv("LOG_FILE");
+  string LogFileName;
+  if (!LogFileEnv) {
+    LogFileName = "/tmp/pts";
+  } else {
+    LogFileName = LogFileEnv;
   }
+  ostringstream OS;
+  OS << LogFileName << "-" << ThreadID;
+  return OS.str();
+}
 
-  Environment() {
-    pthread_mutex_init(&Lock, NULL);
+string GetLogFileName() {
+  pid_t ThreadID = syscall(SYS_gettid);
+  return GetLogFileName(ThreadID);
+}
+
+// TODO: The Append flag is not necessary. We could just uniformly use "ab".
+void OpenLogFile(bool Append) {
+  MyLogFile = fopen(GetLogFileName().c_str(), Append ? "ab" : "wb");
+  if (!MyLogFile)
+    perror("fopen");
+  // cerr << "[" << getpid() << "] open " << GetLogFileName() << " as " << MyLogFile << "\n";
+  assert(MyLogFile);
+  pthread_mutex_lock(&Lock);
+  LogFiles.push_back(MyLogFile);
+  pthread_mutex_unlock(&Lock);
+}
+
+void OpenLogFileIfNecessary() {
+  if (!MyLogFile)
     OpenLogFile(false);
-    assert(LogFile && "fail to open log file");
-  }
-
-  ~Environment() {
-    CloseLogFile();
-  }
-
-  void CloseLogFile() {
-    fclose(LogFile);
-  }
-
-  void OpenLogFile(bool append) {
-    if (append)
-      LogFile = fopen(GetLogFileName().c_str(), "ab");
-    else
-      LogFile = fopen(GetLogFileName().c_str(), "wb");
-  }
-
-  void FlushLogFile() {
-    fflush(LogFile);
-  }
-
-  void LockLogFile() {
-    flock(fileno(LogFile), LOCK_EX);
-  }
-
-  void UnlockLogFile() {
-    flock(fileno(LogFile), LOCK_UN);
-  }
-
-  pthread_mutex_t Lock;
-  FILE *LogFile;
-};
-
-static Environment *Global;
-static __thread int NumActualArgs;
+}
 
 extern "C" void FinalizeMemHooks() {
-  delete Global;
+  pthread_mutex_lock(&Lock);
+  for (size_t i = 0; i < LogFiles.size(); ++i) {
+    // cerr << "[" << getpid() << "] close " << LogFiles[i] << "\n";
+    assert(LogFiles[i]);
+    fclose(LogFiles[i]);
+  }
+  pthread_mutex_unlock(&Lock);
 }
 
 extern "C" void InitMemHooks() {
-  Global = new Environment();
   atexit(FinalizeMemHooks);
 }
 
-// Must be called with Global->Lock held.
 void PrintLogRecord(const LogRecord &Record) {
-  fwrite(&Record, sizeof Record, 1, Global->LogFile);
+  // FIXME: Signal handler can happen anytime even if during the fwrite, causing
+  // the log to be broken. To workaround this issue, PrintLogRecord sets
+  // IsLogging at the beginning, and resets it at the end. If PrintLogRecord
+  // is entered with IsLogging on, the thread is probably inside a signal
+  // handler. In that case, we simply disable future logging. This approach is
+  // sure problematic because it misses logs, but it is not a big deal for now,
+  // because the signal is usually generated at the end of the execution when
+  // the user wants to terminate the server. A better approach would be to
+  // figure out statically which functions are signal handlers, and only disable
+  // logging inside the life cycles of these signal handlers.
+  if (IsLogging)
+    DisableLogging = true;
+  if (DisableLogging)
+    return;
+
+  IsLogging = true;
+  OpenLogFileIfNecessary();
+  size_t NumBytesWritten = fwrite(&Record, sizeof Record, 1, MyLogFile);
+  assert(NumBytesWritten == 1);
+  IsLogging = false;
 }
 
 extern "C" void HookBeforeFork() {
-  Global->FlushLogFile();
-  Global->LockLogFile();
+  // FIXME: MyLogFile can be empty if no log is written before forking.
+  // We assume there is only one running thread at the time of forking.
+  // Therefore, we don't have to protect LogFiles through the entire forking
+  // process.
+  for (size_t i = 0; i < LogFiles.size(); ++i) {
+    assert(LogFiles[i]);
+    fflush(LogFiles[i]);
+  }
+  assert(find(LogFiles.begin(), LogFiles.end(), MyLogFile) != LogFiles.end());
+  flock(fileno(MyLogFile), LOCK_EX);
 }
 
 extern "C" void HookAfterFork(int Result) {
   if (Result == 0) {
     // child process: wait for copy to finish, then open the log file
-    Global->CloseLogFile();
+    assert(find(LogFiles.begin(), LogFiles.end(), MyLogFile) != LogFiles.end());
+    for (size_t i = 0; i < LogFiles.size(); ++i) {
+      assert(LogFiles[i]);
+      fclose(LogFiles[i]);
+    }
 
-    string ParentLogFileName = Global->GetLogFileName(getppid());
+    string ParentLogFileName = GetLogFileName(getppid());
     FILE *ParentLogFile = fopen(ParentLogFileName.c_str(), "rb");
     if (ParentLogFile) {
+      // TODO: in what situation would ParentLogFile be NULL? Should we fail
+      // somehow in this situation?
       flock(fileno(ParentLogFile), LOCK_EX);
       flock(fileno(ParentLogFile), LOCK_UN);
       fclose(ParentLogFile);
     }
 
-    Global->OpenLogFile(true);
+    // The child process inherits LogFiles from the parent process, which are
+    // no longer valid. Therefore, we clear them.
+    // Grabbing the mutex here isn't necessary, because there should only be one
+    // thread running right after the fork.
+    LogFiles.clear();
+    // Although unlikely, DisableLogging may be set by the parent process. Reset
+    // it to false for this child process.
+    DisableLogging = false;
+    OpenLogFile(true);
+    assert(LogFiles.size() == 1);
   } else {
     // parent process: duplicate the log file, then unlock it
-    string ParentLogFileName = Global->GetLogFileName();
-    string ChildLogFileName = Global->GetLogFileName(Result);
+    string ParentLogFileName = GetLogFileName();
+    string ChildLogFileName = GetLogFileName(Result);
     string CmdLine = "cp " + ParentLogFileName + " " + ChildLogFileName;
     int Ret = system(CmdLine.c_str());
     assert(Ret == 0);
-    Global->UnlockLogFile();
+    flock(fileno(MyLogFile), LOCK_UN);
   }
 }
 
@@ -132,16 +169,13 @@ extern "C" void HookMemAlloc(unsigned ValueID,
                              unsigned long Bound) {
   // Bound is sometimes zero for array allocation.
   if (Bound > 0) {
-    pthread_mutex_lock(&Global->Lock);
     // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, StartAddr, Bound);
     LogRecord Record;
     Record.RecordType = LogRecord::MemAlloc;
-    Record.ThreadID = pthread_self();
     Record.MAR.Address = StartAddr;
     Record.MAR.Bound = Bound;
     Record.MAR.AllocatedBy = ValueID;
     PrintLogRecord(Record);
-    pthread_mutex_unlock(&Global->Lock);
   }
 }
 
@@ -153,62 +187,47 @@ extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],
 }
 
 extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
-  pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
   LogRecord Record;
   Record.RecordType = LogRecord::TopLevel;
-  Record.ThreadID = pthread_self();
   Record.TLR.PointerValueID = ValueID;
   Record.TLR.PointeeAddress = Value;
   Record.TLR.LoadedFrom = Pointer;
   PrintLogRecord(Record);
-  pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookEnter(unsigned FuncID) {
-  pthread_mutex_lock(&Global->Lock);
   LogRecord Record;
   Record.RecordType = LogRecord::Enter;
-  Record.ThreadID = pthread_self();
   Record.ER.FunctionID = FuncID;
   PrintLogRecord(Record);
-  pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookStore(void *Value, void *Pointer, unsigned InsID) {
-  pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookStore(%p, %p, %u)\n", Value, Pointer, InsID);
   LogRecord Record;
   Record.RecordType = LogRecord::Store;
-  Record.ThreadID = pthread_self();
   Record.SR.PointerAddress = Pointer;
   Record.SR.PointeeAddress = Value;
   Record.SR.InstructionID = InsID;
   PrintLogRecord(Record);
-  pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookCall(unsigned InsID, int NumArgs) {
-  pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumArgs);
   LogRecord Record;
   Record.RecordType = LogRecord::Call;
-  Record.ThreadID = pthread_self();
   Record.CR.InstructionID = InsID;
   PrintLogRecord(Record);
-  pthread_mutex_unlock(&Global->Lock);
   NumActualArgs = NumArgs;
 }
 
 extern "C" void HookReturn(unsigned InsID) {
-  pthread_mutex_lock(&Global->Lock);
   // fprintf(stderr, "HookReturn(%u)\n", InsID);
   LogRecord Record;
   Record.RecordType = LogRecord::Return;
-  Record.ThreadID = pthread_self();
   Record.RR.InstructionID = InsID;
   PrintLogRecord(Record);
-  pthread_mutex_unlock(&Global->Lock);
 }
 
 extern "C" void HookVAStart(void *VAList) {

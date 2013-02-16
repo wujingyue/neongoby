@@ -12,5 +12,5 @@ if __name__ == '__main__':
                         default = '/tmp')
     args = parser.parse_args()
 
-    os.system('rm -f ' + args.dir + '/pts-*')
-    os.system('rm -f ' + args.dir + '/report-*')
+    os.system('rm ' + args.dir + '/pts-*')
+    os.system('rm ' + args.dir + '/report-*')
