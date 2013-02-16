@@ -94,6 +94,9 @@ static RegisterPass<MemoryInstrumenter> X("instrument-memory",
 
 static cl::opt<bool> HookAllPointers("hook-all-pointers",
                                      cl::desc("Hook all pointers"));
+static cl::opt<bool> Diagnose("diagnose",
+                              cl::desc("Instrument for test case reduction and "
+                                       "trace slicing"));
 
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
@@ -810,11 +813,9 @@ void MemoryInstrumenter::instrumentInstructionIfNecessary(Instruction *I) {
     Function *Callee = CS.getCalledFunction();
     if (Callee && DynAAUtils::IsMalloc(Callee))
       instrumentMalloc(CS);
-    if (HookAllPointers || Callee == NULL || Callee->isVarArg()) {
-      // Instrument all call sites for debugging.
-      // By default, when HookAllPointers is off, we don't instrument any
-      // call site for performance reasons.
-      // TODO: skip call to intrinsics
+    if (Diagnose || Callee == NULL || Callee->isVarArg()) {
+      // Instrument a callsite if we are in the diagnosis mode (for TraceSlicer
+      // and Reducer), or it has variable length arguments.
       instrumentCallSite(CS);
     }
     // Instrument fork() to support multiprocess programs.
