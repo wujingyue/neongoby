@@ -94,8 +94,8 @@ void DynamicAliasAnalysis::updateVersion(void *Start,
 void DynamicAliasAnalysis::initialize() {
   AddressVersion.clear();
   CurrentVersion = 0;
-  BeingPointedBy.clear();
-  PointingTo.clear();
+  PointedBy.clear();
+  PointsTo.clear();
   // Do not clear Aliases, PointersVersionUnknown, and AddressVersionUnknown.
   NumInvocations = 0;
   // std::stack doesn't have clear().
@@ -118,7 +118,7 @@ void DynamicAliasAnalysis::processEnter(const EnterRecord &Record) {
 
 void DynamicAliasAnalysis::processReturn(const ReturnRecord &Record) {
   assert(!CallStack.empty());
-  removePointingTo(CallStack.top());
+  removePointsTo(CallStack.top());
   CallStack.pop();
 }
 
@@ -146,11 +146,11 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
     // Global variables are processed before any invocation.
     PointerTy Ptr(PointerVID, CallStack.empty() ? 0 : CallStack.top());
     AddressTy Loc(PointeeAddress, Version);
-    addPointingTo(Ptr, Loc);
+    addPointsTo(Ptr, Loc);
 
     // Report aliases.
-    PointedByMapTy::iterator I = BeingPointedBy.find(Loc);
-    assert(I != BeingPointedBy.end()); // We just added a point-to in.
+    PointedByMapTy::iterator I = PointedBy.find(Loc);
+    assert(I != PointedBy.end()); // We just added a point-to in.
     if (Version != UnknownVersion &&
         I->second.size() > MaxNumPointersToSameLocation) {
       MaxNumPointersToSameLocation = I->second.size();
@@ -160,35 +160,35 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
 }
 
 void DynamicAliasAnalysis::removePointedBy(PointerTy Ptr, AddressTy Loc) {
-  PointedByMapTy::iterator J = BeingPointedBy.find(Loc);
-  assert(J != BeingPointedBy.end());
+  PointedByMapTy::iterator J = PointedBy.find(Loc);
+  assert(J != PointedBy.end());
   J->second.erase(Ptr);
 }
 
-void DynamicAliasAnalysis::removePointingTo(PointerTy Ptr) {
-  PointsToMapTy::iterator I = PointingTo.find(Ptr);
-  if (I != PointingTo.end()) {
+void DynamicAliasAnalysis::removePointsTo(PointerTy Ptr) {
+  PointsToMapTy::iterator I = PointsTo.find(Ptr);
+  if (I != PointsTo.end()) {
     ++NumRemoveOps;
     removePointedBy(I->first, I->second);
-    PointingTo.erase(I);
+    PointsTo.erase(I);
   }
 }
 
-void DynamicAliasAnalysis::removePointingTo(unsigned InvocationID) {
+void DynamicAliasAnalysis::removePointsTo(unsigned InvocationID) {
   DenseMap<unsigned, vector<unsigned> >::iterator I =
       ActivePointers.find(InvocationID);
   if (I != ActivePointers.end()) {
     for (size_t i = 0; i < I->second.size(); ++i)
-      removePointingTo(PointerTy(I->second[i], InvocationID));
+      removePointsTo(PointerTy(I->second[i], InvocationID));
     ActivePointers.erase(I);
   }
 }
 
-void DynamicAliasAnalysis::addPointingTo(PointerTy Ptr, AddressTy Loc) {
+void DynamicAliasAnalysis::addPointsTo(PointerTy Ptr, AddressTy Loc) {
   ++NumInsertOps;
-  removePointingTo(Ptr);
-  PointingTo[Ptr] = Loc;
-  BeingPointedBy[Loc].insert(Ptr);
+  removePointsTo(Ptr);
+  PointsTo[Ptr] = Loc;
+  PointedBy[Loc].insert(Ptr);
   ActivePointers[Ptr.second].push_back(Ptr.first);
 }
 

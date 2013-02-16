@@ -50,11 +50,11 @@ struct DynamicAliasAnalysis: public ModulePass,
   // Returns the current version of <Addr>.
   unsigned lookupAddress(void *Addr) const;
   void updateVersion(void *Start, unsigned long Bound, unsigned Version);
-  void removePointingTo(unsigned InvocationID);
-  void removePointingTo(PointerTy Ptr);
-  // Helper function called by removePointingTo.
+  void removePointsTo(unsigned InvocationID);
+  void removePointsTo(PointerTy Ptr);
+  // Helper function called by removePointsTo.
   void removePointedBy(PointerTy Ptr, AddressTy Loc);
-  void addPointingTo(PointerTy Ptr, AddressTy Loc);
+  void addPointsTo(PointerTy Ptr, AddressTy Loc);
   // A convenient wrapper for a batch of reports.
   void addAliasPairs(PointerTy P, const DenseSet<PointerTy> &Qs);
   // Adds two values to DidAlias if their contexts match.
@@ -69,12 +69,9 @@ struct DynamicAliasAnalysis: public ModulePass,
   // not enough to claim two pointers alias.
   std::map<Interval, unsigned> AddressVersion;
   unsigned CurrentVersion;
-  // (address, version) => vid
-  // <address> at version <version> is being pointed by <vid>.
-  PointedByMapTy BeingPointedBy;
-  // vid => (address, version)
-  // Value <vid> is pointing to <address> at version <version>.
-  PointsToMapTy PointingTo;
+  // 2-way mapping indicating the current address of each pointer
+  PointedByMapTy PointedBy;
+  PointsToMapTy PointsTo;
   // Stores all alias pairs.
   DenseSet<rcs::ValuePair> Aliases;
   // Pointers that ever point to unversioned addresses.
@@ -87,7 +84,7 @@ struct DynamicAliasAnalysis: public ModulePass,
   unsigned NumInvocations;
   // Thread-specific call stack.
   std::stack<unsigned> CallStack;
-  // Pointers in PointingTo and BeingPointedBy. Indexed by invocation ID so that
+  // Pointers in PointsTo and PointedBy. Indexed by invocation ID so that
   // we can quickly find out what pointers to delete when exiting a function.
   DenseMap<unsigned, std::vector<unsigned> > ActivePointers;
 };
