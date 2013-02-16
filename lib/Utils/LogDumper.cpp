@@ -15,7 +15,7 @@ using namespace llvm;
 using namespace rcs;
 using namespace dyn_aa;
 
-void LogDumper::beforeProcess(const LogRecord &Record) {
+void LogDumper::beforeRecord(const LogRecord &Record) {
   switch (Record.RecordType) {
     case LogRecord::MemAlloc  : printf("[   alloc] "); break;
     case LogRecord::TopLevel  : printf("[ pointer] "); break;

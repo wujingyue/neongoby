@@ -14,8 +14,28 @@ struct LogProcessor {
   void processLog(bool Reversed = false);
   unsigned getCurrentRecordID() const { return CurrentRecordID; }
 
-  // By default, these call-back functions do nothing.
-  virtual void beforeProcess(const LogRecord &) {}
+  // initialize is called before processing each log file, and finalize is
+  // called after processing each log file.
+  virtual void initialize() {}
+  virtual void finalize() {}
+  // beforeRecord is called before processing each log record, and afterRecord
+  // is called after processing each log record. Therefore, a typical callback
+  // flow is:
+  //
+  // initialize
+  // beforeRecord
+  // processXXX
+  // afterRecord
+  // ...
+  // beforeRecord
+  // processXXX
+  // afterRecord
+  // finailize
+  // initialize
+  // ...
+  virtual void beforeRecord(const LogRecord &) {}
+  virtual void afterRecord(const LogRecord &) {}
+  // callback function on each record type
   virtual void processMemAlloc(const MemAllocRecord &) {}
   virtual void processTopLevel(const TopLevelRecord &) {}
   virtual void processEnter(const EnterRecord &) {}
@@ -23,7 +43,6 @@ struct LogProcessor {
   virtual void processCall(const CallRecord &) {}
   virtual void processReturn(const ReturnRecord &) {}
   virtual void processBasicBlock(const BasicBlockRecord &) {}
-  virtual void afterProcess(const LogRecord &) {}
 
  private:
   void processLog(const std::string &LogFileName, bool Reversed);

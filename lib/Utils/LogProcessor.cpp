@@ -44,13 +44,15 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
   assert(LogFile && "The log file doesn't exist.");
   errs().changeColor(raw_ostream::BLUE);
-  errs() << "Processing log: " << LogFileName << " ...\n";
+  errs() << "Processing log " << LogFileName << " ...\n";
   errs().resetColor();
 
   if (Reversed) {
     // Set the file position to the end.
     fseek(LogFile, 0, SEEK_END);
   }
+
+  initialize();
 
   uint64_t FileSize = GetFileSize(LogFile);
   uint64_t NumBytesRead = 0;
@@ -62,7 +64,7 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
     uint64_t OldNumBytesRead = NumBytesRead;
     ++NumRecords;
     NumBytesRead += sizeof Record;
-    beforeProcess(Record);
+    beforeRecord(Record);
     switch (Record.RecordType) {
       case LogRecord::MemAlloc:
         processMemAlloc(Record.MAR);
@@ -93,7 +95,7 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
         ++NumBasicBlockRecords;
         break;
     }
-    afterProcess(Record);
+    afterRecord(Record);
     ++CurrentRecordID;
     DynAAUtils::PrintProgressBar(OldNumBytesRead, NumBytesRead, FileSize);
   }
@@ -107,6 +109,8 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
     errs() << "Try to process as much log as possible.\n";
     errs().resetColor();
   }
+
+  finalize();
 
   fclose(LogFile);
 }
