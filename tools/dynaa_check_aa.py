@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description = 'Check the soundness of the specified AA')
     parser.add_argument('bc', help = 'the bitcode of the program')
-    parser.add_argument('log', help = 'the point-to log (.pts)')
+    parser.add_argument('logs', nargs='+', help = 'point-to logs (.pts)')
     parser.add_argument('aa',
                         help = 'the checked alias analysis: ' + \
                                 str(dynaa_utils.get_aa_choices()),
@@ -63,7 +63,8 @@ if __name__ == '__main__':
         cmd = ' '.join((cmd, '-baseline-intra'))
 
     cmd = ' '.join((cmd, '-check-aa'))
-    cmd = ' '.join((cmd, '-log-file', args.log))
+    for log in args.logs:
+        cmd = ' '.join((cmd, '-log-file', log))
     # cmd = ' '.join((cmd, '-output-dyn-aliases', '/tmp/dyn-aliases'))
     if args.check_all or args.root_only:
         cmd = ' '.join((cmd, '-check-all-pointers'))

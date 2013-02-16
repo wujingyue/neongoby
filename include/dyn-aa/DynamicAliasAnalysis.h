@@ -28,10 +28,7 @@ struct DynamicAliasAnalysis: public ModulePass,
   static char ID;
   static const unsigned UnknownVersion;
 
-  DynamicAliasAnalysis(): ModulePass(ID) {
-    CurrentVersion = 0;
-    NumInvocations = 0;
-  }
+  DynamicAliasAnalysis(): ModulePass(ID) {}
   virtual bool runOnModule(Module &M);
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 
@@ -40,14 +37,14 @@ struct DynamicAliasAnalysis: public ModulePass,
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
 
   // Interfaces of LogProcessor.
+  // TODO: use override keyward
   void processMemAlloc(const MemAllocRecord &Record);
   void processTopLevel(const TopLevelRecord &Record);
   void processEnter(const EnterRecord &Record);
   void processReturn(const ReturnRecord &Record);
+  void initialize();
 
-  const DenseSet<rcs::ValuePair> &getAllAliases() const {
-    return Aliases;
-  }
+  const DenseSet<rcs::ValuePair> &getAllAliases() const { return Aliases; }
 
  private:
   // Returns the current version of <Addr>.

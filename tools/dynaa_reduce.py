@@ -8,7 +8,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description = 'Reduce testcase for alias pointers')
     parser.add_argument('prog', help = 'the program name (e.g. mysqld)')
-    parser.add_argument('logs', nargs='+', help = 'the point-to log (.pts)')
+    parser.add_argument('logs', nargs='+', help = 'point-to logs (.pts)')
     parser.add_argument('aa',
                         help = 'the checked alias analysis: ' + \
                         str(dynaa_utils.get_aa_choices()),
@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     cmd = ' '.join((cmd, '-verify-reducer'))
     cmd = ' '.join((cmd, '-strip'))
-    for index, log in enumerate(args.logs):
+    for log in args.logs:
         cmd = ' '.join((cmd, '-log-file', log))
     cmd = ' '.join((cmd, '-pointer-value', args.vid1))
     cmd = ' '.join((cmd, '-pointer-value', args.vid2))

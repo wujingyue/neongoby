@@ -91,6 +91,19 @@ void DynamicAliasAnalysis::updateVersion(void *Start,
   assert(lookupAddress(Start) == Version);
 }
 
+void DynamicAliasAnalysis::initialize() {
+  AddressVersion.clear();
+  CurrentVersion = 0;
+  BeingPointedBy.clear();
+  PointingTo.clear();
+  // Do not clear Aliases, PointersVersionUnknown, and AddressVersionUnknown.
+  NumInvocations = 0;
+  // std::stack doesn't have clear().
+  while (!CallStack.empty())
+    CallStack.pop();
+  ActivePointers.clear();
+}
+
 void DynamicAliasAnalysis::processMemAlloc(const MemAllocRecord &Record) {
   updateVersion(Record.Address, Record.Bound, CurrentVersion);
   ++CurrentVersion;
