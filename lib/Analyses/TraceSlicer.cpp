@@ -33,13 +33,19 @@ static cl::list<unsigned> StartingValueIDs(
     "starting-value",
     cl::desc("Value IDs of the two pointers"));
 
+static cl::opt<bool> SliceForReduction("slice-for-reduction",
+                                       cl::desc("Slice for reduction"));
+
+static cl::opt<unsigned> LogFileIndex("log-file-index",
+                                       cl::desc("Log file index"));
+
 static RegisterPass<TraceSlicer> X("slice-trace",
                                    "Slice trace of two input pointers",
                                    false, // Is CFG Only?
                                    true); // Is Analysis?
 
 struct RecordFinder: public LogProcessor {
-  RecordFinder(): RecordID1(-1), RecordID2(-1) {}
+  RecordFinder() {}
 
   void processTopLevel(const TopLevelRecord &Record) {
     if (StartingRecordIDs.size() == 2) {
@@ -47,21 +53,35 @@ struct RecordFinder: public LogProcessor {
       return;
     }
     if (Record.PointerValueID == StartingValueIDs[0]) {
+      Filled1 = true;
       RecordID1 = getCurrentRecordID();
       Address1 = Record.PointeeAddress;
     }
     if (Record.PointerValueID == StartingValueIDs[1]) {
+      Filled2 = true;
       RecordID2 = getCurrentRecordID();
       Address2 = Record.PointeeAddress;
     }
-    if (Address1 == Address2) {
+    if (Filled1 && Filled2 && Address1 == Address2) {
       StartingRecordIDs.push_back(RecordID1);
       StartingRecordIDs.push_back(RecordID2);
       assert(StartingRecordIDs.size() == 2);
     }
   }
 
+  void initilize() {
+    Filled1 = false;
+    Filled2 = false;
+  }
+
+  void finalize() {
+    if (StartingRecordIDs.size() == 2) {
+      endProcessing();
+    }
+  }
+
  private:
+  bool Filled1, Filled2;
   unsigned RecordID1, RecordID2;
   void *Address1, *Address2;
 };
@@ -82,10 +102,13 @@ bool TraceSlicer::runOnModule(Module &M) {
     RecordFinder RF;
     RF.processLog();
     CurrentRecordID = RF.getCurrentRecordID();
+    LogFileIndex = RF.getCurrentFileIndex();
   } else {
+    if (!LogFileIndex)
+      LogFileIndex = 0;
     errs() << "Counting log records...\n";
     LogCounter LC;
-    LC.processLog();
+    LC.processSingleLog(LogFileIndex);
     CurrentRecordID = LC.getNumLogRecords();
   }
 
@@ -94,7 +117,10 @@ bool TraceSlicer::runOnModule(Module &M) {
     Trace[i].StartingRecordID = StartingRecordIDs[i];
 
   errs() << "Backward slicing...\n";
-  processLog(true);
+  processSingleLog(LogFileIndex, true);
+
+  if (SliceForReduction)
+    print(errs(), &M);
 
   return false;
 }
@@ -166,20 +192,21 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
   CurrentRecord.PointeeAddress = Record.PointeeAddress;
   CurrentRecord.PointerAddress = Record.LoadedFrom;
 
+  Function *ContainingFunction = NULL;
+  if (Argument *A = dyn_cast<Argument>(V))
+    ContainingFunction = A->getParent();
+  else if (Instruction *I = dyn_cast<Instruction>(V))
+    ContainingFunction = I->getParent()->getParent();
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     if (Trace[PointerLabel].StartingRecordID == CurrentRecordID) {
-      // set StartingFunction
-      if (Argument *A = dyn_cast<Argument>(V))
-        Trace[PointerLabel].StartingFunction = A->getParent();
-      else if (Instruction *I = dyn_cast<Instruction>(V))
-        Trace[PointerLabel].StartingFunction = I->getParent()->getParent();
-      else
-        Trace[PointerLabel].StartingFunction = NULL;
-
+      // first value found
+      Trace[PointerLabel].StartingFunction = ContainingFunction;
       Trace[PointerLabel].Active = true;
       Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                     CurrentRecord.V));
       Trace[PointerLabel].PreviousRecord = CurrentRecord;
+      CurrentFunction = ContainingFunction;
       NumContainingSlices++;
     } else if (Trace[PointerLabel].Active) {
       pair<bool, bool> Result = dependsOn(CurrentRecord,
@@ -189,14 +216,23 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                       CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
+        CurrentFunction = ContainingFunction;
         NumContainingSlices++;
       }
     }
   }
   // If two sliced traces meet, we stop tracking
-  if (NumContainingSlices == 2) {
+  if (!SliceForReduction && NumContainingSlices == 2) {
     Trace[0].Active = false;
     Trace[1].Active = false;
+  }
+}
+
+void TraceSlicer::processEnter(const EnterRecord &Record) {
+  CurrentRecordID--;
+  for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+    // Starting record must be a TopLevel record
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
   }
 }
 
@@ -222,6 +258,7 @@ void TraceSlicer::processStore(const StoreRecord &Record) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                       CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
+        CurrentFunction = I->getParent()->getParent();
         NumContainingSlices++;
       }
     }
@@ -239,6 +276,15 @@ void TraceSlicer::processCall(const CallRecord &Record) {
   LogRecordInfo CurrentRecord;
   CurrentRecord.V = I;
 
+  // get all related function calls for reduction
+  if (isCalledFunction(CurrentFunction, CS)) {
+    CurrentFunction = I->getParent()->getParent();
+    if (SliceForReduction) {
+      Trace[0].Slice.push_back(make_pair(CurrentRecordID, CurrentRecord.V));
+      Trace[1].Slice.push_back(make_pair(CurrentRecordID, CurrentRecord.V));
+    }
+  }
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
@@ -247,8 +293,9 @@ void TraceSlicer::processCall(const CallRecord &Record) {
                                           Trace[PointerLabel].PreviousRecord);
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
-        Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                      CurrentRecord.V));
+        if (!SliceForReduction)
+          Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                        CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
         NumContainingSlices++;
       }
@@ -281,7 +328,7 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
         NumContainingSlices++;
       } else {
         // print return instruction of the starting function
-        if (I->getParent()->getParent() ==
+        if (!SliceForReduction && I->getParent()->getParent() ==
             Trace[PointerLabel].StartingFunction) {
           Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                         CurrentRecord.V));
@@ -365,6 +412,8 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
 }
 
 bool TraceSlicer::isCalledFunction(Function *F, CallSite CS) {
+  if (!F)
+    return false;
   if (CS.getCalledFunction() != NULL)
     return F == CS.getCalledFunction();
   // if CS call a value, judge by comparing return type and argument type

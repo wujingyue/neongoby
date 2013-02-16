@@ -35,9 +35,18 @@ STATISTIC(NumRecords, "Number of all records");
 
 void LogProcessor::processLog(bool Reversed) {
   assert(LogFileNames.size() && "Didn't specify the log file.");
-  for (unsigned i = 0; i < LogFileNames.size(); i++) {
-    processLog(LogFileNames[i], Reversed);
+  EndProcessing = false;
+  for (CurrentFileIndex = 0; CurrentFileIndex < LogFileNames.size();
+      CurrentFileIndex++) {
+    processLog(LogFileNames[CurrentFileIndex], Reversed);
+    if (EndProcessing)
+      break;
   }
+}
+
+void LogProcessor::processSingleLog(unsigned LogFileIndex, bool Reversed) {
+  assert(LogFileIndex < LogFileNames.size() && "Log file index out of range.");
+  processLog(LogFileNames[LogFileIndex], Reversed);
 }
 
 void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
