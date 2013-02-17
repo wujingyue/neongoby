@@ -13,11 +13,6 @@ AAS = ['basicaa', 'anders-aa', 'ds-aa']
 APPS_DIR = os.getenv('APPS_DIR')
 
 
-def is_useful(line):
-    return ('Congrats' in line or 'Detected' in line or
-            'CPU' in line or 'swap' in line)
-
-
 def invoke(args, out_file=None, redirect_stderr=False, is_mysqld=False):
     sys.stdout.write('\033[0;32m%s\033[m\n' % string.join(args))
     if is_mysqld:
@@ -28,20 +23,16 @@ def invoke(args, out_file=None, redirect_stderr=False, is_mysqld=False):
         else:
             if redirect_stderr:
                 out = subprocess.check_output(args, stderr=subprocess.STDOUT)
-                # sys.stdout.write(out)
-                # useful = [line for line in out.splitlines() if is_useful(line)]
-                # out = '\n'.join(useful) + '\n'
             else:
                 out = subprocess.check_output(args)
-                # sys.stdout.write(out)
             out_file.write(out)
             sys.stdout.write(out)
 
 
 def get_pts_files():
-    for filename in os.listdir('/mnt/sdb/dyn-aa'):
+    for filename in os.listdir('/mnt/sdc/dyn-aa'):
         if filename.startswith('pts'):
-            yield os.path.join('/mnt/sdb/dyn-aa', filename)
+            yield os.path.join('/mnt/sdc/dyn-aa', filename)
 
 
 def run_httpd(executable, out_file, threads='1', report=False):
@@ -194,14 +185,11 @@ def eval_online_mysql(threads='1'):
                        out_file)
                 run_mysql('mysqld.hybrid', out_file, threads)
                 pts_files = list(get_pts_files())
-                for pts_file in pts_files:
-                    out_file.write(pts_file + '\n')
-                    invoke(['time', 'dynaa_check_aa.py',
-                            '--disable-print-value',
-                            'mysqld.bc', pts_file, aa],
-                           out_file, redirect_stderr=True)
+                invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
+                        'mysqld.bc'] + pts_files + [aa],
+                       out_file, redirect_stderr=True)
             for pts_file in pts_files:
-                shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+                shutil.move(pts_file, '/mnt/sdc/dyn-aa/backup')
         elif aa == 'basicaa':
             with open('../hybrid-mysql-%s-deref-%s.out' % (aa, threads),
                       'w') as out_file:
@@ -210,14 +198,11 @@ def eval_online_mysql(threads='1'):
                        out_file)
                 run_mysql('mysqld.hybrid', out_file, threads)
                 pts_files = list(get_pts_files())
-                for pts_file in pts_files:
-                    out_file.write(pts_file + '\n')
-                    invoke(['time', 'dynaa_check_aa.py',
-                            '--disable-print-value',
-                            'mysqld.bc', pts_file, aa],
-                           out_file, redirect_stderr=True)
+                invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
+                        'mysqld.bc'] + pts_files + [aa],
+                       out_file, redirect_stderr=True)
             for pts_file in pts_files:
-                shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+                shutil.move(pts_file, '/mnt/sdc/dyn-aa/backup')
         elif aa == 'basicaa':
             with open('../online-mysql-basicaa-deref-%s.out' % threads,
                       'w') as out_file:
@@ -242,24 +227,18 @@ def eval_offline_httpd(threads='1'):
     for aa in AAS:
         with open('../offline-httpd-%s-%s.out' % (aa, threads),
                   'w') as out_file:
-            for pts_file in pts_files:
-                out_file.write(pts_file + '\n')
-                invoke(['time', 'dynaa_check_aa.py', '--check-all',
-                        '--disable-print-value',
-                        'httpd.bc', pts_file, aa],
-                       out_file, redirect_stderr=True)
+            invoke(['time', 'dynaa_check_aa.py', '--check-all',
+                    '--disable-print-value', 'httpd.bc'] + pts_files + [aa],
+                   out_file, redirect_stderr=True)
         if aa == 'anders-aa':
             with open('../offline-httpd-anders-aa-delta-%s.out' % threads,
                       'w') as out_file:
-                for pts_file in pts_files:
-                    out_file.write(pts_file + '\n')
-                    invoke(['time', 'dynaa_check_aa.py', '--check-all',
-                            '--baseline', 'basicaa',
-                            '--disable-print-value',
-                            'httpd.bc', pts_file, aa],
-                           out_file, redirect_stderr=True)
+                invoke(['time', 'dynaa_check_aa.py', '--check-all',
+                        '--baseline', 'basicaa', '--disable-print-value',
+                        'httpd.bc'] + pts_files + [aa],
+                       out_file, redirect_stderr=True)
     for pts_file in pts_files:
-        shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+        shutil.move(pts_file, '/mnt/sdc/dyn-aa/backup')
     if 'anders-aa' in AAS:
         with open('../offline-httpd-deref-%s.out' % threads,
                   'w') as out_file:
@@ -275,15 +254,13 @@ def eval_offline_httpd(threads='1'):
         #                out_file, redirect_stderr=True)
         with open('../offline-httpd-anders-aa-delta-deref-%s.out' % threads,
                   'w') as out_file:
-            for pts_file in pts_files:
-                out_file.write(pts_file + '\n')
-                invoke(['time', 'dynaa_check_aa.py',
-                        '--baseline', 'basicaa',
-                        '--disable-print-value',
-                        'httpd.bc', pts_file, aa],
-                       out_file, redirect_stderr=True)
+            invoke(['time', 'dynaa_check_aa.py',
+                    '--baseline', 'basicaa',
+                    '--disable-print-value',
+                    'httpd.bc'] + pts_files + [aa],
+                   out_file, redirect_stderr=True)
         for pts_file in pts_files:
-            shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+            shutil.move(pts_file, '/mnt/sdc/dyn-aa/backup')
     os.chdir('..')
 
 
@@ -296,14 +273,11 @@ def eval_offline_mysql(threads='1'):
     for aa in AAS:
         with open('../offline-mysql-%s-%s.out' % (aa, threads),
                   'w') as out_file:
-            for pts_file in pts_files:
-                out_file.write(pts_file + '\n')
-                invoke(['time', 'dynaa_check_aa.py', '--check-all',
-                        '--disable-print-value',
-                        'mysqld.bc', pts_file, aa],
-                       out_file, redirect_stderr=True)
+            invoke(['time', 'dynaa_check_aa.py', '--check-all',
+                    '--disable-print-value', 'mysqld.bc'] + pts_files + [aa],
+                   out_file, redirect_stderr=True)
     for pts_file in pts_files:
-        shutil.move(pts_file, '/mnt/sdb/dyn-aa/backup')
+        shutil.move(pts_file, '/mnt/sdc/dyn-aa/backup')
     os.chdir('..')
 
 
@@ -314,7 +288,7 @@ def main():
         description=('\033[0;31mnote: before running this script, please '
                      'make sure that no httpd/mysqld instance is running, '
                      'and please remove apache-install/logs/error_log and '
-                     'all existing /mnt/sdb/dyn-aa/pts* files.\033[m'))
+                     'all existing /mnt/sdc/dyn-aa/pts* files.\033[m'))
     parser.add_argument('--app', choices=APPS,
                         help='only eval the specified application')
     parser.add_argument('--aa', choices=AAS,
@@ -328,7 +302,7 @@ def main():
     parser.add_argument('--no-eval-offline', action='store_true',
                         help='do not eval the offline mode')
     args = parser.parse_args()
-    os.putenv('LOG_FILE', '/mnt/sdb/dyn-aa/pts')
+    os.putenv('LOG_FILE', '/mnt/sdc/dyn-aa/pts')
     if args.app is not None:
         APPS = [args.app]
     if args.aa is not None:
