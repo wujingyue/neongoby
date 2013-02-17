@@ -3,20 +3,22 @@
 // Hook functions are declared with extern "C", because we want to disable
 // the C++ name mangling and make the instrumentation easier.
 
-#include <pthread.h>
 
-#include <iostream>
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <vector>
-#include <cassert>
+#include <errno.h>
+#include <iostream>
+#include <pthread.h>
 #include <signal.h>
+#include <stack>
 #include <string>
 #include <sstream>
 #include <unistd.h>
-#include <stack>
+#include <vector>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 
@@ -37,39 +39,36 @@ static __thread int NumActualArgs;
 static __thread bool IsLogging = false;
 static __thread bool DisableLogging = false;
 
-// TODO: store logs from each run in a separate directory named by the
-// timestamp. e.g., /tmp/pts-20121113-100535.
-string GetLogFileName(pid_t ThreadID) {
-  const char *LogFileEnv = getenv("LOG_FILE");
-  string LogFileName;
-  if (!LogFileEnv) {
-    LogFileName = "/tmp/pts";
-  } else {
-    LogFileName = LogFileEnv;
+static string GetLogDirName() {
+  if (const char *LogDirEnv = getenv("LOG_DIR")) {
+    return LogDirEnv;
   }
+  return "/tmp";
+}
+
+static string GetLogFileName(pid_t ThreadID) {
   ostringstream OS;
-  OS << LogFileName << "-" << ThreadID;
+  OS << GetLogDirName() << "/pts-" << ThreadID;
   return OS.str();
 }
 
-string GetLogFileName() {
+static string GetLogFileName() {
   pid_t ThreadID = syscall(SYS_gettid);
   return GetLogFileName(ThreadID);
 }
 
 // TODO: The Append flag is not necessary. We could just uniformly use "ab".
-void OpenLogFile(bool Append) {
+static void OpenLogFile(bool Append) {
   MyLogFile = fopen(GetLogFileName().c_str(), Append ? "ab" : "wb");
   if (!MyLogFile)
     perror("fopen");
-  // cerr << "[" << getpid() << "] open " << GetLogFileName() << " as " << MyLogFile << "\n";
   assert(MyLogFile);
   pthread_mutex_lock(&Lock);
   LogFiles.push_back(MyLogFile);
   pthread_mutex_unlock(&Lock);
 }
 
-void OpenLogFileIfNecessary() {
+static void OpenLogFileIfNecessary() {
   if (!MyLogFile)
     OpenLogFile(false);
 }
@@ -77,7 +76,6 @@ void OpenLogFileIfNecessary() {
 extern "C" void FinalizeMemHooks() {
   pthread_mutex_lock(&Lock);
   for (size_t i = 0; i < LogFiles.size(); ++i) {
-    // cerr << "[" << getpid() << "] close " << LogFiles[i] << "\n";
     assert(LogFiles[i]);
     fclose(LogFiles[i]);
   }
@@ -88,7 +86,7 @@ extern "C" void InitMemHooks() {
   atexit(FinalizeMemHooks);
 }
 
-void PrintLogRecord(const LogRecord &Record) {
+static void PrintLogRecord(const LogRecord &Record) {
   // FIXME: Signal handler can happen anytime even if during the fwrite, causing
   // the log to be broken. To workaround this issue, PrintLogRecord sets
   // IsLogging at the beginning, and resets it at the end. If PrintLogRecord

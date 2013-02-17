@@ -42,7 +42,7 @@ dynaa_hook_mem.py hello
 
 3. Run the instrumented test program. NeonGoby generates the log file at
    `/tmp/pts-<pid>` by default. You can change the location by specifying
-environment variable `LOG_FILE`.
+environment variable `LOG_DIR`.
 
 ```bash
 ./hello.inst

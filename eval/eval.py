@@ -302,7 +302,7 @@ def main():
     parser.add_argument('--no-eval-offline', action='store_true',
                         help='do not eval the offline mode')
     args = parser.parse_args()
-    os.putenv('LOG_FILE', '/mnt/sdc/dyn-aa/pts')
+    os.putenv('LOG_DIR', '/mnt/sdc/dyn-aa')
     if args.app is not None:
         APPS = [args.app]
     if args.aa is not None:
