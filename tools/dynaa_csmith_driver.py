@@ -14,6 +14,7 @@ def run_neongoby_offline(run_id):
     working_dir = '%s/csmith-%d' % (workspace, run_id)
     os.system('rm -rf %s' % working_dir)
     os.makedirs(working_dir)
+    old_working_dir = os.getcwd()
     os.chdir(working_dir)
  
     os.system('%s/src/csmith > test.c 2>> stderr' % (CSMITH_HOME))
@@ -21,13 +22,17 @@ def run_neongoby_offline(run_id):
     os.system('dynaa_offline.py test basicaa --all --time-limit 5 >> stderr 2>&1')
 
     stderr = open('stderr', 'r')
-    ret = True
     for line in stderr:
         if line.find('Detected') >= 0:
-            ret = False
-            break
+            stderr.close()
+            return False
     stderr.close()
-    return ret
+
+    # If NeonGoby didn't detect any error, remove the working directory to save
+    # space.
+    os.chdir(old_working_dir)
+    os.system('rm -rf %s' % working_dir)
+    return True
 
 def worker_process(base_run_id):
     run_id = base_run_id
