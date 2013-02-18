@@ -30,6 +30,7 @@ using namespace std;
 using namespace rcs;
 using namespace dyn_aa;
 
+static string LogDirName;
 static __thread FILE *MyLogFile = NULL;
 static vector<FILE *> LogFiles;
 static pthread_mutex_t Lock = PTHREAD_MUTEX_INITIALIZER;
@@ -39,16 +40,9 @@ static __thread int NumActualArgs;
 static __thread bool IsLogging = false;
 static __thread bool DisableLogging = false;
 
-static string GetLogDirName() {
-  if (const char *LogDirEnv = getenv("LOG_DIR")) {
-    return LogDirEnv;
-  }
-  return "/tmp";
-}
-
 static string GetLogFileName(pid_t ThreadID) {
   ostringstream OS;
-  OS << GetLogDirName() << "/pts-" << ThreadID;
+  OS << LogDirName << "/pts-" << ThreadID;
   return OS.str();
 }
 
@@ -83,6 +77,26 @@ extern "C" void FinalizeMemHooks() {
 }
 
 extern "C" void InitMemHooks() {
+  // Set the log directory name.
+  if (const char *LogDirEnv = getenv("LOG_DIR")) {
+    LogDirName = LogDirEnv;
+  } else {
+    time_t T = time(NULL);
+    struct tm *LT = localtime(&T);
+    char LogDirNameCStr[1024];
+    sprintf(LogDirNameCStr, "/tmp/ng-%04d%02d%02d-%02d%02d%02d",
+            LT->tm_year + 1900, LT->tm_mon + 1, LT->tm_mday,
+            LT->tm_hour, LT->tm_min, LT->tm_sec);
+    LogDirName = LogDirNameCStr;
+  }
+  // Craete the logging directory if doesn't exist.
+  int R = mkdir(LogDirName.c_str(), 0755);
+  if (R == -1) {
+    if (errno != EEXIST)
+      assert(false);
+    // Clear old log files in the log directory.
+    system(("rm -f " + LogDirName + "/pts-*").c_str());
+  }
   atexit(FinalizeMemHooks);
 }
 
