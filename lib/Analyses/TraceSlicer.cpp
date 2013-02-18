@@ -126,7 +126,7 @@ void TraceSlicer::print(raw_ostream &O, const Module *M) const {
   Index[0] = Trace[0].Slice.size() - 1;
   Index[1] = Trace[1].Slice.size() - 1;
   while (true) {
-    unsigned Min;
+    unsigned Min = UINT_MAX;
     int PointerLabel = -1;
     for (int i = 0; i < 2; ++i) {
       if (Index[i] >= 0 &&
