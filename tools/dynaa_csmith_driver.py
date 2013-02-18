@@ -18,7 +18,7 @@ def run_neongoby_offline(run_id):
  
     os.system('%s/src/csmith > test.c 2>> stderr' % (CSMITH_HOME))
     os.system('clang test.c -o test.bc -c -emit-llvm -I%s/runtime 2>> stderr' % CSMITH_HOME)
-    os.system('dynaa_offline.py test basicaa --all --time-limit 5 >> stderr 2>>&1')
+    os.system('dynaa_offline.py test basicaa --all --time-limit 5 >> stderr 2>&1')
 
     stderr = open('stderr', 'r')
     ret = True
