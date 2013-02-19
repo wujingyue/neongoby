@@ -69,6 +69,7 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
                   pair<unsigned, Value *> TraceRecord,
                   int PointerLabel) const;
   pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
+  void addMetaData(Value *V, Module *M);
 
   PointerTrace Trace[2];
   unsigned CurrentRecordID;

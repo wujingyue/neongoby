@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <fstream>
 
+#include "llvm/IntrinsicInst.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
@@ -119,8 +120,16 @@ bool TraceSlicer::runOnModule(Module &M) {
   errs() << "Backward slicing...\n";
   processSingleLog(LogFileIndex, true);
 
-  if (SliceForReduction)
-    print(errs(), &M);
+  if (SliceForReduction) {
+    if (!Trace[0].Active && !Trace[1].Active) {
+      for (unsigned PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+        for (unsigned i = 0; i < Trace[PointerLabel].Slice.size(); ++i) {
+          Value *V = Trace[PointerLabel].Slice[i].second;
+          addMetaData(V, &M);
+        }
+      }
+    }
+  }
 
   return false;
 }
@@ -152,7 +161,7 @@ void TraceSlicer::print(raw_ostream &O, const Module *M) const {
   Index[0] = Trace[0].Slice.size() - 1;
   Index[1] = Trace[1].Slice.size() - 1;
   while (true) {
-    unsigned Min;
+    unsigned Min = UINT_MAX;
     int PointerLabel = -1;
     for (int i = 0; i < 2; ++i) {
       if (Index[i] >= 0 &&
@@ -280,8 +289,12 @@ void TraceSlicer::processCall(const CallRecord &Record) {
   if (isCalledFunction(CurrentFunction, CS)) {
     CurrentFunction = I->getParent()->getParent();
     if (SliceForReduction) {
-      Trace[0].Slice.push_back(make_pair(CurrentRecordID, CurrentRecord.V));
-      Trace[1].Slice.push_back(make_pair(CurrentRecordID, CurrentRecord.V));
+      for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+        if (Trace[PointerLabel].Active) {
+          Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                        CurrentRecord.V));
+        }
+      }
     }
   }
 
@@ -445,4 +458,23 @@ Value *TraceSlicer::getLatestCommonAncestor() {
     return Trace[0].Slice.back().second;
   }
   return NULL;
+}
+
+void TraceSlicer::addMetaData(Value *V, Module *M) {
+  Function *DeclareFn = Intrinsic::getDeclaration(M, Intrinsic::dbg_declare);
+  Instruction *Inst = dyn_cast<Instruction>(V);
+  if (!Inst) {
+    Function *F;
+    if (Argument *A = dyn_cast<Argument>(V)) {
+      F = A->getParent();
+    } else {
+      F = M->getFunction("main");
+      assert(F);
+    }
+    Value *Args[] = { MDNode::get(V->getContext(), V),
+      MDNode::get(M->getContext(), NULL)};
+    Instruction *InsertBefore = F->getEntryBlock().getFirstInsertionPt();
+    Inst = CallInst::Create(DeclareFn, Args, "", InsertBefore);
+  }
+  Inst->setMetadata("slice", MDNode::get(M->getContext(), NULL));
 }
