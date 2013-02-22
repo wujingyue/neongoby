@@ -99,6 +99,7 @@ void DynamicAliasAnalysis::initialize() {
   while (!CallStack.empty())
     CallStack.pop();
   ActivePointers.clear();
+  OutdatedContexts.clear();
 }
 
 void DynamicAliasAnalysis::processMemAlloc(const MemAllocRecord &Record) {
@@ -109,13 +110,19 @@ void DynamicAliasAnalysis::processMemAlloc(const MemAllocRecord &Record) {
 }
 
 void DynamicAliasAnalysis::processEnter(const EnterRecord &Record) {
+  auto I = OutdatedContexts.find(Record.FunctionID);
+  if (I != OutdatedContexts.end()) {
+    for (auto &OutdatedContext : I->second)
+      removePointsTo(OutdatedContext);
+    OutdatedContexts.erase(I);
+  }
   ++NumInvocations;
   CallStack.push(NumInvocations);
 }
 
 void DynamicAliasAnalysis::processReturn(const ReturnRecord &Record) {
   assert(!CallStack.empty());
-  removePointsTo(CallStack.top());
+  OutdatedContexts[Record.FunctionID].insert(CallStack.top());
   CallStack.pop();
 }
 

@@ -445,6 +445,7 @@ void MemoryInstrumenter::setupHooks(Module &M) {
   // Setup ReturnHook.
   ArgTypes.clear();
   ArgTypes.push_back(IntType);
+  ArgTypes.push_back(IntType);
   FunctionType *ReturnHookType = FunctionType::get(VoidType,
                                                    ArgTypes,
                                                    false);
@@ -723,8 +724,13 @@ void MemoryInstrumenter::instrumentReturnInst(Instruction *I) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   unsigned InsID = IDA.getInstructionID(I);
   assert(InsID != IDAssigner::InvalidID);
+  unsigned FuncID = IDA.getFunctionID(I->getParent()->getParent());
+  assert(FuncID != IDAssigner::InvalidID);
 
-  CallInst::Create(ReturnHook, ConstantInt::get(IntType, InsID), "", I);
+  vector<Value *> Args;
+  Args.push_back(ConstantInt::get(IntType, FuncID));
+  Args.push_back(ConstantInt::get(IntType, InsID));
+  CallInst::Create(ReturnHook, Args, "", I);
 }
 
 void MemoryInstrumenter::instrumentCallSite(CallSite CS) {

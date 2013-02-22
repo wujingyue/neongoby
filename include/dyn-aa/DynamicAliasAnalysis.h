@@ -85,8 +85,10 @@ struct DynamicAliasAnalysis: public ModulePass,
   // Thread-specific call stack.
   std::stack<unsigned> CallStack;
   // Pointers in PointsTo and PointedBy. Indexed by invocation ID so that
-  // we can quickly find out what pointers to delete when exiting a function.
+  // we can quickly find out what pointers to delete given a function.
   DenseMap<unsigned, std::vector<unsigned> > ActivePointers;
+  // Outdated contexts of a function.
+  DenseMap<unsigned, DenseSet<unsigned> > OutdatedContexts;
 };
 }
 

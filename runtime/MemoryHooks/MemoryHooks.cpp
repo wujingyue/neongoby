@@ -181,7 +181,6 @@ extern "C" void HookMemAlloc(unsigned ValueID,
                              unsigned long Bound) {
   // Bound is sometimes zero for array allocation.
   if (Bound > 0) {
-    // fprintf(stderr, "%u: HookMemAlloc(%p, %lu)\n", ValueID, StartAddr, Bound);
     LogRecord Record;
     Record.RecordType = LogRecord::MemAlloc;
     Record.MAR.Address = StartAddr;
@@ -199,7 +198,6 @@ extern "C" void HookMainArgsAlloc(int Argc, char *Argv[],
 }
 
 extern "C" void HookTopLevel(void *Value, void *Pointer, unsigned ValueID) {
-  // fprintf(stderr, "HookTopLevel(%p, %u)\n", Value, ValueID);
   LogRecord Record;
   Record.RecordType = LogRecord::TopLevel;
   Record.TLR.PointerValueID = ValueID;
@@ -216,7 +214,6 @@ extern "C" void HookEnter(unsigned FuncID) {
 }
 
 extern "C" void HookStore(void *Value, void *Pointer, unsigned InsID) {
-  // fprintf(stderr, "HookStore(%p, %p, %u)\n", Value, Pointer, InsID);
   LogRecord Record;
   Record.RecordType = LogRecord::Store;
   Record.SR.PointerAddress = Pointer;
@@ -226,7 +223,6 @@ extern "C" void HookStore(void *Value, void *Pointer, unsigned InsID) {
 }
 
 extern "C" void HookCall(unsigned InsID, int NumArgs) {
-  // fprintf(stderr, "HookCall(%u, %d)\n", InsID, NumArgs);
   LogRecord Record;
   Record.RecordType = LogRecord::Call;
   Record.CR.InstructionID = InsID;
@@ -234,16 +230,15 @@ extern "C" void HookCall(unsigned InsID, int NumArgs) {
   NumActualArgs = NumArgs;
 }
 
-extern "C" void HookReturn(unsigned InsID) {
-  // fprintf(stderr, "HookReturn(%u)\n", InsID);
+extern "C" void HookReturn(unsigned FuncID, unsigned InsID) {
   LogRecord Record;
   Record.RecordType = LogRecord::Return;
+  Record.RR.FunctionID = FuncID;
   Record.RR.InstructionID = InsID;
   PrintLogRecord(Record);
 }
 
 extern "C" void HookBasicBlock(unsigned ValueID) {
-  // fprintf(stderr, "HookBasicBlock(%u)\n", ValueID);
   LogRecord Record;
   Record.RecordType = LogRecord::BasicBlock;
   Record.BBR.ValueID = ValueID;

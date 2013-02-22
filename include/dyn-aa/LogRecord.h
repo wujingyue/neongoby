@@ -36,6 +36,7 @@ struct CallRecord {
 } __attribute__((packed));
 
 struct ReturnRecord {
+  unsigned FunctionID;
   unsigned InstructionID;
 } __attribute__((packed));
 
