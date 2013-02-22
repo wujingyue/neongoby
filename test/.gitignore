@@ -1,3 +1,5 @@
-*
-!.gitignore
-!*.ll
+*.bc
+*.inst
+*.inst.ll
+*.c
+*.cpp
