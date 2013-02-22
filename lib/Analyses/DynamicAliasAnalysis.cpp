@@ -53,9 +53,8 @@ bool DynamicAliasAnalysis::runOnModule(Module &M) {
   if (OutputDynamicAliases != "") {
     string ErrorInfo;
     raw_fd_ostream OutputFile(OutputDynamicAliases.c_str(), ErrorInfo);
-    for (DenseSet<ValuePair>::iterator I = Aliases.begin();
-         I != Aliases.end(); ++I) {
-      Value *V1 = I->first, *V2 = I->second;
+    for (auto &Alias : Aliases) {
+      Value *V1 = Alias.first, *V2 = Alias.second;
       OutputFile << IDA.getValueID(V1) << " " << IDA.getValueID(V2) << "\n";
     }
   }
@@ -63,9 +62,8 @@ bool DynamicAliasAnalysis::runOnModule(Module &M) {
 #if 0
   errs() << PointersVersionUnknown.size()
       << " pointers whose version is unknown:\n";
-  for (ValueSet::iterator I = PointersVersionUnknown.begin();
-       I != PointersVersionUnknown.end(); ++I) {
-    IDA.printValue(errs(), *I);
+  for (auto &Pointer : PointersVersionUnknown) {
+    IDA.printValue(errs(), Pointer);
     errs() << "\n";
   }
 #endif
@@ -84,8 +82,7 @@ void DynamicAliasAnalysis::updateVersion(void *Start,
                                          unsigned long Bound,
                                          unsigned Version) {
   Interval I((unsigned long)Start, (unsigned long)Start + Bound);
-  pair<IntervalTree<unsigned>::iterator, IntervalTree<unsigned>::iterator> ER =
-      AddressVersion.equal_range(I);
+  auto ER = AddressVersion.equal_range(I);
   AddressVersion.erase(ER.first, ER.second);
   AddressVersion.insert(make_pair(I, Version));
   assert(lookupAddress(Start) == Version);
@@ -149,7 +146,7 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
     addPointsTo(Ptr, Loc);
 
     // Report aliases.
-    PointedByMapTy::iterator I = PointedBy.find(Loc);
+    auto I = PointedBy.find(Loc);
     assert(I != PointedBy.end()); // We just added a point-to in.
     if (Version != UnknownVersion &&
         I->second.size() > MaxNumPointersToSameLocation) {
@@ -160,13 +157,13 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
 }
 
 void DynamicAliasAnalysis::removePointedBy(PointerTy Ptr, AddressTy Loc) {
-  PointedByMapTy::iterator J = PointedBy.find(Loc);
+  auto J = PointedBy.find(Loc);
   assert(J != PointedBy.end());
   J->second.erase(Ptr);
 }
 
 void DynamicAliasAnalysis::removePointsTo(PointerTy Ptr) {
-  PointsToMapTy::iterator I = PointsTo.find(Ptr);
+  auto I = PointsTo.find(Ptr);
   if (I != PointsTo.end()) {
     ++NumRemoveOps;
     removePointedBy(I->first, I->second);
@@ -175,11 +172,10 @@ void DynamicAliasAnalysis::removePointsTo(PointerTy Ptr) {
 }
 
 void DynamicAliasAnalysis::removePointsTo(unsigned InvocationID) {
-  DenseMap<unsigned, vector<unsigned> >::iterator I =
-      ActivePointers.find(InvocationID);
+  auto I = ActivePointers.find(InvocationID);
   if (I != ActivePointers.end()) {
-    for (size_t i = 0; i < I->second.size(); ++i)
-      removePointsTo(PointerTy(I->second[i], InvocationID));
+    for (auto &PointerID : I->second)
+      removePointsTo(PointerTy(PointerID, InvocationID));
     ActivePointers.erase(I);
   }
 }
@@ -194,7 +190,7 @@ void DynamicAliasAnalysis::addPointsTo(PointerTy Ptr, AddressTy Loc) {
 
 unsigned DynamicAliasAnalysis::lookupAddress(void *Addr) const {
   Interval I((unsigned long)Addr, (unsigned long)Addr + 1);
-  IntervalTree<unsigned>::const_iterator Pos = AddressVersion.find(I);
+  auto Pos = AddressVersion.find(I);
   if (Pos == AddressVersion.end())
     return UnknownVersion;
   return Pos->second;
@@ -238,6 +234,6 @@ void DynamicAliasAnalysis::addAliasPair(PointerTy P, PointerTy Q) {
 
 void DynamicAliasAnalysis::addAliasPairs(PointerTy P,
                                          const DenseSet<PointerTy> &Qs) {
-  for (DenseSet<PointerTy>::const_iterator I = Qs.begin(); I != Qs.end(); ++I)
-    addAliasPair(P, *I);
+  for (auto &Q : Qs)
+    addAliasPair(P, Q);
 }

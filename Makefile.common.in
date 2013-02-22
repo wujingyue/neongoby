@@ -35,4 +35,4 @@ include $(LLVM_SRC_ROOT)/Makefile.common
 # Add additional include paths.
 AdditionalIncludes = -I$(RCS_SRC_ROOT)/include
 CFLAGS += $(AdditionalIncludes)
-CXXFLAGS += $(AdditionalIncludes)
+CXXFLAGS += $(AdditionalIncludes) -std=c++0x
