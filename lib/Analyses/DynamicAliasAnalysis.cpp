@@ -28,7 +28,7 @@ static RegisterPass<DynamicAliasAnalysis> X("dyn-aa",
 // static RegisterAnalysisGroup<AliasAnalysis> Y(X);
 
 static cl::opt<string> OutputDynamicAliases(
-    "output-dyn-aliases",
+    "output-dynaa",
     cl::desc("Dump all dynamic aliases"));
 
 STATISTIC(NumRemoveOps, "Number of remove operations");
