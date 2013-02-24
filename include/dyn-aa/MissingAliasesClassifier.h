@@ -34,6 +34,7 @@ struct MissingAliasesClassifier: public ModulePass, public LogProcessor {
   bool isRootCause(Value *V1, Value *V2);
 
   // Interfaces of LogProcessor.
+  void initialize();
   void processTopLevel(const TopLevelRecord &Record);
   void processStore(const StoreRecord &Record);
   void processCall(const CallRecord &Record);

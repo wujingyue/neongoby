@@ -12,7 +12,10 @@ struct LogProcessor {
   LogProcessor(): CurrentRecordID(0) {}
 
   void processLog(bool Reversed = false);
+  void processSingleLog(unsigned LogFileIndex, bool Reversed = false);
   unsigned getCurrentRecordID() const { return CurrentRecordID; }
+  unsigned getCurrentFileIndex() const {return CurrentFileIndex; }
+  void endProcessing() { EndProcessing = true; }
 
   // initialize is called before processing each log file, and finalize is
   // called after processing each log file.
@@ -50,6 +53,8 @@ struct LogProcessor {
   static off_t GetFileSize(FILE *LogFile);
 
   unsigned CurrentRecordID;
+  unsigned CurrentFileIndex;
+  bool EndProcessing;
 };
 }
 

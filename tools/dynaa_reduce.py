@@ -19,6 +19,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cmd = dynaa_utils.load_all_plugins('opt')
+
+    # slice trace for reducer
+    cmd = ' '.join((cmd, '-slice-trace', '-slice-for-reduction'))
+    cmd = ' '.join((cmd, '-starting-value', args.vid1))
+    cmd = ' '.join((cmd, '-starting-value', args.vid2))
+
     # reducer need be put before aa
     cmd = ' '.join((cmd, '-remove-untouched-code'))
     cmd = ' '.join((cmd, '-simplifycfg'))

@@ -120,6 +120,7 @@ void Reducer::tagPointers(Module &M) {
 
 bool Reducer::runOnModule(Module &M) {
   // get executed functions and basic blocks from pointer logs
+  errs() << "Obtaining executed basic blocks...\n";
   processLog();
 
   // add metadata for input pointers

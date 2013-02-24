@@ -148,6 +148,13 @@ bool MissingAliasesClassifier::isRootCause(Value *V1, Value *V2) {
   return true;
 }
 
+void MissingAliasesClassifier::initialize() {
+  ArgMem.clear();
+  CallMem.clear();
+  LoadMem.clear();
+  SelectPHIMem.clear();
+}
+
 void MissingAliasesClassifier::processTopLevel(const TopLevelRecord &Record) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *V = IDA.getValue(Record.PointerValueID);
