@@ -1,6 +1,6 @@
 LEVEL = ..
 
-DIRS = dump_log
+DIRS = dump_log opt
 
 include $(LEVEL)/Makefile.common
 

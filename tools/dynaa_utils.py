@@ -6,10 +6,10 @@ import rcs_utils
 def load_all_plugins(cmd):
     cmd = rcs_utils.load_all_plugins(cmd)
     cmd = rcs_utils.load_plugin(cmd, 'libDynAAUtils')
-    cmd = rcs_utils.load_plugin(cmd, 'DynAAAnalyses')
-    cmd = rcs_utils.load_plugin(cmd, 'DynAACheckers')
-    cmd = rcs_utils.load_plugin(cmd, 'DynAAInstrumenters')
-    cmd = rcs_utils.load_plugin(cmd, 'DynAATransforms')
+    cmd = rcs_utils.load_plugin(cmd, 'libDynAAAnalyses')
+    cmd = rcs_utils.load_plugin(cmd, 'libDynAACheckers')
+    cmd = rcs_utils.load_plugin(cmd, 'libDynAAInstrumenters')
+    cmd = rcs_utils.load_plugin(cmd, 'libDynAATransforms')
     return cmd
 
 def load_aa(cmd, *aas):

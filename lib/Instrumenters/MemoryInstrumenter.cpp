@@ -20,6 +20,7 @@
 #include "rcs/typedefs.h"
 #include "rcs/IDAssigner.h"
 
+#include "dyn-aa/Passes.h"
 #include "dyn-aa/Utils.h"
 
 using namespace llvm;
@@ -101,6 +102,10 @@ static cl::opt<bool> Diagnose("diagnose",
                                        "trace slicing"));
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
+
+ModulePass *dynaa::createMemoryInstrumenterPass() {
+  return new MemoryInstrumenter();
+}
 
 void MemoryInstrumenter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetData>();
