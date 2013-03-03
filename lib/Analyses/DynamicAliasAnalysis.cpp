@@ -148,8 +148,8 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
     }
 
     // Global variables are processed before any invocation.
-    PointerTy Ptr(PointerVID, CallStack.empty() ? 0 : CallStack.top());
-    AddressTy Loc(PointeeAddress, Version);
+    Definition Ptr(PointerVID, CallStack.empty() ? 0 : CallStack.top());
+    Location Loc(PointeeAddress, Version);
     addPointsTo(Ptr, Loc);
 
     // Report aliases.
@@ -163,13 +163,13 @@ void DynamicAliasAnalysis::processTopLevel(const TopLevelRecord &Record) {
   } // if (PointerAddress != NULL)
 }
 
-void DynamicAliasAnalysis::removePointedBy(PointerTy Ptr, AddressTy Loc) {
+void DynamicAliasAnalysis::removePointedBy(Definition Ptr, Location Loc) {
   auto J = PointedBy.find(Loc);
   assert(J != PointedBy.end());
   J->second.erase(Ptr);
 }
 
-void DynamicAliasAnalysis::removePointsTo(PointerTy Ptr) {
+void DynamicAliasAnalysis::removePointsTo(Definition Ptr) {
   auto I = PointsTo.find(Ptr);
   if (I != PointsTo.end()) {
     ++NumRemoveOps;
@@ -182,12 +182,12 @@ void DynamicAliasAnalysis::removePointsTo(unsigned InvocationID) {
   auto I = ActivePointers.find(InvocationID);
   if (I != ActivePointers.end()) {
     for (auto &PointerID : I->second)
-      removePointsTo(PointerTy(PointerID, InvocationID));
+      removePointsTo(Definition(PointerID, InvocationID));
     ActivePointers.erase(I);
   }
 }
 
-void DynamicAliasAnalysis::addPointsTo(PointerTy Ptr, AddressTy Loc) {
+void DynamicAliasAnalysis::addPointsTo(Definition Ptr, Location Loc) {
   ++NumInsertOps;
   removePointsTo(Ptr);
   PointsTo[Ptr] = Loc;
@@ -209,8 +209,9 @@ void *DynamicAliasAnalysis::getAdjustedAnalysisPointer(AnalysisID PI) {
   return this;
 }
 
-AliasAnalysis::AliasResult DynamicAliasAnalysis::alias(const Location &L1,
-                                                       const Location &L2) {
+AliasAnalysis::AliasResult DynamicAliasAnalysis::alias(
+    const AliasAnalysis::Location &L1,
+    const AliasAnalysis::Location &L2) {
   Value *V1 = const_cast<Value *>(L1.Ptr);
   Value *V2 = const_cast<Value *>(L2.Ptr);
   if (V1 > V2)
@@ -227,7 +228,7 @@ void DynamicAliasAnalysis::addAliasPair(Value *V1, Value *V2) {
   Aliases.insert(make_pair(V1, V2));
 }
 
-void DynamicAliasAnalysis::addAliasPair(PointerTy P, PointerTy Q) {
+void DynamicAliasAnalysis::addAliasPair(Definition P, Definition Q) {
   assert(P.first != IDAssigner::InvalidID &&
          Q.first != IDAssigner::InvalidID);
   IDAssigner &IDA = getAnalysis<IDAssigner>();
@@ -239,8 +240,8 @@ void DynamicAliasAnalysis::addAliasPair(PointerTy P, PointerTy Q) {
   addAliasPair(U, V);
 }
 
-void DynamicAliasAnalysis::addAliasPairs(PointerTy P,
-                                         const DenseSet<PointerTy> &Qs) {
+void DynamicAliasAnalysis::addAliasPairs(Definition P,
+                                         const DenseSet<Definition> &Qs) {
   for (auto &Q : Qs)
     addAliasPair(P, Q);
 }

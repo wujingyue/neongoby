@@ -20,10 +20,8 @@ namespace dyn_aa {
 struct DynamicAliasAnalysis: public ModulePass,
                              public AliasAnalysis,
                              public LogProcessor {
-  typedef std::pair<void *, unsigned> AddressTy;
-  typedef std::pair<unsigned, unsigned> PointerTy;
-  typedef DenseMap<AddressTy, DenseSet<PointerTy> > PointedByMapTy;
-  typedef DenseMap<PointerTy, AddressTy> PointsToMapTy;
+  typedef std::pair<void *, unsigned> Location;
+  typedef std::pair<unsigned, unsigned> Definition;
 
   static char ID;
   static const unsigned UnknownVersion;
@@ -33,7 +31,8 @@ struct DynamicAliasAnalysis: public ModulePass,
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 
   // Interfaces of AliasAnalysis.
-  AliasAnalysis::AliasResult alias(const Location &L1, const Location &L2);
+  AliasAnalysis::AliasResult alias(const AliasAnalysis::Location &L1,
+                                   const AliasAnalysis::Location &L2);
   virtual void *getAdjustedAnalysisPointer(AnalysisID PI);
 
   // Interfaces of LogProcessor.
@@ -51,14 +50,14 @@ struct DynamicAliasAnalysis: public ModulePass,
   unsigned lookupAddress(void *Addr) const;
   void updateVersion(void *Start, unsigned long Bound, unsigned Version);
   void removePointsTo(unsigned InvocationID);
-  void removePointsTo(PointerTy Ptr);
+  void removePointsTo(Definition Ptr);
   // Helper function called by removePointsTo.
-  void removePointedBy(PointerTy Ptr, AddressTy Loc);
-  void addPointsTo(PointerTy Ptr, AddressTy Loc);
+  void removePointedBy(Definition Ptr, Location Loc);
+  void addPointsTo(Definition Ptr, Location Loc);
   // A convenient wrapper for a batch of reports.
-  void addAliasPairs(PointerTy P, const DenseSet<PointerTy> &Qs);
+  void addAliasPairs(Definition P, const DenseSet<Definition> &Qs);
   // Adds two values to DidAlias if their contexts match.
-  void addAliasPair(PointerTy P, PointerTy Q);
+  void addAliasPair(Definition P, Definition Q);
   // Report <V1, V2> as an alias pair.
   // This function canonicalizes the pair, so that <V1, V2> and
   // <V2, V1> are considered the same.
@@ -70,8 +69,8 @@ struct DynamicAliasAnalysis: public ModulePass,
   std::map<Interval, unsigned> AddressVersion;
   unsigned CurrentVersion;
   // 2-way mapping indicating the current address of each pointer
-  PointedByMapTy PointedBy;
-  PointsToMapTy PointsTo;
+  DenseMap<Location, DenseSet<Definition> > PointedBy;
+  DenseMap<Definition, Location> PointsTo;
   // Stores all alias pairs.
   DenseSet<rcs::ValuePair> Aliases;
   // Pointers that ever point to unversioned addresses.
