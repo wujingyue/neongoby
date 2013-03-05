@@ -34,6 +34,7 @@ struct MissingAliasesClassifier: public ModulePass, public LogProcessor {
   bool isRootCause(Value *V1, Value *V2);
 
   // Interfaces of LogProcessor.
+  void initialize();
   void processTopLevel(const TopLevelRecord &Record);
   void processStore(const StoreRecord &Record);
   void processCall(const CallRecord &Record);
@@ -46,7 +47,7 @@ struct MissingAliasesClassifier: public ModulePass, public LogProcessor {
   // Argument list
   list<Value *> ArgMem;
   // CallSite list
-  list<Value *> CallMem;
+  Value *CallMem;
   // Keys are PointerAddress, values are list of <LoadInst, PointeeAddress>
   DenseMap<void *, list<pair<Value *, void *> > > LoadMem;
   // Keys are PointeeAddress, values are SelectInst or PHINode list

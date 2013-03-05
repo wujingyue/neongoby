@@ -36,16 +36,18 @@ STATISTIC(NumRecords, "Number of all records");
 void LogProcessor::processLog(bool Reversed) {
   assert(LogFileNames.size() && "Didn't specify the log file.");
   for (unsigned i = 0; i < LogFileNames.size(); i++) {
-    processLog(LogFileNames[i], Reversed);
+    if (processLog(LogFileNames[i], Reversed))
+      break;
   }
 }
 
-void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
+bool LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
   FILE *LogFile = fopen(LogFileName.c_str(), "rb");
   assert(LogFile && "The log file doesn't exist.");
   errs().changeColor(raw_ostream::BLUE);
   errs() << "Processing log " << LogFileName << " ...\n";
   errs().resetColor();
+  CurrentFileName = LogFileName;
 
   if (Reversed) {
     // Set the file position to the end.
@@ -110,9 +112,9 @@ void LogProcessor::processLog(const std::string &LogFileName, bool Reversed) {
     errs().resetColor();
   }
 
-  finalize();
-
   fclose(LogFile);
+
+  return finalize();
 }
 
 bool LogProcessor::ReadData(void *P, int Length, bool Reversed, FILE *LogFile) {
