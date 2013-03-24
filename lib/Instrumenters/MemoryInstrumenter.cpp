@@ -238,7 +238,9 @@ void MemoryInstrumenter::instrumentMalloc(const CallSite &CS) {
     ++Loc;
   } else {
     assert(isa<InvokeInst>(Ins));
-    Loc = cast<InvokeInst>(Ins)->getNormalDest()->getFirstNonPHI();
+    InvokeInst *II = cast<InvokeInst>(Ins);
+    assert(II->getNormalDest()->getUniquePredecessor());
+    Loc = II->getNormalDest()->getFirstInsertionPt();
   }
 
   IRBuilder<> Builder(Loc);
@@ -880,7 +882,31 @@ void MemoryInstrumenter::instrumentPointerInstruction(Instruction *I) {
     ++Loc;
   } else {
     assert(isa<InvokeInst>(I));
-    Loc = cast<InvokeInst>(I)->getNormalDest()->getFirstNonPHI();
+    InvokeInst *II = cast<InvokeInst>(I);
+    BasicBlock *NormalDest = II->getNormalDest();
+    // It's not always OK to insert HookTopLevel simply at the beginning of the
+    // normal destination, because the normal destionation may be shared by
+    // multiple InvokeInsts. In that case, we will create a critical edge block,
+    // and add the HookTopLevel over there.
+    if (NormalDest->getUniquePredecessor()) {
+      Loc = NormalDest->getFirstNonPHI();
+    } else {
+      BasicBlock *CritEdge = BasicBlock::Create(I->getContext(),
+                                                "crit_edge",
+                                                I->getParent()->getParent());
+      Loc = BranchInst::Create(NormalDest, CritEdge);
+      // Now that CritEdge becomes the new predecessor of NormalDest, replace
+      // all phi uses of I->getParent() with CritEdge.
+      for (auto J = NormalDest->begin();
+           NormalDest->getFirstNonPHI() != J;
+           ++J) {
+        PHINode *Phi = cast<PHINode>(J);
+        int i;
+        while ((i = Phi->getBasicBlockIndex(I->getParent())) >= 0)
+          Phi->setIncomingBlock(i, CritEdge);
+      }
+      II->setNormalDest(CritEdge);
+    }
   }
   if (LoadInst *LI = dyn_cast<LoadInst>(I))
     instrumentPointer(I, LI->getPointerOperand(), Loc);
