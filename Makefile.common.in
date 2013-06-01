@@ -9,12 +9,6 @@ LLVM_SRC_ROOT = @LLVM_SRC@
 # (this is *not* the same as OBJ_ROOT as defined in LLVM's Makefile.config).
 LLVM_OBJ_ROOT = @LLVM_OBJ@
 
-# Set this variable to the top of the RCS common source tree.
-RCS_SRC_ROOT = @RCS_SRC@
-
-# Set this variable to the top level directory where RCS common was built.
-RCS_OBJ_ROOT = @RCS_OBJ@
-
 # Set the directory root of this project's source files
 PROJ_SRC_ROOT := $(subst //,/,@abs_top_srcdir@)
 
@@ -23,6 +17,12 @@ PROJ_OBJ_ROOT := $(subst //,/,@abs_top_objdir@)
 
 # Set the root directory of this project's install prefix
 PROJ_INSTALL_ROOT := @prefix@
+
+# Set this variable to the top of the RCS common source tree.
+RCS_SRC_ROOT = $(PROJ_SRC_ROOT)/submodules/rcs
+
+# Set this variable to the top level directory where RCS common was built.
+RCS_OBJ_ROOT = $(PROJ_OBJ_ROOT)/submodules/rcs
 
 # Use clang to build runtime bytecode libraries
 LLVMCC_OPTION = clang

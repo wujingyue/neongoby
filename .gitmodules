@@ -1,0 +1,3 @@
+[submodule "submodules/rcs"]
+	path = submodules/rcs
+	url = git@github.com:wujingyue/rcs.git
