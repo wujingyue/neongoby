@@ -8,7 +8,7 @@ Build LLVM 3.0/3.1 and clang 3.0/3.1 from source code.
 
 Build [RCS common utilities](https://github.com/wujingyue/rcs).
 
-Finally, build Loom:
+Finally, build NeonGoby:
 
 ```bash
 ./configure \
