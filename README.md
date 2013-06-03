@@ -61,7 +61,7 @@ checks only intraprocedural alias queries. However, the offline mode has to log
 information to disk, and on-disk logging can be costly. In contract, the online
 mode embeds checks into the program, and does not require logging.
 
-**Offline mode**
+**Offline Mode**
 
 To check an alias analysis (say `buggyaa`) with a test program (say
 `example.cpp`) using the offline
@@ -87,7 +87,7 @@ and `ds-aa`). To check more third-party alias analyses, you need to build the
 alias analysis as an LLVM loadable module (a `.so` file), and manually add extra
 configuration in `tools/dynaa_utils.py`.
 
-**Online mode**
+**Online Mode**
 
 To check `buggyaa` with this test program using the online mode of NeonGoby, run
 the following commands:
@@ -103,7 +103,7 @@ runs the program instrumented with alias checks, and reports missing aliases to
 alias, change `--action-if-missed=report` to `--action-if-missed=abort` in the
 first command.
 
-**Other Utilities**
+**Dumping Logs**
 
 Use `dynaa_dump_log` to dump `.pts` files to a readable format.
 
