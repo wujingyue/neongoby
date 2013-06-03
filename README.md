@@ -105,10 +105,10 @@ first command.
 
 **Other Utilities**
 
-Use `dump_dump_log` to dump `.pts` files to a readable format.
+Use `dynaa_dump_log` to dump `.pts` files to a readable format.
 
 ```bash
-dynaa_dump_log -log-file <log file>
+dynaa_dump_log -log-file <log-file>
 ```
 
 Bugs Detected
