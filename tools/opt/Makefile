@@ -4,9 +4,14 @@ TOOLNAME = dynaa_opt
 
 LINK_COMPONENTS = bitreader bitwriter asmparser instrumentation scalaropts ipo vectorize
 
-USEDLIBS = DynAAUtils.a DynAAAnalyses.a DynAACheckers.a DynAAInstrumenters.a DynAATransforms.a
-
-AdditionalLibPaths = $(RCS_OBJ_ROOT)/$(BuildMode)/lib
-LDFLAGS += -lRCSID -lRCSCFG -lRCSPointerAnalysis
+# Put basic libraries at the back.
+USEDLIBS = DynAATransforms.a DynAAInstrumenters.a DynAACheckers.a DynAAAnalyses.a DynAAUtils.a
 
 include $(LEVEL)/Makefile.common
+
+# Put basic libraries at the back.
+# Append to ProjLibsOptions to make sure RCS libraries are between NeonGoby
+# libraries and LLVM libraries
+# FIXME: If RCS libraries changed, dynaa_opt will not be recompiled due to lack
+# of dependencies.
+ProjLibsOptions += -lRCSPointerAnalysis -lRCSCFG -lRCSID
