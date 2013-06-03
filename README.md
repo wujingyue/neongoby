@@ -114,7 +114,7 @@ dynaa_dump_log -log-file <log file>
 Bugs Detected
 -------------
 
-See section 8 in our paper [Effective Dynamic Detection of Alias Analysis
+See table 2 in our paper [Effective Dynamic Detection of Alias Analysis
 Errors](http://www.cs.columbia.edu/~jingyue/docs/wu-fse13.pdf) for the bugs we
 found so far using NeonGoby.
 
