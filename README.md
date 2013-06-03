@@ -118,7 +118,7 @@ See table 2 in our paper [Effective Dynamic Detection of Alias Analysis
 Errors](http://www.cs.columbia.edu/~jingyue/docs/wu-fse13.pdf) for the bugs we
 found so far using NeonGoby.
 
-We fixed all the bugs we found in `anders-aa`; we included the patches in the
+We fixed all the 13 bugs we found in `anders-aa`; we included the patches in the
 `bugs` folder. We reported 8 bugs to `ds-aa` developers, and 4 of them have been
 confirmed and fixed.
 
