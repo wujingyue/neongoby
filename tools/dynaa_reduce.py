@@ -18,26 +18,38 @@ if __name__ == '__main__':
     parser.add_argument('vid2', help = 'ValueID of Pointer 2')
     args = parser.parse_args()
 
-    cmd = dynaa_utils.load_all_plugins('opt')
-    # reducer need be put before aa
-    cmd = ' '.join((cmd, '-remove-untouched-code'))
-    cmd = ' '.join((cmd, '-simplifycfg'))
+    cmd = dynaa_utils.load_all_plugins('dynaa_opt')
+    # cmd = ' '.join((cmd, '-debug-pass=Details'))
+
+    # slice trace and add tags for reducer
+    cmd = ' '.join((cmd, '-slice-for-reduction'))
+    cmd = ' '.join((cmd, '-starting-value', args.vid1))
+    cmd = ' '.join((cmd, '-starting-value', args.vid2))
+    for log in args.logs:
+        cmd = ' '.join((cmd, '-log-file', log))
 
     # Load the checked AA
     cmd = dynaa_utils.load_aa(cmd, args.aa)
 
-    cmd = ' '.join((cmd, '-verify-reducer'))
-    cmd = ' '.join((cmd, '-strip'))
-    for log in args.logs:
-        cmd = ' '.join((cmd, '-log-file', log))
-    cmd = ' '.join((cmd, '-pointer-value', args.vid1))
-    cmd = ' '.join((cmd, '-pointer-value', args.vid2))
-    cmd = ' '.join((cmd, '-o', args.prog + '.reduce.bc'))
+    cmd = ' '.join((cmd, '>', args.prog + '.reduce.big.bc'))
     cmd = ' '.join((cmd, '<', args.prog + '.bc'))
     rcs_utils.invoke(cmd)
 
+    # simplifycfg and strip
+    cmd = dynaa_utils.load_all_plugins('opt')
+    cmd = ' '.join((cmd, '-simplifycfg'))
+    cmd = ' '.join((cmd, '-strip'))
+    cmd = ' '.join((cmd, '-verify'))
+    cmd = ' '.join((cmd, '>', args.prog + '.reduce.bc'))
+    cmd = ' '.join((cmd, '<', args.prog + '.reduce.big.bc'))
+    rcs_utils.invoke(cmd)
+
+    # reducer may lead to linking errors
     cmd = ' '.join(('clang++', args.prog + '.reduce.bc',
                     '-o', args.prog + '.reduce'))
     linking_flags = rcs_utils.get_linking_flags(args.prog)
     cmd = ' '.join((cmd, ' '.join(linking_flags)))
+    # rcs_utils.invoke(cmd)
+
+    cmd = ' '.join(('llvm-dis', args.prog + '.reduce.bc'))
     rcs_utils.invoke(cmd)

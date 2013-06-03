@@ -47,7 +47,10 @@ struct PointerTrace{
 struct TraceSlicer: public ModulePass, public LogProcessor {
   static char ID;
 
-  TraceSlicer(): ModulePass(ID) {}
+  TraceSlicer(): ModulePass(ID),
+                 CurrentFunction(NULL),
+                 Merged(false),
+                 PushCallInst(false) {}
   virtual bool runOnModule(Module &M);
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual void print(raw_ostream &O, const Module *M) const;
@@ -55,11 +58,11 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
   // Interfaces of LogProcessor.
   void processMemAlloc(const MemAllocRecord &Record);
   void processTopLevel(const TopLevelRecord &Record);
+  void processEnter(const EnterRecord &Record);
   void processStore(const StoreRecord &Record);
   void processCall(const CallRecord &Record);
   void processReturn(const ReturnRecord &Record);
   void processBasicBlock(const BasicBlockRecord &Record);
-  static bool isCalledFunction(Function *F, CallSite CS);
   static Value *getOperandIfConstant(Value *V);
   Value *getLatestCommonAncestor();
 
@@ -68,9 +71,18 @@ struct TraceSlicer: public ModulePass, public LogProcessor {
                   pair<unsigned, Value *> TraceRecord,
                   int PointerLabel) const;
   pair<bool, bool> dependsOn(LogRecordInfo &R1, LogRecordInfo &R2);
+  // for inst, arg, gv: alias, slice; for bb: related; for func: executed
+  void addMetaData(Value *V, string Kind, Module *M);
 
   PointerTrace Trace[2];
   unsigned CurrentRecordID;
+  Function *CurrentFunction;
+  bool Merged;
+  bool PushCallInst;
+
+  // for reduction tagging
+  DenseSet<Function *> RelatedFunctions;
+  DenseSet<BasicBlock *> ExecutedBasicBlocks;
 };
 }
 

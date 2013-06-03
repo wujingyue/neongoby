@@ -10,14 +10,15 @@
 namespace dyn_aa {
 struct LogProcessor {
   LogProcessor(): CurrentRecordID(0) {}
-
   void processLog(bool Reversed = false);
+  bool processLog(const std::string &LogFileName, bool Reversed = false);
   unsigned getCurrentRecordID() const { return CurrentRecordID; }
+  std::string getCurrentFileName() const {return CurrentFileName; }
 
   // initialize is called before processing each log file, and finalize is
   // called after processing each log file.
   virtual void initialize() {}
-  virtual void finalize() {}
+  virtual bool finalize() { return false; }
   // beforeRecord is called before processing each log record, and afterRecord
   // is called after processing each log record. Therefore, a typical callback
   // flow is:
@@ -45,11 +46,11 @@ struct LogProcessor {
   virtual void processBasicBlock(const BasicBlockRecord &) {}
 
  private:
-  void processLog(const std::string &LogFileName, bool Reversed);
   static bool ReadData(void *P, int Length, bool Reversed, FILE *LogFile);
   static off_t GetFileSize(FILE *LogFile);
 
   unsigned CurrentRecordID;
+  std::string CurrentFileName;
 };
 }
 

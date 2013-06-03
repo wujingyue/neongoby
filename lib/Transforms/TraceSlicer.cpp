@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <fstream>
 
+#include "llvm/IntrinsicInst.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
@@ -33,13 +34,16 @@ static cl::list<unsigned> StartingValueIDs(
     "starting-value",
     cl::desc("Value IDs of the two pointers"));
 
+static cl::opt<bool> SliceForReduction("slice-for-reduction",
+                                       cl::desc("Slice for reduction"));
+
 static RegisterPass<TraceSlicer> X("slice-trace",
                                    "Slice trace of two input pointers",
                                    false, // Is CFG Only?
                                    true); // Is Analysis?
 
 struct RecordFinder: public LogProcessor {
-  RecordFinder(): RecordID1(-1), RecordID2(-1) {}
+  RecordFinder() {}
 
   void processTopLevel(const TopLevelRecord &Record) {
     if (StartingRecordIDs.size() == 2) {
@@ -47,21 +51,33 @@ struct RecordFinder: public LogProcessor {
       return;
     }
     if (Record.PointerValueID == StartingValueIDs[0]) {
+      Filled1 = true;
       RecordID1 = getCurrentRecordID();
       Address1 = Record.PointeeAddress;
     }
     if (Record.PointerValueID == StartingValueIDs[1]) {
+      Filled2 = true;
       RecordID2 = getCurrentRecordID();
       Address2 = Record.PointeeAddress;
     }
-    if (Address1 == Address2) {
+    if (Filled1 && Filled2 && Address1 == Address2) {
       StartingRecordIDs.push_back(RecordID1);
       StartingRecordIDs.push_back(RecordID2);
       assert(StartingRecordIDs.size() == 2);
     }
   }
 
+  void initialize() {
+    Filled1 = false;
+    Filled2 = false;
+  }
+
+  bool finalize() {
+    return StartingRecordIDs.size() == 2;
+  }
+
  private:
+  bool Filled1, Filled2;
   unsigned RecordID1, RecordID2;
   void *Address1, *Address2;
 };
@@ -75,6 +91,7 @@ bool TraceSlicer::runOnModule(Module &M) {
          "we need two starting-record");
   assert((StartingValueIDs.empty() || StartingValueIDs.size() == 2) &&
          "we need two starting-value");
+  string LogFileName = "";
   if (StartingRecordIDs.empty()) {
     // The user specifies staring-value instead of starting-record. Need look
     // for starting-record in the trace.
@@ -82,6 +99,7 @@ bool TraceSlicer::runOnModule(Module &M) {
     RecordFinder RF;
     RF.processLog();
     CurrentRecordID = RF.getCurrentRecordID();
+    LogFileName = RF.getCurrentFileName();
   } else {
     errs() << "Counting log records...\n";
     LogCounter LC;
@@ -94,9 +112,42 @@ bool TraceSlicer::runOnModule(Module &M) {
     Trace[i].StartingRecordID = StartingRecordIDs[i];
 
   errs() << "Backward slicing...\n";
-  processLog(true);
+  if (LogFileName != "")
+    processLog(LogFileName, true);
+  else
+    processLog(true);
 
-  return false;
+  if (Trace[0].Active || Trace[1].Active)
+    errs() << "Fail to merge!\n";
+
+  if (SliceForReduction) {
+    print(errs(), &M);
+    if (Merged) {
+      // add metadata for values in slice
+      for (unsigned PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+        for (unsigned i = 0; i < Trace[PointerLabel].Slice.size(); ++i) {
+          Value *V = Trace[PointerLabel].Slice[i].second;
+          addMetaData(V, "slice", &M);
+          if (i == 0)
+            addMetaData(V, "alias", &M);
+        }
+      }
+
+      // add metadata for related basic blocks
+      for (DenseSet<Function *>::iterator I = RelatedFunctions.begin();
+           I != RelatedFunctions.end(); ++I) {
+        addMetaData(&((*I)->getEntryBlock()), "related", &M);
+      }
+
+      // add metadata for executed basic blocks
+      for (DenseSet<BasicBlock *>::iterator I = ExecutedBasicBlocks.begin();
+           I != ExecutedBasicBlocks.end(); ++I) {
+        addMetaData(*I, "executed", &M);
+      }
+    }
+  }
+
+  return true;
 }
 
 void TraceSlicer::getAnalysisUsage(AnalysisUsage &AU) const {
@@ -121,7 +172,7 @@ void TraceSlicer::printTrace(raw_ostream &O,
 }
 
 void TraceSlicer::print(raw_ostream &O, const Module *M) const {
-  O << "RecID\tPtr\tValueID\tFunc:  Inst/Arg\n";
+  O << "RecID\tPtr\tValueID\tGV/Inst/Arg\n";
   int Index[2];
   Index[0] = Trace[0].Slice.size() - 1;
   Index[1] = Trace[1].Slice.size() - 1;
@@ -166,20 +217,21 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
   CurrentRecord.PointeeAddress = Record.PointeeAddress;
   CurrentRecord.PointerAddress = Record.LoadedFrom;
 
+  Function *ContainingFunction = NULL;
+  if (Argument *A = dyn_cast<Argument>(V))
+    ContainingFunction = A->getParent();
+  else if (Instruction *I = dyn_cast<Instruction>(V))
+    ContainingFunction = I->getParent()->getParent();
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     if (Trace[PointerLabel].StartingRecordID == CurrentRecordID) {
-      // set StartingFunction
-      if (Argument *A = dyn_cast<Argument>(V))
-        Trace[PointerLabel].StartingFunction = A->getParent();
-      else if (Instruction *I = dyn_cast<Instruction>(V))
-        Trace[PointerLabel].StartingFunction = I->getParent()->getParent();
-      else
-        Trace[PointerLabel].StartingFunction = NULL;
-
+      // first value found
+      Trace[PointerLabel].StartingFunction = ContainingFunction;
       Trace[PointerLabel].Active = true;
       Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                     CurrentRecord.V));
       Trace[PointerLabel].PreviousRecord = CurrentRecord;
+      CurrentFunction = ContainingFunction;
       NumContainingSlices++;
     } else if (Trace[PointerLabel].Active) {
       pair<bool, bool> Result = dependsOn(CurrentRecord,
@@ -189,14 +241,26 @@ void TraceSlicer::processTopLevel(const TopLevelRecord &Record) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                       CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
+        CurrentFunction = ContainingFunction;
         NumContainingSlices++;
       }
     }
   }
   // If two sliced traces meet, we stop tracking
   if (NumContainingSlices == 2) {
-    Trace[0].Active = false;
-    Trace[1].Active = false;
+    Merged = true;
+    if (!SliceForReduction) {
+      Trace[0].Active = false;
+      Trace[1].Active = false;
+    }
+  }
+}
+
+void TraceSlicer::processEnter(const EnterRecord &Record) {
+  CurrentRecordID--;
+  for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+    // Starting record must be a TopLevel record
+    assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
   }
 }
 
@@ -222,6 +286,7 @@ void TraceSlicer::processStore(const StoreRecord &Record) {
         Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                       CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
+        CurrentFunction = I->getParent()->getParent();
         NumContainingSlices++;
       }
     }
@@ -239,6 +304,18 @@ void TraceSlicer::processCall(const CallRecord &Record) {
   LogRecordInfo CurrentRecord;
   CurrentRecord.V = I;
 
+  // get all related function calls for reduction
+  if (SliceForReduction && PushCallInst) {
+    for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
+      if (Trace[PointerLabel].Active) {
+        Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                      CurrentRecord.V));
+      }
+    }
+    PushCallInst = false;
+    CurrentFunction = I->getParent()->getParent();
+  }
+
   for (int PointerLabel = 0; PointerLabel < 2; ++PointerLabel) {
     // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
@@ -247,8 +324,9 @@ void TraceSlicer::processCall(const CallRecord &Record) {
                                           Trace[PointerLabel].PreviousRecord);
       Trace[PointerLabel].Active = Result.second;
       if (Result.first) {
-        Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
-                                                      CurrentRecord.V));
+        if (!SliceForReduction)
+          Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
+                                                        CurrentRecord.V));
         Trace[PointerLabel].PreviousRecord = CurrentRecord;
         NumContainingSlices++;
       }
@@ -281,7 +359,7 @@ void TraceSlicer::processReturn(const ReturnRecord &Record) {
         NumContainingSlices++;
       } else {
         // print return instruction of the starting function
-        if (I->getParent()->getParent() ==
+        if (!SliceForReduction && I->getParent()->getParent() ==
             Trace[PointerLabel].StartingFunction) {
           Trace[PointerLabel].Slice.push_back(make_pair(CurrentRecordID,
                                                         CurrentRecord.V));
@@ -297,6 +375,24 @@ void TraceSlicer::processBasicBlock(const BasicBlockRecord &Record) {
     // Starting record must be a TopLevel record
     assert(Trace[PointerLabel].StartingRecordID != CurrentRecordID);
   }
+  if (SliceForReduction) {
+    // record executed basic blocks
+    IDAssigner &IDA = getAnalysis<IDAssigner>();
+    Value *V = IDA.getValue(Record.ValueID);
+    BasicBlock *BB = cast<BasicBlock>(V);
+    ExecutedBasicBlocks.insert(BB);
+
+    // record related functions
+    if (Trace[0].Active || Trace[1].Active) {
+      Function *F = BB->getParent();
+      if (&(F->getEntryBlock()) == BB) {
+        if (F == CurrentFunction) {
+          PushCallInst = true;
+          RelatedFunctions.insert(F);
+        }
+      }
+    }
+  }
 }
 
 // whether R1 depend on R2, return <depend, active>
@@ -309,17 +405,22 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
       // R2 is CallRecord
       return make_pair(R1.V == getOperandIfConstant(CS2.getArgument(R2.ArgNo)),
                        true);
-    } else if (CS1 && R1.V == R2.V) {
+    } else if (CS1) {
       // R2 is an external function call
+      assert(R1.V == R2.V);
       return make_pair(false, false);
-    } else if (ReturnInst *RI = dyn_cast<ReturnInst>(R1.V)) {
-      return make_pair(isCalledFunction(RI->getParent()->getParent(), CS2),
-                       true);
+    } else if (dyn_cast<ReturnInst>(R1.V)) {
+      return make_pair(true, true);
     } else {
-      return make_pair(false, true);
+      assert(false);
     }
   } else if (Argument *A = dyn_cast<Argument>(R2.V)) {
-    if (CS1 && isCalledFunction(A->getParent(), CS1)) {
+    if (CS1) {
+      Function *CalledFunction = CS1.getCalledFunction();
+      if (CalledFunction && CalledFunction->isDeclaration()) {
+        // containing function is called by external function
+        return make_pair(false, false);
+      }
       R1.ArgNo = A->getArgNo();
       return make_pair(true, true);
     } else {
@@ -364,21 +465,6 @@ pair<bool, bool> TraceSlicer::dependsOn(LogRecordInfo &R1, LogRecordInfo &R2) {
   }
 }
 
-bool TraceSlicer::isCalledFunction(Function *F, CallSite CS) {
-  if (CS.getCalledFunction() != NULL)
-    return F == CS.getCalledFunction();
-  // if CS call a value, judge by comparing return type and argument type
-  // this is a temporary method to solve multithread problem
-  if (F->getReturnType() != CS.getType())
-    return false;
-  if (F->getFunctionType()->getNumParams() != CS.arg_size())
-    return false;
-  for (unsigned i = 0; i < CS.arg_size(); ++i)
-    if (F->getFunctionType()->getParamType(i) != (CS.getArgument(i))->getType())
-      return false;
-  return true;
-}
-
 // get operand if V is a constant expression
 Value *TraceSlicer::getOperandIfConstant(Value *V) {
   Operator *Op = dyn_cast<Operator>(V);
@@ -396,4 +482,33 @@ Value *TraceSlicer::getLatestCommonAncestor() {
     return Trace[0].Slice.back().second;
   }
   return NULL;
+}
+
+void TraceSlicer::addMetaData(Value *V, string Kind, Module *M) {
+  Function *DeclareFn = Intrinsic::getDeclaration(M, Intrinsic::dbg_declare);
+  Instruction *Inst = dyn_cast<Instruction>(V);
+  if (!Inst) {
+    vector<Value *> Args;
+    Instruction *InsertBefore;
+    if (BasicBlock *BB = dyn_cast<BasicBlock>(V)) {
+      // add metadata for basic block
+      Args.push_back(MDNode::get(M->getContext(), NULL));
+      InsertBefore = BB->getFirstInsertionPt();
+    } else {
+      Function *F;
+      if (Argument *A = dyn_cast<Argument>(V)) {
+        // add metadata for argument
+        F = A->getParent();
+      } else {
+        // add metadata for global variable
+        F = M->getFunction("main");
+        assert(F);
+      }
+      Args.push_back(MDNode::get(V->getContext(), V));
+      InsertBefore = F->getEntryBlock().getFirstInsertionPt();
+    }
+    Args.push_back(MDNode::get(M->getContext(), NULL));
+    Inst = CallInst::Create(DeclareFn, Args, "", InsertBefore);
+  }
+  Inst->setMetadata(Kind, MDNode::get(M->getContext(), NULL));
 }

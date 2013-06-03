@@ -148,6 +148,13 @@ bool MissingAliasesClassifier::isRootCause(Value *V1, Value *V2) {
   return true;
 }
 
+void MissingAliasesClassifier::initialize() {
+  ArgMem.clear();
+  CallMem = NULL;
+  LoadMem.clear();
+  SelectPHIMem.clear();
+}
+
 void MissingAliasesClassifier::processTopLevel(const TopLevelRecord &Record) {
   IDAssigner &IDA = getAnalysis<IDAssigner>();
   Value *V = IDA.getValue(Record.PointerValueID);
@@ -199,7 +206,7 @@ void MissingAliasesClassifier::processTopLevel(const TopLevelRecord &Record) {
     if (isa<LoadInst>(V)) {
       LoadMem[Record.LoadedFrom].push_back(make_pair(V, Record.PointeeAddress));
     } else if (CS) {
-      CallMem.push_back(V);
+      CallMem = V;
     } else if (isa<Argument>(V)) {
       ArgMem.push_back(V);
     } else if (isa<SelectInst>(V) || isa<PHINode>(V)) {
@@ -228,25 +235,26 @@ void MissingAliasesClassifier::processCall(const CallRecord &Record) {
   CallSite CS(V);
   assert(CS);
 
-  // extract from ArgMem
-  for (list<Value *>::iterator I = ArgMem.begin(), E = ArgMem.end(); I != E;) {
-    Argument *A = dyn_cast<Argument>(*I);
-    if (TraceSlicer::isCalledFunction(A->getParent(), CS)) {
-      PrevInst[A].insert(
-          TraceSlicer::getOperandIfConstant(CS.getArgument(A->getArgNo())));
-      I = ArgMem.erase(I);
-    } else
-      ++I;
+  Function *CalledFunction = CS.getCalledFunction();
+  if (CalledFunction && CalledFunction->isDeclaration()) {
+    // containing function is called by external function
+    ArgMem.clear();
   }
+
+  // extract from ArgMem
+  for (list<Value *>::iterator I = ArgMem.begin(); I != ArgMem.end(); ++I) {
+    Argument *A = dyn_cast<Argument>(*I);
+    PrevInst[A].insert(
+        TraceSlicer::getOperandIfConstant(CS.getArgument(A->getArgNo())));
+  }
+  ArgMem.clear();
 
   // extract from CallMem, for external function
   if (CS.getType()->isPointerTy()) {
-    for (list<Value *>::iterator I = CallMem.begin(), E = CallMem.end();
-         I != E;) {
-      if (V == *I) {
-        I = CallMem.erase(I);
-      } else
-        ++I;
+    if (CallMem) {
+      CallSite CS(CallMem);
+      assert(CallMem == V);
+      CallMem = NULL;
     }
   }
 }
@@ -261,14 +269,10 @@ void MissingAliasesClassifier::processReturn(const ReturnRecord &Record) {
   Value *ReturnValue = RI->getReturnValue();
   if (ReturnValue && ReturnValue->getType()->isPointerTy()) {
     // extract from CallMem
-    for (list<Value *>::iterator I = CallMem.begin(), E = CallMem.end();
-         I != E;) {
-      CallSite CS(*I);
-      if (TraceSlicer::isCalledFunction(RI->getParent()->getParent(), CS)) {
-        PrevInst[*I].insert(ReturnValue);
-        I = CallMem.erase(I);
-      } else
-        ++I;
+    if (CallMem) {
+      CallSite CS(CallMem);
+      PrevInst[CallMem].insert(ReturnValue);
+      CallMem = NULL;
     }
   }
 }

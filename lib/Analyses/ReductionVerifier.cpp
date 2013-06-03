@@ -11,24 +11,17 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "dyn-aa/BaselineAliasAnalysis.h"
 #include "dyn-aa/Utils.h"
+#include "dyn-aa/Reducer.h"
+#include "dyn-aa/ReductionVerifier.h"
 
 using namespace std;
 using namespace llvm;
 using namespace dyn_aa;
 
-namespace dyn_aa {
-struct ReductionVerifier: public ModulePass {
-  static char ID;
-
-  ReductionVerifier(): ModulePass(ID) { }
-  virtual bool runOnModule(Module &M);
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-};
-}
-
-static RegisterPass<ReductionVerifier> X("verify-reducer",
-                                         "Verify whether reducer keeps "
+static RegisterPass<ReductionVerifier> X("verify-reduction",
+                                         "Verify whether reduction keeps "
                                          "the bug",
                                          false, // Is CFG Only?
                                          true); // Is Analysis?
@@ -45,10 +38,11 @@ bool ReductionVerifier::runOnModule(Module &M) {
           assert(ValueNum < 2);
           DbgDeclareInst *DDI = dyn_cast<DbgDeclareInst>(I);
           if (DDI) {
-            V[ValueNum++] = DDI->getAddress();
+            V[ValueNum] = DDI->getAddress();
           } else {
-            V[ValueNum++] = I;
+            V[ValueNum] = I;
           }
+          ValueNum++;
         }
       }
     }
@@ -56,19 +50,18 @@ bool ReductionVerifier::runOnModule(Module &M) {
   assert(ValueNum == 2);
 
   AliasAnalysis &AA = getAnalysis<AliasAnalysis>();
-  errs().changeColor(raw_ostream::RED);
+  Verified = AA.alias(V[0], V[1]) == AliasAnalysis::NoAlias;
+
   errs() << "Reduction Verifier: ";
-  if (AA.alias(V[0], V[1]) == AliasAnalysis::NoAlias) {
-    errs() << "Pass\n";
+  if (Verified) {
+    errs() << "Verified\n";
   } else {
-    errs() << "Fail\n";
+    errs() << "Not verified\n";
   }
-  errs().resetColor();
 
   return false;
 }
 
 void ReductionVerifier::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
   AU.addRequired<AliasAnalysis>();
 }
