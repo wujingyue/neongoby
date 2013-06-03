@@ -1,86 +1,121 @@
 NeonGoby Alias Analysis Checker
 ===============================
 
+NeonGoby is a system for effectively detecting errors in alias analysis, one of
+the most important and widely used program analysis. It currently checks alias
+analyses implemented on the LLVM framework. We have used it to find 29 bugs in
+two popular alias analysis implementations: data structure alias analysis
+(`ds-aa`) and Andersen's alias analysis (`anders-aa`).
+
+Publications
+------------
+
+[Effective Dynamic Detection of Alias Analysis
+Errors](http://www.cs.columbia.edu/~jingyue/docs/wu-fse13.pdf). In Proc.
+ESEC/FSE 2013.
+
 Building NeonGoby
 -----------------
 
-Build LLVM 3.0/3.1 and clang 3.0/3.1 from source code.
+To build NeonGoby, you need to have a C++ compiler installed. It should compile
+without trouble on most recent Linux or MacOS machines.
 
-Build [RCS common utilities](https://github.com/wujingyue/rcs).
+1. Download the source code of LLVM 3.0/3.1 and clang 3.0/3.1 from
+   [LLVM Download Page](http://llvm.org/releases/download.html). Other version
+of LLVM and clang are not guaranteed to work with NeonGoby.
 
-Finally, build NeonGoby:
+2. Build LLVM and clang from source code.
 
 ```bash
-./configure \
-    --with-rcssrc=<rcs srouce directory> \
-    --with-rcsobj=<rcs object directory> \
-    --prefix=`llvm-config --prefix`
+cd <llvm source code root>
+mv <clang source code root> tools/clang
+./configure --enable-assertions --prefix=<where you want to install LLVM>
+make [-j] install
+```
+
+3. Add LLVM's install directory to PATH, so that you can run LLVM commands
+   (e.g., `llvm-config`) everywhere.
+
+4. Checkout NeonGoby's source code
+
+5. Build NeonGoby
+
+```bash
+git submodule init
+git submodule update
+./configure --prefix=`llvm-config --prefix`
 make
 make install
 ```
 
-Running NeonGoby
+Using NeonGoby
 ----------------
+
+Given a test program and a test workload, NeonGoby dynamically observes the
+pointer addresses in the test program, and then checks these addresses against
+an alias analysis for errors.
+
+NeonGoby provides two modes to check an alias analysis: the offline mode and the
+online mode. The offline mode checks more thoroughly, whereas the online mode
+checks only intraprocedural alias queries. However, the offline mode has to log
+information to disk, and on-disk logging can be costly. In contract, the online
+mode embeds checks into the program, and does not require logging.
 
 **Offline mode**
 
-As an example, say we want to check LLVM's basic alias analysis (`basicaa`) with
-a test program `hello.cpp`.
-
-1. Generate the bitcode of the test program using clang.
-
-```bash
-clang++ hello.cpp -o hello.bc -c -emit-llvm
-```
-
-2. Instrument the test program. `dynaa_hook_mem.py -h` shows you more options to
-   tweak the instrumentation.
+To check an alias analysis (say `buggyaa`) with a test program (say
+`example.cpp`) using the offline
+mode of NeonGoby, first compile the code into `example.bc` in LLVM’s
+intermediate representation (IR), and run the following three commands:
 
 ```bash
-dynaa_hook_mem.py hello
+dynaa_hook_mem.py --hook-all example.bc
+./example.inst
+dynaa_check_aa.py --check-all example.bc <log file> buggyaa
 ```
 
-3. Run the instrumented test program. NeonGoby generates the log file at
-   `/tmp/pts-<pid>` by default. You can change the location by specifying
-environment variable `LOG_DIR`.
-
-```bash
-./hello.inst
-```
-
-4. Check the alias analysis results against the aliases in the real execution.
-
-```bash
-dynaa_check_aa.py hello.bc <log file> basicaa
-```
+The first command instruments the program for checking, and outputs the
+instrumented executable as `example.inst`. The second command runs the
+instrumented program, which logs information to
+`/tmp/ng-<date>-<time>/pts-<pid>`. You can change the location by specifying
+environment variable `LOG_DIR`. The third command checks this log against
+`buggyaa` for errors.
 
 **Online mode**
 
-1. Generate the bitcode as in the offline mode.
-
-2. Insert alias checks to the program. You can use option `action-if-missed` to
-   specify what to do when detecting a missing alias: `report` means printing
-the missing alias to `/tmp/report-<pid>` and continuing executing the test
-program; `abort` means aborting the program; `silence` means doing nothing which
-is for internal use.
+To check `buggyaa` with this test program using the online mode of NeonGoby, run
+the following commands:
 
 ```bash
-dynaa_insert_alias_checker.py --action-if-missed=report hello basicaa
+dynaa_insert_alias_checker.py --action-if-missed=report example buggyaa
+./example.ac
 ```
 
-3. Run the output executable. According to which action you specified in step 2,
-   the program will abort on the first missing alias or report all missing
-aliases.
+The first command inserts alias checks into the test program. The second command
+runs the program instrumented with alias checks, and reports missing aliases to
+`/tmp/report-<pid>`. If you want the program to abort at the first missing
+alias, change `--action-if-missed=report` to `--action-if-missed=abort` in the
+first command.
+
+**Other Utilities**
+
+Use `dump_dump_log` to dump `.pts` files to a readable format.
 
 ```bash
-./hello.ac
+dynaa_dump_log -log-file <log file>
 ```
 
-Utilities
----------
+Bugs Detected
+-------------
 
-Use `dump_dump_log` to dump .pts files:
+See our paper [Effective Dynamic Detection of Alias Analysis
+Errors](http://www.cs.columbia.edu/~jingyue/docs/wu-fse13.pdf) for the bugs we
+found so far using NeonGoby.
 
-```bash
-dynaa_dump_log -log-file hello.pts > hello.log
-```
+People
+------
+- [Jingyue Wu](http://www.cs.columbia.edu/~jingyue/)
+- Gang Hu
+- [Yang Tang](http://ytang.com/)
+- Junyang Lu
+- [Junfeng Yang](http://www.cs.columbia.edu/~junfeng/)
