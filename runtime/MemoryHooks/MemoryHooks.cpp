@@ -95,7 +95,8 @@ extern "C" void InitMemHooks() {
     if (errno != EEXIST)
       assert(false);
     // Clear old log files in the log directory.
-    system(("rm -f " + LogDirName + "/pts-*").c_str());
+    R = system(("rm -f " + LogDirName + "/pts-*").c_str());
+    assert(R != -1);
   }
   atexit(FinalizeMemHooks);
 }
