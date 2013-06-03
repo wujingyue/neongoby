@@ -118,6 +118,22 @@ See table 2 in our paper [Effective Dynamic Detection of Alias Analysis
 Errors](http://www.cs.columbia.edu/~jingyue/docs/wu-fse13.pdf) for the bugs we
 found so far using NeonGoby.
 
+We fixed all the bugs we found in `anders-aa`; we included the patches in the
+`bugs` folder. We reported 8 bugs to `ds-aa` developers, and 4 of them have been
+confirmed and fixed.
+
+Fixed bugs in `ds-aa`:
+- [#12744](http://llvm.org/bugs/show_bug.cgi?id=12744)
+- [#12786](http://llvm.org/bugs/show_bug.cgi?id=12786)
+- [#14147](http://llvm.org/bugs/show_bug.cgi?id=14147)
+- [#14190](http://llvm.org/bugs/show_bug.cgi?id=14190)
+
+Reported bugs in `ds-aa`:
+- [#14075](http://llvm.org/bugs/show_bug.cgi?id=14075)
+- [#14179](http://llvm.org/bugs/show_bug.cgi?id=14179)
+- [#14401](http://llvm.org/bugs/show_bug.cgi?id=14401)
+- [#14496](http://llvm.org/bugs/show_bug.cgi?id=14496)
+
 People
 ------
 - [Jingyue Wu](http://www.cs.columbia.edu/~jingyue/)
