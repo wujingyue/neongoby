@@ -4,8 +4,9 @@ NeonGoby Alias Analysis Checker
 NeonGoby is a system for effectively detecting errors in alias analysis, one of
 the most important and widely used program analysis. It currently checks alias
 analyses implemented on the LLVM framework. We have used it to find 29 bugs in
-two popular alias analysis implementations: data structure alias analysis
-(`ds-aa`) and Andersen's alias analysis (`anders-aa`).
+two popular alias analysis implementations: [Data Structure Alias
+Analysis](http://llvm.org/docs/AliasAnalysis.html#the-ds-aa-pass)(`ds-aa`)
+and Andersen's Alias Analysis (`anders-aa`).
 
 Publications
 ------------
@@ -17,19 +18,19 @@ ESEC/FSE 2013.
 Building NeonGoby
 -----------------
 
-To build NeonGoby, you need to have a C++ compiler installed. It should compile
-without trouble on most recent Linux or MacOS machines.
+To build NeonGoby, you need to have a C++ compiler (e.g., g++ or clang)
+installed. It should compile without trouble on most recent Linux or MacXOS
+machines.
 
 1. Download the source code of LLVM 3.0/3.1 and clang 3.0/3.1 from
    [LLVM Download Page](http://llvm.org/releases/download.html). Other version
 of LLVM and clang are not guaranteed to work with NeonGoby.
 
 2. Build LLVM and clang from source code.
-
 ```bash
-cd <llvm source code root>
-mv <clang source code root> tools/clang
-./configure --enable-assertions --prefix=<where you want to install LLVM>
+cd <llvm-source-code-root>
+mv <clang-source-code-root> tools/clang
+./configure --enable-assertions --prefix=<where-you-want-to-install-LLVM>
 make [-j] install
 ```
 
@@ -39,7 +40,6 @@ make [-j] install
 4. Checkout NeonGoby's source code
 
 5. Build NeonGoby
-
 ```bash
 git submodule init
 git submodule update
@@ -71,7 +71,7 @@ intermediate representation (IR), and run the following three commands:
 ```bash
 dynaa_hook_mem.py --hook-all example.bc
 ./example.inst
-dynaa_check_aa.py --check-all example.bc <log file> buggyaa
+dynaa_check_aa.py --check-all example.bc <log-file> buggyaa
 ```
 
 The first command instruments the program for checking, and outputs the
@@ -80,6 +80,12 @@ instrumented program, which logs information to
 `/tmp/ng-<date>-<time>/pts-<pid>`. You can change the location by specifying
 environment variable `LOG_DIR`. The third command checks this log against
 `buggyaa` for errors.
+
+Our scripts currently work with all the builtin alias analyses in LLVM (e.g.,
+`basicaa` and `scev-aa`), and some third-party alias analyses (e.g., `anders-aa`
+and `ds-aa`). To check more third-party alias analyses, you need to build the
+alias analysis as an LLVM loadable module (a `.so` file), and manually add extra
+configuration in `tools/dynaa_utils.py`.
 
 **Online mode**
 
@@ -108,7 +114,7 @@ dynaa_dump_log -log-file <log file>
 Bugs Detected
 -------------
 
-See our paper [Effective Dynamic Detection of Alias Analysis
+See section 8 in our paper [Effective Dynamic Detection of Alias Analysis
 Errors](http://www.cs.columbia.edu/~jingyue/docs/wu-fse13.pdf) for the bugs we
 found so far using NeonGoby.
 
