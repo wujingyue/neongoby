@@ -69,9 +69,9 @@ mode of NeonGoby, first compile the code into `example.bc` in LLVM’s
 intermediate representation (IR), and run the following three commands:
 
 ```bash
-dynaa_hook_mem.py --hook-all example.bc
+ng_hook_mem.py --hook-all example.bc
 ./example.inst
-dynaa_check_aa.py --check-all example.bc <log-file> buggyaa
+ng_check_aa.py --check-all example.bc <log-file> buggyaa
 ```
 
 The first command instruments the program for checking, and outputs the
@@ -85,7 +85,7 @@ Our scripts currently work with all the builtin alias analyses in LLVM (e.g.,
 `basicaa` and `scev-aa`), and some third-party alias analyses (e.g., `anders-aa`
 and `ds-aa`). To check more third-party alias analyses, you need to build the
 alias analysis as an LLVM loadable module (a `.so` file), and manually add extra
-configuration in `tools/dynaa_utils.py`.
+configuration in `tools/ng_utils.py`.
 
 **Online Mode**
 
@@ -93,7 +93,7 @@ To check `buggyaa` with this test program using the online mode of NeonGoby, run
 the following commands:
 
 ```bash
-dynaa_insert_alias_checker.py --action-if-missed=report example buggyaa
+ng_insert_alias_checker.py --action-if-missed=report example buggyaa
 ./example.ac
 ```
 
@@ -105,10 +105,10 @@ first command.
 
 **Dumping Logs**
 
-Use `dynaa_dump_log` to dump `.pts` files to a readable format.
+Use `ng_dump_log` to dump `.pts` files to a readable format.
 
 ```bash
-dynaa_dump_log -log-file <log-file>
+ng_dump_log -log-file <log-file>
 ```
 
 Bugs Detected

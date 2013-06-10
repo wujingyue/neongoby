@@ -5,7 +5,7 @@
 
 #include "llvm/Value.h"
 
-namespace dyn_aa {
+namespace neongoby {
 // Address range.
 // All intervals in the interval tree are disjoint.
 // The comparer treats overlapping intervals as equal.

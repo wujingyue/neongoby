@@ -3,7 +3,7 @@
 
 #include "dyn-aa/LogProcessor.h"
 
-namespace dyn_aa {
+namespace neongoby {
 struct LogCounter: public LogProcessor {
   unsigned getNumLogRecords() const { return getCurrentRecordID(); }
 };

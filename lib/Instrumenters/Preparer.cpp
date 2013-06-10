@@ -24,7 +24,7 @@ using namespace llvm;
 using namespace std;
 using namespace rcs;
 
-namespace dyn_aa {
+namespace neongoby {
 struct Preparer: public ModulePass {
   static char ID;
 
@@ -53,7 +53,7 @@ struct Preparer: public ModulePass {
 };
 }
 
-using namespace dyn_aa;
+using namespace neongoby;
 
 char Preparer::ID = 0;
 
@@ -180,7 +180,7 @@ void Preparer::expandMalloc(CallSite CS) {
 }
 
 void Preparer::expandAlloca(AllocaInst *AI) {
-  // Skip dynaa.slots which is added by AliasCheckerInstrumenter.
+  // Skip ng.slots which is added by AliasCheckerInstrumenter.
   if (AI->getName().startswith(DynAAUtils::SlotsName))
     return;
 

@@ -1,6 +1,6 @@
 LEVEL = ../..
 
-TOOLNAME = dynaa_dump_log
+TOOLNAME = ng_dump_log
 
 USEDLIBS = DynAAUtils.a
 

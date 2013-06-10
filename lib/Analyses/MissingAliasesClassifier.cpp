@@ -20,7 +20,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 static RegisterPass<MissingAliasesClassifier> X("classify-missing-aliases",
                                                 "Classify All Missing Aliases",

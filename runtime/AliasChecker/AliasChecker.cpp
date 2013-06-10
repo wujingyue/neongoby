@@ -103,18 +103,18 @@ static void DelayedFree(void *Item, queue<void*> &Queue, FreeFuncType Free) {
   pthread_spin_unlock(&Global.FreeLock);
 }
 
-extern "C" void dynaa_free(void *MemBlock) {
+extern "C" void ng_free(void *MemBlock) {
   DelayedFree(MemBlock, Global.FreeQueue, free);
 }
 
 extern "C" void _ZdlPv(void *MemBlock);
 
-extern "C" void dynaa_delete(void *MemBlock) {
+extern "C" void ng_delete(void *MemBlock) {
   DelayedFree(MemBlock, Global.DeleteQueue, _ZdlPv);
 }
 
 extern "C" void _ZdaPv(void *Array);
 
-extern "C" void dynaa_delete_array(void *Array) {
+extern "C" void ng_delete_array(void *Array) {
   DelayedFree(Array, Global.DeleteArrayQueue, _ZdaPv);
 }

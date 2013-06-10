@@ -13,7 +13,7 @@
 
 using namespace std;
 using namespace llvm;
-using namespace dyn_aa;
+using namespace neongoby;
 
 const string DynAAUtils::MemAllocHookName = "HookMemAlloc";
 const string DynAAUtils::MainArgsAllocHookName = "HookMainArgsAlloc";
@@ -28,7 +28,7 @@ const string DynAAUtils::MemHooksIniterName = "InitMemHooks";
 const string DynAAUtils::AfterForkHookName = "HookAfterFork";
 const string DynAAUtils::BeforeForkHookName = "HookBeforeFork";
 const string DynAAUtils::VAStartHookName = "HookVAStart";
-const string DynAAUtils::SlotsName = "dynaa.slots";
+const string DynAAUtils::SlotsName = "ng.slots";
 
 void DynAAUtils::PrintProgressBar(uint64_t Old, uint64_t Now, uint64_t Total) {
   assert(Total > 0);

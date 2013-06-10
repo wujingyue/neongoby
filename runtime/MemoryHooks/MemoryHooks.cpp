@@ -28,7 +28,7 @@
 
 using namespace std;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 static string LogDirName;
 static __thread FILE *MyLogFile = NULL;

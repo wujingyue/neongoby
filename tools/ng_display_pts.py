@@ -5,7 +5,7 @@ import os
 import sys
 import string
 import rcs_utils
-import dynaa_utils
+import ng_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -19,7 +19,7 @@ if __name__ == '__main__':
             action = 'store_true')
     args = parser.parse_args()
 
-    cmd = dynaa_utils.load_all_plugins('opt')
+    cmd = ng_utils.load_all_plugins('opt')
     if args.dsaa:
         # Use DSAA
         cmd = rcs_utils.load_plugin(cmd, 'LLVMDataStructure')

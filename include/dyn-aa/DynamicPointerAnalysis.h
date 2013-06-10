@@ -14,7 +14,7 @@
 
 using namespace llvm;
 
-namespace dyn_aa {
+namespace neongoby {
 struct DynamicPointerAnalysis: public ModulePass, public rcs::PointerAnalysis, public LogProcessor {
   static char ID;
 

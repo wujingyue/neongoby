@@ -10,7 +10,7 @@ install-local::
 	$(Verb) for script in $(Scripts) ; do \
 		echo Installing $$script ; \
 		$(MKDIR) $(DESTDIR)$(PROJ_bindir) ; \
-		if [ "$$script" = "dynaa_utils.py" ]; then \
+		if [ "$$script" = "ng_utils.py" ]; then \
 			$(DataInstall) $(PROJ_SRC_DIR)/$$script $(DESTDIR)$(PROJ_bindir) ; \
 		else \
 			$(ScriptInstall) $(PROJ_SRC_DIR)/$$script $(DESTDIR)$(PROJ_bindir) ; \

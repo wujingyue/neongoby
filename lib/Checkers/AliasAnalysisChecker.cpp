@@ -21,9 +21,9 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
-namespace dyn_aa {
+namespace neongoby {
 struct AliasAnalysisChecker: public ModulePass {
   static char ID;
 

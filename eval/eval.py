@@ -98,7 +98,7 @@ def eval_baseline_mysql(threads='1'):
 def eval_online_httpd(threads='1'):
     os.chdir('httpd')
     for aa in AAS:
-        args = ['dynaa_insert_alias_checker.py', 'httpd', aa]
+        args = ['ng_insert_alias_checker.py', 'httpd', aa]
         # with open('../online-httpd-%s-vr.out' % aa, 'w') as out_file:
         #     invoke(args, out_file)
         #     run_httpd('httpd.ac', out_file)
@@ -167,7 +167,7 @@ def eval_online_httpd(threads='1'):
 def eval_online_mysql(threads='1'):
     os.chdir('mysql')
     for aa in AAS:
-        args = ['dynaa_insert_alias_checker.py', 'mysqld', aa]
+        args = ['ng_insert_alias_checker.py', 'mysqld', aa]
         # if aa == 'ds-aa':
         #     args.append('--skip-huge-functions')
         # with open('../online-mysql-%s-vr.out' % aa, 'w') as out_file:
@@ -179,13 +179,13 @@ def eval_online_mysql(threads='1'):
         if aa in ['ds-aa', 'anders-aa']:
             with open('../hybrid-mysql-%s-delta-deref-%s.out' % (aa, threads),
                       'w') as out_file:
-                invoke(['dynaa_hybrid.py', 'mysqld', aa,
+                invoke(['ng_hybrid.py', 'mysqld', aa,
                         '--baseline', 'basicaa',
                         '--offline-funcs', '_Z10MYSQLparsePv',],
                        out_file)
                 run_mysql('mysqld.hybrid', out_file, threads)
                 pts_files = list(get_pts_files())
-                invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
+                invoke(['time', 'ng_check_aa.py', '--disable-print-value',
                         'mysqld.bc'] + pts_files + [aa],
                        out_file, redirect_stderr=True)
             for pts_file in pts_files:
@@ -193,12 +193,12 @@ def eval_online_mysql(threads='1'):
         elif aa == 'basicaa':
             with open('../hybrid-mysql-%s-deref-%s.out' % (aa, threads),
                       'w') as out_file:
-                invoke(['dynaa_hybrid.py', 'mysqld', aa,
+                invoke(['ng_hybrid.py', 'mysqld', aa,
                         '--offline-funcs', '_Z10MYSQLparsePv',],
                        out_file)
                 run_mysql('mysqld.hybrid', out_file, threads)
                 pts_files = list(get_pts_files())
-                invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
+                invoke(['time', 'ng_check_aa.py', '--disable-print-value',
                         'mysqld.bc'] + pts_files + [aa],
                        out_file, redirect_stderr=True)
             for pts_file in pts_files:
@@ -219,7 +219,7 @@ def eval_online_mysql(threads='1'):
 def eval_offline_httpd(threads='1'):
     os.chdir('httpd')
     with open('../offline-httpd-%s.out' % threads, 'w') as out_file:
-        invoke(['time', 'dynaa_hook_mem.py',
+        invoke(['time', 'ng_hook_mem.py',
                 '--hook-all', 'httpd'],
                out_file)
         run_httpd('httpd.inst', out_file, threads)
@@ -227,13 +227,13 @@ def eval_offline_httpd(threads='1'):
     for aa in AAS:
         with open('../offline-httpd-%s-%s.out' % (aa, threads),
                   'w') as out_file:
-            invoke(['time', 'dynaa_check_aa.py', '--check-all',
+            invoke(['time', 'ng_check_aa.py', '--check-all',
                     '--disable-print-value', 'httpd.bc'] + pts_files + [aa],
                    out_file, redirect_stderr=True)
         if aa == 'anders-aa':
             with open('../offline-httpd-anders-aa-delta-%s.out' % threads,
                       'w') as out_file:
-                invoke(['time', 'dynaa_check_aa.py', '--check-all',
+                invoke(['time', 'ng_check_aa.py', '--check-all',
                         '--baseline', 'basicaa', '--disable-print-value',
                         'httpd.bc'] + pts_files + [aa],
                        out_file, redirect_stderr=True)
@@ -242,19 +242,19 @@ def eval_offline_httpd(threads='1'):
     if 'anders-aa' in AAS:
         with open('../offline-httpd-deref-%s.out' % threads,
                   'w') as out_file:
-            invoke(['time', 'dynaa_hook_mem.py', 'httpd'], out_file)
+            invoke(['time', 'ng_hook_mem.py', 'httpd'], out_file)
             run_httpd('httpd.inst', out_file, threads)
         pts_files = list(get_pts_files())
         # with open('../offline-httpd-anders-aa-deref-%s.out' % threads,
         #           'w') as out_file:
         #     for pts_file in pts_files:
         #         out_file.write(pts_file + '\n')
-        #         invoke(['time', 'dynaa_check_aa.py', '--disable-print-value',
+        #         invoke(['time', 'ng_check_aa.py', '--disable-print-value',
         #                 'httpd.bc', pts_file, aa],
         #                out_file, redirect_stderr=True)
         with open('../offline-httpd-anders-aa-delta-deref-%s.out' % threads,
                   'w') as out_file:
-            invoke(['time', 'dynaa_check_aa.py',
+            invoke(['time', 'ng_check_aa.py',
                     '--baseline', 'basicaa',
                     '--disable-print-value',
                     'httpd.bc'] + pts_files + [aa],
@@ -267,13 +267,13 @@ def eval_offline_httpd(threads='1'):
 def eval_offline_mysql(threads='1'):
     os.chdir('mysql')
     with open('../offline-mysql-%s.out' % threads, 'w') as out_file:
-        invoke(['dynaa_hook_mem.py', '--hook-all', 'mysqld'], out_file)
+        invoke(['ng_hook_mem.py', '--hook-all', 'mysqld'], out_file)
         run_mysql('mysqld.inst', out_file, threads, small_workload=True)
     pts_files = list(get_pts_files())
     for aa in AAS:
         with open('../offline-mysql-%s-%s.out' % (aa, threads),
                   'w') as out_file:
-            invoke(['time', 'dynaa_check_aa.py', '--check-all',
+            invoke(['time', 'ng_check_aa.py', '--check-all',
                     '--disable-print-value', 'mysqld.bc'] + pts_files + [aa],
                    out_file, redirect_stderr=True)
     for pts_file in pts_files:

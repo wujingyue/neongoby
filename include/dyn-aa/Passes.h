@@ -3,7 +3,7 @@
 
 #include "llvm/Pass.h"
 
-namespace dynaa {
+namespace neongoby {
 llvm::ModulePass *createMemoryInstrumenterPass();
 }
 

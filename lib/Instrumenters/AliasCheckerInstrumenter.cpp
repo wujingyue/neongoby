@@ -27,9 +27,9 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
-namespace dyn_aa {
+namespace neongoby {
 struct AliasCheckerInstrumenter: public FunctionPass {
   static char ID;
 
@@ -465,10 +465,10 @@ bool AliasCheckerInstrumenter::doInitialization(Module &M) {
 bool AliasCheckerInstrumenter::doFinalization(Module &M) {
   // replace free() and delete with our implementation
   vector<pair<string, string> > ReplacePairs;
-  ReplacePairs.push_back(make_pair<string, string>("free", "dynaa_free"));
-  ReplacePairs.push_back(make_pair<string, string>("_ZdlPv", "dynaa_delete"));
+  ReplacePairs.push_back(make_pair<string, string>("free", "ng_free"));
+  ReplacePairs.push_back(make_pair<string, string>("_ZdlPv", "ng_delete"));
   ReplacePairs.push_back(make_pair<string, string>("_ZdaPv",
-                                                   "dynaa_delete_array"));
+                                                   "ng_delete_array"));
   for (vector<pair<string, string> >::iterator it = ReplacePairs.begin();
       it != ReplacePairs.end(); it++) {
     Function *Func = M.getFunction(it->first);

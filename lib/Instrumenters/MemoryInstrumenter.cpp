@@ -27,7 +27,7 @@ using namespace llvm;
 using namespace std;
 using namespace rcs;
 
-namespace dyn_aa {
+namespace neongoby {
 struct MemoryInstrumenter: public ModulePass {
   static char ID;
 
@@ -87,7 +87,7 @@ struct MemoryInstrumenter: public ModulePass {
 };
 }
 
-using namespace dyn_aa;
+using namespace neongoby;
 
 char MemoryInstrumenter::ID = 0;
 
@@ -103,7 +103,7 @@ static cl::opt<bool> Diagnose("diagnose",
 static cl::list<string> OfflineWhiteList(
     "offline-white-list", cl::desc("Functions which should be hooked"));
 
-ModulePass *dynaa::createMemoryInstrumenterPass() {
+ModulePass *neongoby::createMemoryInstrumenterPass() {
   return new MemoryInstrumenter();
 }
 

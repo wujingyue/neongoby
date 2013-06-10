@@ -7,7 +7,7 @@
 
 #include "dyn-aa/LogRecord.h"
 
-namespace dyn_aa {
+namespace neongoby {
 struct LogProcessor {
   LogProcessor(): CurrentRecordID(0) {}
 

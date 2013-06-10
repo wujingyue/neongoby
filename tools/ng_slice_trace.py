@@ -5,7 +5,7 @@ import os
 import sys
 import string
 import rcs_utils
-import dynaa_utils
+import ng_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Find out the trace of ' + \
@@ -20,7 +20,7 @@ if __name__ == '__main__':
                         default = False)
     args = parser.parse_args()
 
-    cmd = dynaa_utils.load_all_plugins('opt')
+    cmd = ng_utils.load_all_plugins('opt')
 
     cmd = string.join((cmd, '-slice-trace'))
     cmd = string.join((cmd, '-log-file', args.log))

@@ -22,7 +22,7 @@ using namespace llvm;
 using namespace std;
 using namespace rcs;
 
-namespace dyn_aa {
+namespace neongoby {
 struct Reducer: public ModulePass, public LogProcessor {
   static char ID;
 
@@ -41,7 +41,7 @@ struct Reducer: public ModulePass, public LogProcessor {
 };
 }
 
-using namespace dyn_aa;
+using namespace neongoby;
 
 char Reducer::ID = 0;
 

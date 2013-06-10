@@ -5,7 +5,7 @@
 
 // Structs are packed to save space.
 
-namespace dyn_aa {
+namespace neongoby {
 struct MemAllocRecord {
   void *Address;
   unsigned long Bound;
@@ -68,6 +68,6 @@ struct LogRecord {
     BasicBlockRecord BBR;
   };
 };
-} // namespace dyn_aa
+} // namespace neongoby
 
 #endif

@@ -12,7 +12,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 static RegisterPass<DynamicPointerAnalysis> X("dyn-pa",
                                               "Build the point-to graph "

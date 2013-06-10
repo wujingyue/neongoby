@@ -17,7 +17,7 @@
 
 using namespace std;
 using namespace llvm;
-using namespace dyn_aa;
+using namespace neongoby;
 
 static cl::list<string> LogFileNames(
     "log-file",

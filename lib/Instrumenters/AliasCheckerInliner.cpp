@@ -12,7 +12,7 @@
 using namespace std;
 using namespace llvm;
 
-namespace dyn_aa {
+namespace neongoby {
 struct AliasCheckerInliner: public FunctionPass {
   static char ID;
 
@@ -32,7 +32,7 @@ struct AliasCheckerInliner: public FunctionPass {
 };
 }
 
-using namespace dyn_aa;
+using namespace neongoby;
 
 static RegisterPass<AliasCheckerInliner> X(
     "inline-alias-checker",

@@ -2,7 +2,7 @@
 
 import argparse
 import rcs_utils
-import dynaa_utils
+import ng_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -11,20 +11,20 @@ if __name__ == '__main__':
     parser.add_argument('logs', nargs='+', help = 'point-to logs (.pts)')
     parser.add_argument('aa',
                         help = 'the checked alias analysis: ' + \
-                        str(dynaa_utils.get_aa_choices()),
+                        str(ng_utils.get_aa_choices()),
                         metavar = 'aa',
-                        choices = dynaa_utils.get_aa_choices())
+                        choices = ng_utils.get_aa_choices())
     parser.add_argument('vid1', help = 'ValueID of Pointer 1')
     parser.add_argument('vid2', help = 'ValueID of Pointer 2')
     args = parser.parse_args()
 
-    cmd = dynaa_utils.load_all_plugins('opt')
+    cmd = ng_utils.load_all_plugins('opt')
     # reducer need be put before aa
     cmd = ' '.join((cmd, '-remove-untouched-code'))
     cmd = ' '.join((cmd, '-simplifycfg'))
 
     # Load the checked AA
-    cmd = dynaa_utils.load_aa(cmd, args.aa)
+    cmd = ng_utils.load_aa(cmd, args.aa)
 
     cmd = ' '.join((cmd, '-verify-reducer'))
     cmd = ' '.join((cmd, '-strip'))

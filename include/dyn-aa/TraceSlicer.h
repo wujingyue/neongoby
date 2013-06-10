@@ -19,7 +19,7 @@
 using namespace std;
 using namespace llvm;
 
-namespace dyn_aa {
+namespace neongoby {
 struct LogRecordInfo{
   LogRecordInfo(): ArgNo(-1) {}
   Value *V;

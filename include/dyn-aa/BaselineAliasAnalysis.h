@@ -7,7 +7,7 @@
 
 using namespace llvm;
 
-namespace dyn_aa {
+namespace neongoby {
 // Make it an ImmutablePass so that it can be inserted before and after
 // basicaa or other ImmutablePasses.
 struct BaselineAliasAnalysis: public ImmutablePass, public AliasAnalysis {

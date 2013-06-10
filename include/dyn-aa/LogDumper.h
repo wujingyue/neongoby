@@ -3,7 +3,7 @@
 
 #include "dyn-aa/LogProcessor.h"
 
-namespace dyn_aa {
+namespace neongoby {
 struct LogDumper: public LogProcessor {
   virtual void beforeRecord(const LogRecord &);
   virtual void processMemAlloc(const MemAllocRecord &);

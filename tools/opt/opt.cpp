@@ -20,7 +20,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dynaa;
+using namespace neongoby;
 
 int main(int argc, char *argv[]) {
   sys::PrintStackTraceOnErrorSignal();

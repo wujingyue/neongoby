@@ -8,7 +8,7 @@
 
 using namespace std;
 using namespace llvm;
-using namespace dyn_aa;
+using namespace neongoby;
 
 static RegisterPass<BaselineAliasAnalysis> X(
     "baseline-aa",

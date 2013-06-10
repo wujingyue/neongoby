@@ -19,7 +19,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 // Users specify either StartingRecordIDs or StartingValueIDs.
 static cl::list<unsigned> StartingRecordIDs(

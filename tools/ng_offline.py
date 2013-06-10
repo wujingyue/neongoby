@@ -6,7 +6,7 @@
 
 import argparse
 import rcs_utils
-import dynaa_utils
+import ng_utils
 import os
 import re
 import sys
@@ -16,9 +16,9 @@ if __name__ == '__main__':
     parser.add_argument('prog', help = 'the program name (e.g. mysqld)')
     parser.add_argument('aa',
                         help = 'the checked alias analysis: ' + \
-                                str(dynaa_utils.get_aa_choices()),
+                                str(ng_utils.get_aa_choices()),
                         metavar = 'aa',
-                        choices = dynaa_utils.get_aa_choices())
+                        choices = ng_utils.get_aa_choices())
     parser.add_argument('--all',
                         help = 'hook and check all pointers (False by default)',
                         action = 'store_true',
@@ -34,8 +34,8 @@ if __name__ == '__main__':
                         default = '/tmp')
     args = parser.parse_args()
 
-    # dynaa_hook_mem
-    cmd = ' '.join(('dynaa_hook_mem.py', args.prog))
+    # ng_hook_mem
+    cmd = ' '.join(('ng_hook_mem.py', args.prog))
     if args.all:
         cmd = ' '.join((cmd, '--hook-all'))
     rcs_utils.invoke(cmd)
@@ -50,9 +50,9 @@ if __name__ == '__main__':
     if timeout != 0:
         print >> sys.stderr, 'Warning: runtime error or time limit exceeded'
 
-    # dynaa_check_aa.py
+    # ng_check_aa.py
     # use automatic globbing
-    cmd = ' '.join(('dynaa_check_aa.py',
+    cmd = ' '.join(('ng_check_aa.py',
                     args.prog + '.bc',
                     args.dir + '/pts-*',
                     args.aa))

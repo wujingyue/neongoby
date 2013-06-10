@@ -13,7 +13,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 void LogDumper::beforeRecord(const LogRecord &Record) {
   switch (Record.RecordType) {

@@ -2,7 +2,7 @@
 
 import argparse
 import rcs_utils
-import dynaa_utils
+import ng_utils
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -22,7 +22,7 @@ if __name__ == '__main__':
     instrumented_bc = args.prog + '.inst.bc'
     instrumented_exe = args.prog + '.inst'
 
-    cmd = dynaa_utils.load_all_plugins('opt')
+    cmd = ng_utils.load_all_plugins('opt')
     # Preparer doesn't preserve IDAssigner, so we put it after
     # -instrument-memory.
     cmd = ' '.join((cmd, '-instrument-memory', '-prepare'))

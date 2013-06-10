@@ -7,7 +7,7 @@
 #include "llvm/Value.h"
 #include "llvm/Pass.h"
 
-namespace dyn_aa {
+namespace neongoby {
 struct DynAAUtils {
   static const std::string MemAllocHookName;
   static const std::string MainArgsAllocHookName;

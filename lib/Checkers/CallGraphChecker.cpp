@@ -13,9 +13,9 @@
 
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
-namespace dyn_aa {
+namespace neongoby {
 struct CallGraphChecker: public ModulePass {
   static char ID;
 

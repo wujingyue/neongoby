@@ -13,7 +13,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 int main(int argc, char *argv[]) {
   cl::ParseCommandLineOptions(argc, argv, "Dumps point-to logs");

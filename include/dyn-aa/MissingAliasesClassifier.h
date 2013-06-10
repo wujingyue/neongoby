@@ -23,7 +23,7 @@ using namespace std;
 using namespace llvm;
 using namespace rcs;
 
-namespace dyn_aa {
+namespace neongoby {
 struct MissingAliasesClassifier: public ModulePass, public LogProcessor {
   static char ID;
 

@@ -16,7 +16,7 @@
 
 using namespace llvm;
 
-namespace dyn_aa {
+namespace neongoby {
 struct DynamicAliasAnalysis: public ModulePass,
                              public AliasAnalysis,
                              public LogProcessor {

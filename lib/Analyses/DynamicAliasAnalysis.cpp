@@ -15,7 +15,7 @@
 using namespace std;
 using namespace llvm;
 using namespace rcs;
-using namespace dyn_aa;
+using namespace neongoby;
 
 static RegisterPass<DynamicAliasAnalysis> X("dyn-aa",
                                             "Accurate alias analysis "
@@ -28,7 +28,7 @@ static RegisterPass<DynamicAliasAnalysis> X("dyn-aa",
 // static RegisterAnalysisGroup<AliasAnalysis> Y(X);
 
 static cl::opt<string> OutputDynamicAliases(
-    "output-dynaa",
+    "output-ng",
     cl::desc("Dump all dynamic aliases"));
 
 STATISTIC(NumRemoveOps, "Number of remove operations");
