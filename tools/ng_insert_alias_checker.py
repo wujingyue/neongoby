@@ -117,6 +117,8 @@ if __name__ == '__main__':
     cmd = ' '.join((cmd, rcs_utils.get_libdir() + '/libDynAAAliasChecker.a'))
     cmd = ' '.join((cmd, '-o', args.prog + '.ac'))
     linking_flags = rcs_utils.get_linking_flags(args.prog)
+    # The pthread library is necessary for the online mode.
+    linking_flags.append('-pthread')
     cmd = ' '.join((cmd, ' '.join(linking_flags)))
     rcs_utils.invoke(cmd)
 
