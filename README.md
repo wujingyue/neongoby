@@ -69,7 +69,7 @@ mode of NeonGoby, first compile the code into `example.bc` in LLVM’s
 intermediate representation (IR), and run the following three commands:
 
 ```bash
-ng_hook_mem.py --hook-all example.bc
+ng_hook_mem.py --hook-all example
 ./example.inst
 ng_check_aa.py --check-all example.bc <log-file> buggyaa
 ```
