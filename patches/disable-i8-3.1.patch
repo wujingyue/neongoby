@@ -1,0 +1,41 @@
+--- lib/Transforms/InstCombine/InstructionCombining.cpp.orig	2012-10-26 19:35:41.593729715 -0400
++++ lib/Transforms/InstCombine/InstructionCombining.cpp	2012-10-26 19:39:56.863354458 -0400
+@@ -48,6 +48,8 @@
+ #include "llvm/Support/GetElementPtrTypeIterator.h"
+ #include "llvm/Support/PatternMatch.h"
+ #include "llvm/Support/ValueHandle.h"
++// Added by Jingyue
++#include "llvm/Support/CallSite.h"
+ #include "llvm/ADT/SmallPtrSet.h"
+ #include "llvm/ADT/Statistic.h"
+ #include "llvm/ADT/StringSwitch.h"
+@@ -1050,7 +1052,28 @@
+   /// into a gep of the original struct.  This is important for SROA and alias
+   /// analysis of unions.  If "A" is also a bitcast, wait for A/X to be merged.
+   if (BitCastInst *BCI = dyn_cast<BitCastInst>(PtrOp)) {
+-    if (TD &&
++    // Condition changed by Jingyue
++    bool isMemoryAllocation = false;
++    if (Instruction *I = dyn_cast<Instruction>(BCI->getOperand(0))) {
++      CallSite CS(I);
++      if (CS.getInstruction()) {
++        Function *Callee = CS.getCalledFunction();
++#if 0
++        if (Callee && (
++              Callee->getName() == "malloc" ||
++              Callee->getName() == "calloc" ||
++              Callee->getName() == "valloc")) {
++          // errs() << "InstCombine on " << GEP << " is disabled\n";
++          isMemoryAllocation = true;
++        }
++#endif
++        // Conservatively treat every function call as potentially
++        // allocating memory. 
++        if (Callee)
++          isMemoryAllocation = true;
++      }
++    }
++    if (TD && !isMemoryAllocation &&
+         !isa<BitCastInst>(BCI->getOperand(0)) && GEP.hasAllConstantIndices() &&
+         StrippedPtrTy->getAddressSpace() == GEP.getPointerAddressSpace()) {
+ 

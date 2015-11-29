@@ -1,0 +1,13 @@
+--- llvm-2.7-orig/lib/VMCore/Verifier.cpp	2010-03-06 15:26:48.000000000 -0500
++++ llvm-2.7/lib/VMCore/Verifier.cpp	2011-10-21 16:10:31.000000000 -0400
+@@ -1623,10 +1623,6 @@
+     MDNode *MD = cast<MDNode>(CI.getOperand(1));
+     Assert1(MD->getNumOperands() == 1,
+                 "invalid llvm.dbg.declare intrinsic call 2", &CI);
+-    if (MD->getOperand(0))
+-      if (Constant *C = dyn_cast<Constant>(MD->getOperand(0)))
+-        Assert1(C && !isa<ConstantPointerNull>(C),
+-                "invalid llvm.dbg.declare intrinsic call 3", &CI);
+   } break;
+   case Intrinsic::memcpy:
+   case Intrinsic::memmove:

@@ -1,0 +1,126 @@
+Index: include/poolalloc/RunTimeAssociate.h
+===================================================================
+--- include/poolalloc/RunTimeAssociate.h	(revision 160292)
++++ include/poolalloc/RunTimeAssociate.h	(working copy)
+@@ -23,7 +23,6 @@
+ #include "llvm/DerivedTypes.h"
+ #include "llvm/Support/CallSite.h"
+ #include "llvm/ADT/EquivalenceClasses.h"
+-#include "llvm/ADT/VectorExtras.h"
+ #include "llvm/ADT/DenseMap.h"
+ #include "llvm/Support/CommandLine.h"
+ 
+Index: include/poolalloc/PoolAllocate.h
+===================================================================
+--- include/poolalloc/PoolAllocate.h	(revision 160292)
++++ include/poolalloc/PoolAllocate.h	(working copy)
+@@ -24,7 +24,6 @@
+ #include "llvm/DerivedTypes.h"
+ #include "llvm/Support/CallSite.h"
+ #include "llvm/ADT/EquivalenceClasses.h"
+-#include "llvm/ADT/VectorExtras.h"
+ #include "llvm/ADT/DenseMap.h"
+ #include "llvm/ADT/DenseSet.h"
+ #include "llvm/ADT/StringMap.h"
+Index: lib/AssistDS/TypeChecks.cpp
+===================================================================
+--- lib/AssistDS/TypeChecks.cpp	(revision 160292)
++++ lib/AssistDS/TypeChecks.cpp	(working copy)
+@@ -600,7 +600,7 @@
+ 
+   // Add an entry for uninitialized(Type Number = 0)
+ 
+-  Constant *CA = ConstantArray::get(M.getContext(), "UNINIT", true);
++  Constant *CA = ConstantDataArray::getString(M.getContext(), "UNINIT", true);
+   GlobalVariable *GV = new GlobalVariable(M, 
+                                           CA->getType(),
+                                           true,
+@@ -621,7 +621,7 @@
+ 
+     *test << TI->first;
+     //WriteTypeSymbolic(*test, TI->first, &M);
+-    Constant *CA = ConstantArray::get(M.getContext(), test->str(), true);
++    Constant *CA = ConstantDataArray::getString(M.getContext(), test->str(), true);
+     GlobalVariable *GV = new GlobalVariable(M, 
+                                             CA->getType(),
+                                             true,
+@@ -1185,7 +1185,7 @@
+   // Find all basic blocks which terminate the function.
+   std::set<BasicBlock *> exitBlocks;
+   for (inst_iterator I = inst_begin(&F), E = inst_end(&F); I != E; ++I) {
+-    if (isa<ReturnInst>(*I) || isa<UnwindInst>(*I)) {
++    if (isa<ReturnInst>(*I) || isa<ResumeInst>(*I)) {
+       exitBlocks.insert(I->getParent());
+     }
+   }
+Index: lib/PoolAllocate/TransformFunctionBody.cpp
+===================================================================
+--- lib/PoolAllocate/TransformFunctionBody.cpp	(revision 160292)
++++ lib/PoolAllocate/TransformFunctionBody.cpp	(working copy)
+@@ -27,7 +27,6 @@
+ #include "llvm/Support/FormattedStream.h"
+ #include "llvm/Support/Debug.h"
+ #include "llvm/ADT/StringMap.h"
+-#include "llvm/ADT/VectorExtras.h"
+ 
+ #include <iostream>
+ using namespace llvm;
+Index: lib/PoolAllocate/PoolAllocate.cpp
+===================================================================
+--- lib/PoolAllocate/PoolAllocate.cpp	(revision 160292)
++++ lib/PoolAllocate/PoolAllocate.cpp	(working copy)
+@@ -1415,7 +1415,7 @@
+     if (F.getName().str() != "main")
+       for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
+         if (isa<ReturnInst>(BB->getTerminator()) ||
+-            isa<UnwindInst>(BB->getTerminator()))
++            isa<ResumeInst>(BB->getTerminator()))
+           PoolDestroyPoints.push_back(BB->getTerminator());
+   } else {
+     // Keep track of the blocks we have inserted poolinit/destroy into.
+Index: lib/DSA/Local.cpp
+===================================================================
+--- lib/DSA/Local.cpp	(revision 160292)
++++ lib/DSA/Local.cpp	(working copy)
+@@ -952,27 +952,6 @@
+       N->setModifiedMarker();
+     return true;
+ 
+-  case Intrinsic::eh_exception: {
+-    DSNode * Node = createNode();
+-    Node->setIncompleteMarker();
+-    Node->foldNodeCompletely();
+-    setDestTo (*(CS.getInstruction()), Node);
+-    return true;
+-  }
+-
+-  case Intrinsic::eh_selector: {
+-    for (CallSite::arg_iterator I = CS.arg_begin(), E = CS.arg_end();
+-         I != E; ++I) {
+-      if (isa<PointerType>((*I)->getType())) {
+-        DSNodeHandle Ptr = getValueDest(*I);
+-        if(Ptr.getNode()) {
+-          Ptr.getNode()->setReadMarker();
+-          Ptr.getNode()->setIncompleteMarker();
+-        }
+-      }
+-    }
+-    return true;
+-  }
+   case Intrinsic::eh_typeid_for: {
+     DSNodeHandle Ptr = getValueDest(*CS.arg_begin());
+     Ptr.getNode()->setReadMarker();
+@@ -1184,6 +1163,13 @@
+       Constant * ConstElement = cast<Constant>(CA->getOperand(i));
+       MergeConstantInitIntoNode(NH, ElementType, ConstElement);
+     }
++  } else if (ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(C)) {
++    // Added by Jingyue.
++    // ConstantDataSequential was introduced in LLVM 3.1.
++    for (unsigned i = 0, e = CDS->getNumElements(); i != e; ++i) {
++      Constant *ConstElement = CDS->getElementAsConstant(i);
++      MergeConstantInitIntoNode(NH, CDS->getElementType(), ConstElement);
++    }
+   } else if (ConstantStruct *CS = dyn_cast<ConstantStruct>(C)) {
+     //
+     // For a structure, we need to merge each element of the constant structure

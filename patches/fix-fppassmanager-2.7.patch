@@ -1,0 +1,11 @@
+--- a/lib/VMCore/PassManager.cpp	2011-07-12 11:51:25.000000000 -0400
++++ b/lib/VMCore/PassManager.cpp	2011-07-12 11:49:43.000000000 -0400
+@@ -1368,7 +1368,7 @@
+   bool Changed = doInitialization(M);
+ 
+   for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I)
+-    runOnFunction(*I);
++    Changed |= runOnFunction(*I);
+ 
+   return doFinalization(M) || Changed;
+ }

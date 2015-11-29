@@ -1,0 +1,38 @@
+--- llvm-2.9-orig/lib/Transforms/IPO/DeadArgumentElimination.cpp	2011-02-28 19:33:47.000000000 -0500
++++ llvm-2.9/lib/Transforms/IPO/DeadArgumentElimination.cpp	2011-11-14 20:29:49.000000000 -0500
+@@ -254,7 +254,16 @@
+       if (cast<CallInst>(Call)->isTailCall())
+         cast<CallInst>(New)->setTailCall();
+     }
+-    New->setDebugLoc(Call->getDebugLoc());
++    // by Jingyue
++    // Included by the following copy. 
++    // New->setDebugLoc(Call->getDebugLoc());
++    // Copy all metadata
++    if (Call->hasMetadata()) {
++      SmallVector<std::pair<unsigned, MDNode*>, 4> TheMDs;
++      Call->getAllMetadata(TheMDs);
++      for (unsigned i = 0, e = TheMDs.size(); i != e; ++i)
++        New->setMetadata(TheMDs[i].first, TheMDs[i].second);
++    }
+ 
+     Args.clear();
+ 
+@@ -832,7 +841,16 @@
+       if (cast<CallInst>(Call)->isTailCall())
+         cast<CallInst>(New)->setTailCall();
+     }
+-    New->setDebugLoc(Call->getDebugLoc());
++    // by Jingyue
++    // Included by the following copy. 
++    // New->setDebugLoc(Call->getDebugLoc());
++    // Copy all metadata
++    if (Call->hasMetadata()) {
++      SmallVector<std::pair<unsigned, MDNode*>, 4> TheMDs;
++      Call->getAllMetadata(TheMDs);
++      for (unsigned i = 0, e = TheMDs.size(); i != e; ++i)
++        New->setMetadata(TheMDs[i].first, TheMDs[i].second);
++    }
+ 
+     Args.clear();
+ 

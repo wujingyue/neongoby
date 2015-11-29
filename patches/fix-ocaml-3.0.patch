@@ -1,0 +1,43 @@
+Index: bindings/ocaml/Makefile.ocaml
+===================================================================
+--- bindings/ocaml/Makefile.ocaml	(revision 144182)
++++ bindings/ocaml/Makefile.ocaml	(revision 144183)
+@@ -238,14 +238,14 @@
+ # Also install the .mli's (headers) as documentation.
+ install-cmis: $(OutputsCMI) $(OcamlHeaders)
+ 	$(Verb) $(MKDIR) $(PROJ_libocamldir)
++	$(Verb) for i in $(OcamlHeaders:$(ObjDir)/%=%); do \
++	  $(EchoCmd) "Installing $(BuildMode) $(PROJ_libocamldir)/$$i"; \
++	  $(DataInstall) $(ObjDir)/$$i "$(PROJ_libocamldir)/$$i"; \
++	done
+ 	$(Verb) for i in $(OutputsCMI:$(OcamlDir)/%=%); do \
+ 	  $(EchoCmd) "Installing $(BuildMode) $(PROJ_libocamldir)/$$i"; \
+ 	  $(DataInstall) $(OcamlDir)/$$i "$(PROJ_libocamldir)/$$i"; \
+ 	done
+-	$(Verb) for i in $(OcamlHeaders:$(ObjDir)/%=%); do \
+-	  $(EchoCmd) "Installing $(BuildMode) $(PROJ_libocamldir)/$$i"; \
+-	  $(DataInstall) $(ObjDir)/$$i "$(PROJ_libocamldir)/$$i"; \
+-	done
+ 
+ uninstall-cmis::
+ 	$(Verb) for i in $(OutputsCMI:$(OcamlDir)/%=%); do \
+Index: bindings/ocaml/llvm/Makefile
+===================================================================
+--- bindings/ocaml/llvm/Makefile	(revision 144182)
++++ bindings/ocaml/llvm/Makefile	(revision 144183)
+@@ -30,11 +30,13 @@
+ $(OcamlDir)/META.llvm: META.llvm
+ 	$(Verb) $(CP) -f $< $@
+ 
+-install-meta:: $(ObjDir)/META.llvm
++install-meta:: $(OcamlDir)/META.llvm
+ 	$(Echo) "Install $(BuildMode) $(DestMETA)"
+ 	$(Verb) $(MKDIR) $(PROJ_libocamldir)
+-	$(Verb) $(DataInstall) META.llvm "$(DestMETA)"
++	$(Verb) $(DataInstall) $< "$(DestMETA)"
+ 
+ uninstall-meta::
+ 	$(Echo) "Uninstalling $(DestMETA)"
+ 	-$(Verb) $(RM) -f "$(DestMETA)"
++
++.PHONY: copy-meta install-meta uninstall-meta

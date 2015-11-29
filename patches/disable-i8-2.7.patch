@@ -1,0 +1,41 @@
+--- llvm-2.9-orig/lib/Transforms/InstCombine/InstructionCombining.cpp	2011-02-14 21:02:30.000000000 -0500
++++ llvm-2.9/lib/Transforms/InstCombine/InstructionCombining.cpp	2012-02-16 19:20:03.000000000 -0500
+@@ -46,6 +46,8 @@
+ #include "llvm/Support/Debug.h"
+ #include "llvm/Support/GetElementPtrTypeIterator.h"
+ #include "llvm/Support/PatternMatch.h"
++// Added by Jingyue
++#include "llvm/Support/CallSite.h"
+ #include "llvm/ADT/SmallPtrSet.h"
+ #include "llvm/ADT/Statistic.h"
+ #include "llvm-c/Initialization.h"
+@@ -983,7 +985,28 @@
+   /// into a gep of the original struct.  This is important for SROA and alias
+   /// analysis of unions.  If "A" is also a bitcast, wait for A/X to be merged.
+   if (BitCastInst *BCI = dyn_cast<BitCastInst>(PtrOp)) {
+-    if (TD &&
++    // Condition changed by Jingyue
++    bool isMemoryAllocation = false;
++    if (Instruction *I = dyn_cast<Instruction>(BCI->getOperand(0))) {
++      CallSite CS = CallSite::get(I);
++      if (CS.getInstruction()) {
++        Function *Callee = CS.getCalledFunction();
++#if 0
++        if (Callee && (
++              Callee->getName() == "malloc" ||
++              Callee->getName() == "calloc" ||
++              Callee->getName() == "valloc")) {
++          // errs() << "InstCombine on " << GEP << " is disabled\n";
++          isMemoryAllocation = true;
++        }
++#endif
++        // Conservatively treat every function call as potentially
++        // allocating memory. 
++        if (Callee)
++          isMemoryAllocation = true;
++      }
++    }
++    if (TD && !isMemoryAllocation &&
+         !isa<BitCastInst>(BCI->getOperand(0)) && GEP.hasAllConstantIndices()) {
+       // Determine how much the GEP moves the pointer.  We are guaranteed to get
+       // a constant back from EmitGEPOffset.
