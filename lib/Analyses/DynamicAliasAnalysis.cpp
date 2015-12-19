@@ -167,6 +167,10 @@ void DynamicAliasAnalysis::removePointedBy(Definition Ptr, Location Loc) {
   auto J = PointedBy.find(Loc);
   assert(J != PointedBy.end());
   J->second.erase(Ptr);
+  /*Do not keep those Location entry which does not map to any Defintion set*/
+  if(0 == J->second.size()) {
+    PointedBy.erase(J);
+  }
 }
 
 void DynamicAliasAnalysis::removePointsTo(Definition Ptr) {
